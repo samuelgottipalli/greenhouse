@@ -4,3 +4,6 @@ venv
 *.csv
 *.exe
 *.dll
+*.zip
+*.tar.gz
+DB.Browser.for.SQLite-v3.13.1-win64
