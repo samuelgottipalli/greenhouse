@@ -41,7 +41,7 @@ def get_relay_state_data():
                                 reason, 
                                 max(actiontime) as actiontime 
                             from 
-                                relay_state 
+                                relay_status 
                             group by 
                                 deviceid, 
                                 relayid, 
@@ -70,11 +70,23 @@ with st.expander("ℹ️ About this app", expanded=False):
     st.write("Use the toggles below to turn the devices on or off manually.")
 
 st.table(get_relay_state_data())
-st.write("Fan Status:")
-st.toggle("Turn Fan On/Off", key="fan_status", help="Toggle to turn the fan on or off", label_visibility="hidden")
-st.write("Heater Status:")
-st.toggle("Turn Heater On/Off", key="heater_status", help="Toggle to turn the heater on or off", label_visibility="hidden")
-st.write("Light Status:")
-st.toggle("Turn Light On/Off", key="light_status", help="Toggle to turn the light on or off", label_visibility="hidden")
-st.write("Water Status:")
-st.toggle("Turn Water On/Off", key="water_status", help="Toggle to turn the water on or off", label_visibility="hidden")
+
+with st.container(border=True):
+    with st.columns(2)[0]:
+        st.subheader("Device Controls")
+    with st.columns(2)[0]:
+        st.write("Fan Status:")
+    with st.columns(2)[1]:
+        st.toggle("Turn Fan On/Off", key="fan_status", help="Toggle to turn the fan on or off", label_visibility="hidden")
+    with st.columns(2)[0]:
+        st.write("Heater Status:")
+    with st.columns(2)[1]:
+        st.toggle("Turn Heater On/Off", key="heater_status", help="Toggle to turn the heater on or off", label_visibility="hidden")
+    with st.columns(2)[0]:
+        st.write("Light Status:")
+    with st.columns(2)[1]:
+        st.toggle("Turn Light On/Off", key="light_status", help="Toggle to turn the light on or off", label_visibility="hidden")
+    with st.columns(2)[0]:
+        st.write("Water Status:")
+    with st.columns(2)[1]:
+        st.toggle("Turn Water On/Off", key="water_status", help="Toggle to turn the water on or off", label_visibility="hidden")
