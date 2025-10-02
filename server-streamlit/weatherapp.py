@@ -99,7 +99,7 @@ def load_to_db(data: dict[str, str|int|float] | None) -> bool | None:
     return True
 
 
-get_config()
-data = fetch_weather()
-data = clean_data(data)
-print(load_to_db(data))
+# get_config()
+# data = fetch_weather()
+# data = clean_data(data)
+# print(load_to_db(data))
