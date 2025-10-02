@@ -1,3 +1,5 @@
+from pandas.core.frame import DataFrame
+from sqlalchemy.engine.base import Engine
 import streamlit as st
 
 from os import getenv
@@ -14,10 +16,12 @@ st.set_page_config(
 )
 
 st.title("Weather Data")
-# st.write("This app fetches weather data from an external API, cleans it, and loads it into a database.")
 
 @st.cache_data
 def get_weather_data():
+    """
+    Fetch weather data from the database.
+    """
     db_path = getenv("DB_PATH")
     if not db_path:
         st.error("Missing DB_PATH environment variable. Check .env file.")
@@ -26,13 +30,13 @@ def get_weather_data():
     if not conn_str:
         st.error("Missing DB_CONNECTION_STRING environment variable. Check .env file.")
         return None
-    from pandas import read_sql_table
-    from sqlalchemy import create_engine
-    engine = create_engine(conn_str, echo=False)
+    from pandas import read_sql_table, DataFrame
+    from sqlalchemy import create_engine, Engine
+    engine: Engine = create_engine(conn_str, echo=False)
     try:
         with engine.connect() as conn:
-            data = read_sql_table("weather_data", conn)
-            st.success("Weather data fetched from DB")
+            data: DataFrame = read_sql_table("weather_data", conn)
+            st.success(body="Weather data fetched from DB")
             return data
     except Exception as e:
         st.error(f"Unable to fetch weather data from DB. Possibly due to a database error. Error: {e}")

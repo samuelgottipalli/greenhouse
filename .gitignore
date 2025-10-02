@@ -2,3 +2,5 @@ venv
 *.conf
 *.log
 *.csv
+*.exe
+*.dll
