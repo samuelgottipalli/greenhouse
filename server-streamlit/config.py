@@ -1,6 +1,6 @@
 
 # Weather Code Description
-weather_code_descr = {0: "Clear sky",
+weather_code_descr: dict[int, str] = {0: "Clear sky",
     1: "Mainly clear",
     2: "Partly cloudy",
     3: "Overcast",
@@ -29,3 +29,10 @@ weather_code_descr = {0: "Clear sky",
     96: "Thunderstorm with slight hail",
     99: "Thunderstorm with heavy hail",
 }
+
+temp_lower_threshold: int = 18
+temp_lower_diff: int = 2
+temp_upper_threshold: int = 27
+temp_upper_diff: int = 2
+humidity_upper_threshold: int = 60
+humidity_upper_diff: int = 5

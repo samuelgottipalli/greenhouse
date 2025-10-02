@@ -1,15 +1,14 @@
 from os import getenv
 
-from dotenv import load_dotenv
 from requests import get
 from sqlalchemy import create_engine, text
 
+import local_utils as lu
 
-def get_config() -> None:
-    conf = load_dotenv(".env")
-
+lu.get_config()
 
 def fetch_weather() -> dict[str, str|int|float|dict[str, str|int|float|list[str]]] | None:
+
     weatherurl: str|None = getenv("WEATHER_API")
     lat: str|None = getenv("LATITUDE")
     long: str|None = getenv("LONGITUDE")
@@ -100,6 +99,6 @@ def load_to_db(data: dict[str, str|int|float] | None) -> bool | None:
 
 
 # get_config()
-# data = fetch_weather()
-# data = clean_data(data)
-# print(load_to_db(data))
+data = fetch_weather()
+data = clean_data(data)
+print(load_to_db(data))
