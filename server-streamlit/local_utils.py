@@ -11,5 +11,9 @@ def get_config() -> bool:
     Returns:
         bool: True if the .env file was loaded successfully, False otherwise.
     """
+    from os import path
+    if not path.exists(".env"):
+        print(".env file not found.")
+        return False
     conf: bool = load_dotenv(dotenv_path=".env")
     return conf
