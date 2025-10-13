@@ -1,6 +1,8 @@
+import time
 from pandas import DataFrame
 import streamlit as st
 from config import weather_code_descr
+from datetime import timedelta
 
 
 st.set_page_config(
@@ -13,7 +15,7 @@ st.set_page_config(
 
 st.title("Weather Data")
 
-@st.fragment(run_every="15m")
+@st.fragment(run_every=timedelta(minutes=15))
 def get_weather_data():
     """
     Fetch weather data from the database.

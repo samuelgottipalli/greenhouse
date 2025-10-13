@@ -1,9 +1,12 @@
+from typing import Literal
 from pytz import utc
 import streamlit as st
 from pandas import DataFrame
 from streamlit.connections.sql_connection import SQLConnection
 from datetime import datetime as dtt
 from sqlalchemy import text
+from streamlit.delta_generator import DeltaGenerator
+from pub_to_pico import publish_relay_status
 
 st.set_page_config(
     page_title="Greenhouse Control Center",
@@ -11,9 +14,6 @@ st.set_page_config(
     layout="centered",
 )
 
-
-# @st.fragment()
-# @st.cache_data
 def get_relay_state_data() -> DataFrame | None:
     """
     Fetch relay state data from the database.
@@ -66,14 +66,13 @@ def get_relay_state_data() -> DataFrame | None:
         
         if len(data) != 0:
             return data
-        else:
-            return None
+        return None
     except Exception:
         return None
 
 
 # @st.fragment
-def insert_relay_status(data: dict[str, str | int] | None) -> None:
+def insert_relay_status(data: dict[str, str | int] | None) -> None | Literal[True]:
     """
     Insert relay status data into the database.
     Args:
@@ -84,7 +83,24 @@ def insert_relay_status(data: dict[str, str | int] | None) -> None:
     if not data or len(data) == 0:
         st.toast("No data to load to DB", icon=":material/warning:")
         return None
+    
+    if data["relayid"] == "1":
+            relay = "Water"
+    elif data["relayid"] == "2":
+        relay = "Fan"
+    elif data["relayid"] == "3":
+        relay = "Heater"
+    elif data["relayid"] == "4":
+        relay = "Light"
+    else:
+        relay = "Unknown"
 
+    if data["actionid"] == "020":
+        action = "Off"
+    elif data["actionid"] == "021":
+        action = "On"
+    else:
+        action = "Unknown"
     insert_relay_status_text = text("""INSERT INTO relay_status VALUES (
                              :actiontime,
                              :deviceid,
@@ -99,29 +115,7 @@ def insert_relay_status(data: dict[str, str | int] | None) -> None:
             s.begin()
             s.execute(statement=insert_relay_status_text, params=data)
             s.commit()
-
-        if data["relayid"] == "1":
-            relay = "Water"
-        elif data["relayid"] == "2":
-            relay = "Fan"
-        elif data["relayid"] == "3":
-            relay = "Heater"
-        elif data["relayid"] == "4":
-            relay = "Light"
-        else:
-            relay = "Unknown"
-        if data["actionid"] == "020":
-            action = "Off"
-        elif data["actionid"] == "021":
-            action = "On"
-        else:
-            action = "Unknown"
-        st.toast(f"{relay} turned {action} via app", icon=":material/thumb_up:")
-        # ppublish(
-        #     hostname="raspberrypi",
-        #     port=1883,
-        #     topic=)
-        return None
+        relay_change: DeltaGenerator = st.toast(f"{relay} turned {action} via app", icon=":material/thumb_up:")
     except Exception as e:
         st.toast(
             f"""Unable to insert relay status data into DB. Possibly due to a database error.
@@ -129,6 +123,19 @@ def insert_relay_status(data: dict[str, str | int] | None) -> None:
             icon=":material/error:",
         )
         return None
+    try:
+        publish_relay_status(
+            device_id=data["deviceid"],
+            relay_id=data["relayid"],
+            action_id=data["actionid"],
+        )
+        relay_change.toast(f"{relay} status '{action}' published via MQTT", icon=":material/thumb_up:")
+        return True
+    except Exception as e:
+        st.toast(f"""Unable to publish relay status to MQTT. Error: {e}""", icon=":material/error:")
+        return None
+
+
 
 
 st.title(body="Greenhouse Remote Control")
