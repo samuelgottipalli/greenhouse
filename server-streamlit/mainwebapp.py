@@ -19,5 +19,4 @@ pages = {
 }
 
 pg = st.navigation(pages)
-if __name__ == "__main__":
-    pg.run()
+pg.run()

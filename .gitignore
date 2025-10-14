@@ -7,3 +7,6 @@ venv
 *.zip
 *.tar.gz
 DB.Browser.for.SQLite-v3.13.1-win64
+*.ttf
+*.txt
+Noto*
