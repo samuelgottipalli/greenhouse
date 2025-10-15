@@ -5,9 +5,10 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Help",
-    page_icon="🌦️",
+    page_icon=r"images\favicon.png",
     layout="centered",
 )
+st.logo(r"images\favicon.png", icon_image=r"images\favicon.png", size="large")
 
 help_text = """
 # Greenhouse Control System Help

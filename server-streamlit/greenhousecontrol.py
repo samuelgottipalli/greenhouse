@@ -9,10 +9,11 @@ from streamlit.delta_generator import DeltaGenerator
 from pub_to_pico import publish_relay_status
 
 st.set_page_config(
-    page_title="Greenhouse Control Center",
-    page_icon="🌦️",
+    page_title="Greenhouse Control",
+    page_icon=r"images\favicon.png",
     layout="centered",
 )
+st.logo(r"images\favicon.png", icon_image=r"images\favicon.png", size="large")
 
 def get_relay_state_data() -> DataFrame | None:
     """
@@ -134,8 +135,6 @@ def insert_relay_status(data: dict[str, str | int] | None) -> None | Literal[Tru
     except Exception as e:
         st.toast(f"""Unable to publish relay status to MQTT. Error: {e}""", icon=":material/error:")
         return None
-
-
 
 
 st.title(body="Greenhouse Remote Control")

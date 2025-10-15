@@ -6,11 +6,10 @@ from dotenv import load_dotenv
 conf = load_dotenv(".env")
 
 st.set_page_config(
-    # Title and icon for the browser's tab bar:
-    page_title="Greenhouse Control Center",
-    # page_icon="🌦️",
-    # Make the content take up the width of the page:
+    page_title="Greenhouse Weather",
+    page_icon=r"images\favicon.png",
     layout="wide",
 )
+st.logo(r"images\favicon.png", icon_image=r"images\favicon.png", size="large")
 
 st.title("Greenhouse Weather Data")
