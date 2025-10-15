@@ -16,7 +16,7 @@ if "date_format" not in st.session_state:
 if "time_format" not in st.session_state:
     st.session_state["time_format"] = "12-hour"
 if "timezone" not in st.session_state:
-    st.session_state["timezone"] = "UTC"
+    st.session_state["timezone"] = "Local"
 if "timezone_offset" not in st.session_state:
     st.session_state["timezone_offset"] = "America/Los_Angeles"
 timezone_list = sorted(list(zoneinfo.available_timezones()))

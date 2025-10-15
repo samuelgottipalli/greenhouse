@@ -84,9 +84,9 @@ def insert_relay_status(data: dict[str, str | int] | None) -> None | Literal[Tru
     if not data or len(data) == 0:
         st.toast("No data to load to DB", icon=":material/warning:")
         return None
-    
+
     if data["relayid"] == "1":
-            relay = "Water"
+        relay = "Water"
     elif data["relayid"] == "2":
         relay = "Fan"
     elif data["relayid"] == "3":
@@ -116,7 +116,7 @@ def insert_relay_status(data: dict[str, str | int] | None) -> None | Literal[Tru
             s.begin()
             s.execute(statement=insert_relay_status_text, params=data)
             s.commit()
-        relay_change: DeltaGenerator = st.toast(f"{relay} turned {action} via app", icon=":material/thumb_up:")
+        relay_change: DeltaGenerator = st.toast(body=f"{relay} turned {action} via app", icon=":material/thumb_up:")
     except Exception as e:
         st.toast(
             f"""Unable to insert relay status data into DB. Possibly due to a database error.
@@ -130,10 +130,13 @@ def insert_relay_status(data: dict[str, str | int] | None) -> None | Literal[Tru
             relay_id=data["relayid"],
             action_id=data["actionid"],
         )
-        relay_change.toast(f"{relay} status '{action}' published via MQTT", icon=":material/thumb_up:")
+        relay_change.toast(
+            body=f"{relay} status '{action}' published via MQTT",
+            icon=":material/published_with_changes:",
+        )
         return True
     except Exception as e:
-        st.toast(f"""Unable to publish relay status to MQTT. Error: {e}""", icon=":material/error:")
+        st.toast(body=f"""Unable to publish relay status to MQTT. Error: {e}""", icon=":material/error:")
         return None
 
 
@@ -146,11 +149,11 @@ with st.expander("ℹ️ About this app", expanded=False):
     )
     st.write("Use the toggles below to turn the devices on or off manually.")
 
-relay_state_toast = st.toast("Fetching relay state data...")
-df = get_relay_state_data()
+relay_state_toast: DeltaGenerator = st.toast("Fetching relay state data...")
+df: DataFrame | None = get_relay_state_data()
 if isinstance(df, DataFrame):
     relay_state_toast.toast(
-        "Relay state data fetched from DB", icon=":material/thumb_up:"
+        body="Relay state data fetched from DB", icon=":material/check_circle:"
     )
 else:
     relay_state_toast.toast("Error fetching relay state data", icon=":material/error:")
