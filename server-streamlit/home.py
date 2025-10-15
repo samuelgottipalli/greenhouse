@@ -1,7 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Greenhouse Settings",
+    page_title="Home",
     page_icon=r"images\favicon.png",
     layout="centered",
 )

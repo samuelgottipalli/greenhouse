@@ -6,13 +6,11 @@ import zoneinfo
 
 
 st.set_page_config(
-    # Title and icon for the browser's tab bar:
-    page_title="Greenhouse Control Center",
-    page_icon="🌦️",
-    # Make the content take up the width of the page:
+    page_title="Weather Data",
+    page_icon=r"images\favicon.png",
     layout="wide",
 )
-
+st.logo(r"images\favicon.png", icon_image=r"images\favicon.png", size="large")
 st.title("Weather Data")
 
 
@@ -26,7 +24,6 @@ def unit_conversion(units: str):
                         d_measures
                     """,
         )
-        data = data.set_index("measurename")
     except Exception as e:
         st.toast(
             f"Unable to get units of measurement! Error: {e}", icon=":material/error:"
@@ -50,7 +47,7 @@ def get_weather_data():
 
     if st.session_state["timezone"] == "Local":
         if "timezone_offset" not in st.session_state:
-            st.session_state["timezone_offset"] = "UTC"
+            st.session_state["timezone_offset"] = "America/Los_Angeles"
 
     if st.session_state["timezone"] == "UTC":
         current_datetime = dtt.now(timezone.utc)
@@ -132,19 +129,27 @@ def get_weather_data():
                 middle.metric(
                     label="Temperature",
                     value=str(data.iloc[-1]["TEMPERATURE"])
-                    + str(units.loc["temperature", unit_col]),
+                    + str(units.loc[units["measurename"] == "temperature", unit_col].values[0]),
                     border=True,
                 )
                 middle.metric(
                     label="Humidity",
                     value=str(data.iloc[-1]["RELATIVE_HUMIDITY"])
-                    + str(units.loc["humidity", unit_col]),
+                    + str(
+                        units.loc[units["measurename"] == "humidity", unit_col].values[
+                            0
+                        ]
+                    ),
                     border=True,
                 )
                 middle.metric(
                     label="Precipitation",
                     value=str(data.iloc[-1]["PRECIPITATION"])
-                    + str(units.loc["distance_short", unit_col]),
+                    + str(
+                        units.loc[units["measurename"] == "distance_short", unit_col].values[
+                            0
+                        ]
+                    ),
                     border=True,
                 )
                 weathercode = data.iloc[-1]["WEATHER_CODE"]
@@ -159,13 +164,21 @@ def get_weather_data():
                 right.metric(
                     label="Wind Speed",
                     value=str(data.iloc[-1]["WIND_SPEED"])
-                    + str(units.loc["speed", unit_col]),
+                    + str(
+                        units.loc[units["measurename"] == "speed", unit_col].values[
+                            0
+                        ]
+                    ),
                     border=True,
                 )
                 right.metric(
                     label="Wind Direction",
                     value=str(data.iloc[-1]["WIND_DIRECTION"])
-                    + str(units.loc["direction", unit_col]),
+                    + str(
+                        units.loc[units["measurename"] == "direction", unit_col].values[
+                            0
+                        ]
+                    ),
                     border=True,
                 )
 
@@ -199,7 +212,7 @@ def update_datetime():
 
     if st.session_state["timezone"] == "Local":
         if "timezone_offset" not in st.session_state:
-            st.session_state["timezone_offset"] = "UTC"
+            st.session_state["timezone_offset"] = "America/Los_Angeles"
 
     if st.session_state["timezone"] == "UTC":
         current_datetime = dtt.now(timezone.utc)

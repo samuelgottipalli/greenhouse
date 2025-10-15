@@ -2,10 +2,11 @@ import streamlit as st
 import zoneinfo
 
 st.set_page_config(
-    page_title="Greenhouse Control Center: App Settings",
-    page_icon="🌦️",
+    page_title="App Settings",
+    page_icon=r"images\favicon.png",
     layout="centered",
 )
+st.logo(r"images\favicon.png", icon_image=r"images\favicon.png", size="large")
 
 st.title("App Settings")
 if "units" not in st.session_state:
@@ -17,7 +18,7 @@ if "time_format" not in st.session_state:
 if "timezone" not in st.session_state:
     st.session_state["timezone"] = "UTC"
 if "timezone_offset" not in st.session_state:
-    st.session_state["timezone_offset"] = "UTC"
+    st.session_state["timezone_offset"] = "America/Los_Angeles"
 timezone_list = sorted(list(zoneinfo.available_timezones()))
 
 def load_value(options: list[str], key: str) -> int:
