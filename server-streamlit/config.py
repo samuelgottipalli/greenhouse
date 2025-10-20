@@ -29,10 +29,3 @@ weather_code_descr: dict[int, str] = {
     96: "Thunderstorm with slight hail ⛈️⚪",
     99: "Thunderstorm with heavy hail ⛈️⚪",
 }
-
-temp_lower_threshold: int = 18
-temp_lower_diff: int = 2
-temp_upper_threshold: int = 27
-temp_upper_diff: int = 2
-humidity_upper_threshold: int = 60
-humidity_upper_diff: int = 5
