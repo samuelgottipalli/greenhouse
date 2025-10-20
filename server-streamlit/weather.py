@@ -1,11 +1,20 @@
-from pandas import DataFrame, to_datetime
-import streamlit as st
-from streamlit.connections.sql_connection import SQLConnection
-from streamlit.delta_generator import DeltaGenerator
-from config import weather_code_descr
-from datetime import timedelta, datetime as dtt, timezone
 import zoneinfo
+from datetime import datetime as dtt
+from datetime import timedelta, timezone
+from os import getenv
+
 import local_utils as lu
+import streamlit as st
+from config import weather_code_descr
+from pandas import DataFrame, to_datetime, read_sql
+from sqlalchemy import Engine
+from sqlalchemy.engine import create_engine
+from streamlit.delta_generator import DeltaGenerator
+
+lu.get_config()
+DB_CONN_STRING: str = getenv(
+    key="DB_CONNECTION_STRING", default="sqlite:///greenhouse.db"
+)
 
 st.set_page_config(
     page_title="Weather Data",
@@ -40,208 +49,211 @@ def get_weather_data(weathertoast: DeltaGenerator):
         st.session_state["units"] = "US"
     units: None | DataFrame = lu.get_units(units=st.session_state["units"])
 
-    conn = st.connection("greenhouse", type="sql")
-    try:
-        data: DataFrame = conn.query(
+    engine: Engine = create_engine(
+        url=DB_CONN_STRING,
+    )
+    with engine.connect() as conn:
+        try:
+            data: DataFrame = read_sql(
             sql="""select
                         *
                     from
                         weather_data
                     order by
                         MEASURE_DATE DESC
-                    LIMIT 216;""",
+                    LIMIT 216;""", con=conn
         )
-        weathertoast.toast("Weather data fetched from DB", icon=":material/thumb_up:")
-        if isinstance(data, DataFrame) and len(data) > 0:
+            weathertoast.toast("Weather data fetched from DB", icon=":material/thumb_up:")
+            if isinstance(data, DataFrame) and len(data) > 0:
 
-            data["MEASURE_DATE"] = to_datetime(data["MEASURE_DATE"])
-            data["SUNRISE_TIME"] = to_datetime(data["SUNRISE_TIME"])
-            data["SUNSET_TIME"] = to_datetime(data["SUNSET_TIME"])
-            if st.session_state["timezone"] == "Local":
-                data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.tz_localize("UTC")
-                data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.tz_convert(
-                    st.session_state["timezone_offset"]
-                )
-                data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.tz_localize("UTC")
-                data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.tz_convert(
-                    st.session_state["timezone_offset"]
-                )
-                data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.tz_localize("UTC")
-                data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.tz_convert(
-                    st.session_state["timezone_offset"]
-                )
-            data = data[data["MEASURE_DATE"].dt.date == current_date]
-            data = data.sort_values(by="MEASURE_DATE")
-
-            if st.session_state["units"] == "SI":
-                unit_col = "siunit"
-                data["RAIN"] = round(data["RAIN"] / 10, 2)
-                data["SHOWERS"] = round(data["SHOWERS"] / 10, 2)
-                data["PRECIPITATION"] = round(data["PRECIPITATION"] / 10, 2)
-            else:
-                unit_col = "englishunit"
-                data["TEMPERATURE"] = round((data["TEMPERATURE"] * 9 / 5) + 32, 2)
-                data["APPARENT_TEMPERATURE"] = round((data["TEMPERATURE"] * 9 / 5) + 32, 2)
-                data["RAIN"] = round(data["RAIN"] / 10 / 2.94, 2)
-                data["SHOWERS"] = round(data["SHOWERS"] / 10 / 2.94, 2)
-                data["PRECIPITATION"] = round(data["PRECIPITATION"] / 10 / 2.94, 2)
-                data["SNOWFALL"] = round(data["SNOWFALL"] / 2.94,2)
-                data["WIND_SPEED"] = round(data["WIND_SPEED"] / 1.609,2)
-
-            if "time_format" not in st.session_state:
-                st.session_state["time_format"] = "12-hour"
-            if st.session_state["time_format"] == "12-hour":
-                data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.strftime("%I:%M %p")
-                data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.strftime("%I:%M %p")
-                data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.strftime("%I:%M %p")
-            else:
-                data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.strftime("%H:%M")
-                data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.strftime("%H:%M")
-                data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.strftime("%H:%M")
-            weathertoast.toast(
-                body="Loading charts...", icon=":material/hourglass:"
-            )
-            metrics_container = st.container(border=True, horizontal=True)
-            with metrics_container:
-                left, middle, right = st.columns(3)
-                left.metric(
-                    label="Sunrise 🌅",
-                    value=str(data.iloc[-1]["SUNRISE_TIME"]),
-                    border=True,
-                )
-                middle.metric(
-                    label="Sunset 🌇", value=str(data.iloc[-1]["SUNSET_TIME"]), border=True
-                )
-
-                left.metric(
-                    label="Temperature",
-                    value=str(data.iloc[-1]["TEMPERATURE"])
-                    + " "
-                    + str(
-                        units.loc[
-                            units["measurename"] == "temperature", unit_col
-                        ].values[0]
-                    ),
-                    delta=str(
-                        round(
-                            data.iloc[-1]["TEMPERATURE"] - data.iloc[-2]["TEMPERATURE"],
-                            2,
-                        )
+                data["MEASURE_DATE"] = to_datetime(data["MEASURE_DATE"])
+                data["SUNRISE_TIME"] = to_datetime(data["SUNRISE_TIME"])
+                data["SUNSET_TIME"] = to_datetime(data["SUNSET_TIME"])
+                if st.session_state["timezone"] == "Local":
+                    data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.tz_localize("UTC")
+                    data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.tz_convert(
+                        st.session_state["timezone_offset"]
                     )
-                    + " "
-                    + str(
-                        units.loc[
-                            units["measurename"] == "temperature", unit_col
-                        ].values[0]
-                    ),
-                    delta_color="off",
-                    border=True,
-                    chart_data=data[["TEMPERATURE"]],
-                )
-                middle.metric(
-                    label="Humidity",
-                    value=str(data.iloc[-1]["RELATIVE_HUMIDITY"])
-                    + " "
-                    + str(
-                        units.loc[units["measurename"] == "humidity", unit_col].values[
-                            0
-                        ]
-                    ),
-                    delta=str(
-                        round(
-                            data.iloc[-1]["RELATIVE_HUMIDITY"]
-                            - data.iloc[-2]["RELATIVE_HUMIDITY"],
-                            2,
-                        )
+                    data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.tz_localize("UTC")
+                    data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.tz_convert(
+                        st.session_state["timezone_offset"]
                     )
-                    + " "
-                    + str(
-                        units.loc[units["measurename"] == "humidity", unit_col].values[
-                            0
-                        ]
-                    ),
-                    delta_color="off",
-                    border=True,
-                    chart_data=data[["RELATIVE_HUMIDITY"]],
+                    data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.tz_localize("UTC")
+                    data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.tz_convert(
+                        st.session_state["timezone_offset"]
+                    )
+                data = data[data["MEASURE_DATE"].dt.date == current_date]
+                data = data.sort_values(by="MEASURE_DATE")
+
+                if st.session_state["units"] == "SI":
+                    unit_col = "siunit"
+                    data["RAIN"] = round(data["RAIN"] / 10, 2)
+                    data["SHOWERS"] = round(data["SHOWERS"] / 10, 2)
+                    data["PRECIPITATION"] = round(data["PRECIPITATION"] / 10, 2)
+                else:
+                    unit_col = "englishunit"
+                    data["TEMPERATURE"] = round((data["TEMPERATURE"] * 9 / 5) + 32, 2)
+                    data["APPARENT_TEMPERATURE"] = round((data["TEMPERATURE"] * 9 / 5) + 32, 2)
+                    data["RAIN"] = round(data["RAIN"] / 10 / 2.94, 2)
+                    data["SHOWERS"] = round(data["SHOWERS"] / 10 / 2.94, 2)
+                    data["PRECIPITATION"] = round(data["PRECIPITATION"] / 10 / 2.94, 2)
+                    data["SNOWFALL"] = round(data["SNOWFALL"] / 2.94,2)
+                    data["WIND_SPEED"] = round(data["WIND_SPEED"] / 1.609,2)
+
+                if "time_format" not in st.session_state:
+                    st.session_state["time_format"] = "12-hour"
+                if st.session_state["time_format"] == "12-hour":
+                    data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.strftime("%I:%M %p")
+                    data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.strftime("%I:%M %p")
+                    data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.strftime("%I:%M %p")
+                else:
+                    data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.strftime("%H:%M")
+                    data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.strftime("%H:%M")
+                    data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.strftime("%H:%M")
+                weathertoast.toast(
+                    body="Loading charts...", icon=":material/hourglass:"
                 )
-                weathercode = data.iloc[-1]["WEATHER_CODE"]
-                if weathercode in weather_code_descr:
-                    right.metric(
-                        label="Weather",
-                        value=weather_code_descr[weathercode],
+                metrics_container = st.container(border=True, horizontal=True)
+                with metrics_container:
+                    left, middle, right = st.columns(3)
+                    left.metric(
+                        label="Sunrise 🌅",
+                        value=str(data.iloc[-1]["SUNRISE_TIME"]),
                         border=True,
                     )
-                else:
-                    st.metric(label="Weather", value="Unknown", border=True)
-                right.metric(
-                    label="Precipitation",
-                    value=str(data.iloc[-1]["PRECIPITATION"])
-                    + " "
-                    + str(
-                        units.loc[
-                            units["measurename"] == "distance_short", unit_col
-                        ].values[0]
-                    ),
-                    delta=str(
-                        round(
-                            data.iloc[-1]["PRECIPITATION"]
-                            - data.iloc[-2]["PRECIPITATION"],
-                            2,
-                        )
+                    middle.metric(
+                        label="Sunset 🌇", value=str(data.iloc[-1]["SUNSET_TIME"]), border=True
                     )
-                    + " "
-                    + str(
-                        units.loc[
-                            units["measurename"] == "distance_short", unit_col
-                        ].values[0]
-                    ),
-                    delta_color="off",
-                    border=True,
-                    chart_data=data[["PRECIPITATION"]],
-                )
 
-                left.metric(
-                    label="Wind Speed",
-                    value=str(data.iloc[-1]["WIND_SPEED"])
-                    + " "
-                    + str(
-                        units.loc[units["measurename"] == "speed", unit_col].values[0]
-                    ),
-                    delta=str(
-                        round(
-                            data.iloc[-1]["WIND_SPEED"] - data.iloc[-2]["WIND_SPEED"],
-                            2,
+                    left.metric(
+                        label="Temperature",
+                        value=str(data.iloc[-1]["TEMPERATURE"])
+                        + " "
+                        + str(
+                            units.loc[
+                                units["measurename"] == "temperature", unit_col
+                            ].values[0]
+                        ),
+                        delta=str(
+                            round(
+                                data.iloc[-1]["TEMPERATURE"] - data.iloc[-2]["TEMPERATURE"],
+                                2,
+                            )
                         )
+                        + " "
+                        + str(
+                            units.loc[
+                                units["measurename"] == "temperature", unit_col
+                            ].values[0]
+                        ),
+                        delta_color="off",
+                        border=True,
+                        chart_data=data[["TEMPERATURE"]],
                     )
-                    + " "
-                    + str(
-                        units.loc[units["measurename"] == "speed", unit_col].values[0]
-                    ),
-                    delta_color="off",
-                    border=True,
-                    chart_data=data[["WIND_SPEED"]],
-                )
-                right.metric(
-                    label="Wind Direction",
-                    value=str(data.iloc[-1]["WIND_DIRECTION"]) + " "
-                    + str(
-                        units.loc[units["measurename"] == "direction", unit_col].values[
-                            0
-                        ]
-                    ),
-                    border=True,
-                )
+                    middle.metric(
+                        label="Humidity",
+                        value=str(data.iloc[-1]["RELATIVE_HUMIDITY"])
+                        + " "
+                        + str(
+                            units.loc[units["measurename"] == "humidity", unit_col].values[
+                                0
+                            ]
+                        ),
+                        delta=str(
+                            round(
+                                data.iloc[-1]["RELATIVE_HUMIDITY"]
+                                - data.iloc[-2]["RELATIVE_HUMIDITY"],
+                                2,
+                            )
+                        )
+                        + " "
+                        + str(
+                            units.loc[units["measurename"] == "humidity", unit_col].values[
+                                0
+                            ]
+                        ),
+                        delta_color="off",
+                        border=True,
+                        chart_data=data[["RELATIVE_HUMIDITY"]],
+                    )
+                    weathercode = data.iloc[-1]["WEATHER_CODE"]
+                    if weathercode in weather_code_descr:
+                        right.metric(
+                            label="Weather",
+                            value=weather_code_descr[weathercode],
+                            border=True,
+                        )
+                    else:
+                        st.metric(label="Weather", value="Unknown", border=True)
+                    right.metric(
+                        label="Precipitation",
+                        value=str(data.iloc[-1]["PRECIPITATION"])
+                        + " "
+                        + str(
+                            units.loc[
+                                units["measurename"] == "distance_short", unit_col
+                            ].values[0]
+                        ),
+                        delta=str(
+                            round(
+                                data.iloc[-1]["PRECIPITATION"]
+                                - data.iloc[-2]["PRECIPITATION"],
+                                2,
+                            )
+                        )
+                        + " "
+                        + str(
+                            units.loc[
+                                units["measurename"] == "distance_short", unit_col
+                            ].values[0]
+                        ),
+                        delta_color="off",
+                        border=True,
+                        chart_data=data[["PRECIPITATION"]],
+                    )
 
-            if st.checkbox("Show raw data"):
-                st.subheader("Raw data")
-                st.write(data)
+                    left.metric(
+                        label="Wind Speed",
+                        value=str(data.iloc[-1]["WIND_SPEED"])
+                        + " "
+                        + str(
+                            units.loc[units["measurename"] == "speed", unit_col].values[0]
+                        ),
+                        delta=str(
+                            round(
+                                data.iloc[-1]["WIND_SPEED"] - data.iloc[-2]["WIND_SPEED"],
+                                2,
+                            )
+                        )
+                        + " "
+                        + str(
+                            units.loc[units["measurename"] == "speed", unit_col].values[0]
+                        ),
+                        delta_color="off",
+                        border=True,
+                        chart_data=data[["WIND_SPEED"]],
+                    )
+                    right.metric(
+                        label="Wind Direction",
+                        value=str(data.iloc[-1]["WIND_DIRECTION"]) + " "
+                        + str(
+                            units.loc[units["measurename"] == "direction", unit_col].values[
+                                0
+                            ]
+                        ),
+                        border=True,
+                    )
 
-    except Exception as e:
-        weathertoast.toast(
-            f"Unable to fetch weather data from DB. Possibly due to a database error. Error: {e}",
-            icon=":material/error:",
-        )
-        raise ValueError(f"Error fetching weather data: {e}") from e
+                if st.checkbox("Show raw data"):
+                    st.subheader("Raw data")
+                    st.write(data)
+
+        except Exception as e:
+            weathertoast.toast(
+                f"Unable to fetch weather data from DB. Possibly due to a database error. Error: {e}",
+                icon=":material/error:",
+            )
+            raise ValueError(f"Error fetching weather data: {e}") from e
 
 
 @st.fragment(run_every=timedelta(minutes=1))

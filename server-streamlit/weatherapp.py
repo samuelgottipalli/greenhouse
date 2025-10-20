@@ -51,11 +51,7 @@ def clean_data(data: dict[str, str|int|float|dict[str, str|int|float|list[str]]]
     return data_list
 
 def load_to_db(data: dict[str, str|int|float] | None) -> bool | None:
-    db_path = getenv("DB_PATH")
-    if not db_path:
-        print("Missing DB_PATH environment variable. Check .env file.")
-        return None
-    conn_str = getenv("DB_CONNECTION_STRING").format(DB_PATH=db_path)
+    conn_str: str = getenv("DB_CONNECTION_STRING", default="sqlite:///greenhouse.db")
     if not conn_str:
         print("Missing DB_CONNECTION_STRING environment variable. Check .env file.")
         return None
@@ -99,11 +95,13 @@ def load_to_db(data: dict[str, str|int|float] | None) -> bool | None:
     return True
 
 
-# get_config()
+data = fetch_weather()
+data = clean_data(data)
+print(load_to_db(data))
+sleep(10)
 while True:
     if dtt.now().minute % 15 == 0 and 0<=dtt.now().second <= 10:
         data = fetch_weather()
         data = clean_data(data)
         print(load_to_db(data))
     sleep(10)
-    
