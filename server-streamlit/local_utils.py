@@ -1,11 +1,14 @@
 """
 Utility functions for the greenhouse project.
 """
+from os import getenv, path
+
 from dotenv import load_dotenv
-from sqlalchemy.engine import create_engine
+from pandas import DataFrame, read_sql
+from pandas.errors import EmptyDataError
 from sqlalchemy import Engine, text
-from pandas import DataFrame, read_sql_query
-from os import getenv
+from sqlalchemy.engine import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
 
 def get_config() -> bool:
@@ -15,24 +18,29 @@ def get_config() -> bool:
     Returns:
         bool: True if the .env file was loaded successfully, False otherwise.
     """
-    from os import path
-    if not path.exists(".env"):
+    if not path.exists(path=".env"):
         print(".env file not found.")
         return False
     conf: bool = load_dotenv(dotenv_path=".env")
     return conf
+
 get_config()
-DB_CONN_STRING: str = getenv("DB_CONNECTION_STRING")
-# print(DB_CONN_STRING)
+DB_CONN_STRING: str = getenv(key="DB_CONNECTION_STRING", default="sqlite:///greenhouse.db")
 
 
 def get_units(units: str) -> None | DataFrame:
-    engine: Engine = create_engine(
-        url=DB_CONN_STRING,
-    )
+    """
+    Get the units of measurement from the database.
+    Args:
+        units (str): The units to get from the database.
+
+    Returns:
+        None | DataFrame: The units of measurement from the database.
+    """
+    engine: Engine = create_engine(url=DB_CONN_STRING,)
     with engine.connect() as conn:
         try:
-            data: DataFrame = read_sql_query(
+            data: DataFrame = read_sql(
                 sql="""select
                             *
                         from
@@ -40,7 +48,7 @@ def get_units(units: str) -> None | DataFrame:
                         """,
                         con=conn
             )
-        except Exception as e:
+        except (SQLAlchemyError, EmptyDataError, ValueError) as e:
             print("Unable to get units of measurement!")
             print(e)
             return None
@@ -64,7 +72,7 @@ def read_greenhouse_conditions(default: bool = False) -> None | DataFrame:
     )
     with engine.connect() as conn:
         try:
-            data: DataFrame = read_sql_query(
+            data: DataFrame = read_sql(
                 sql=f"""select
                             *
                         from
@@ -72,10 +80,8 @@ def read_greenhouse_conditions(default: bool = False) -> None | DataFrame:
                         where
                             deviceid = '001' 
                             and relayid != '4'
-                        """,
-                con=conn,
-            )
-        except Exception as e:
+                        """, con=conn)
+        except (SQLAlchemyError, EmptyDataError, ValueError) as e:
             print("Unable to read greenhouse settings from database!")
             print(e)
             return None
@@ -83,7 +89,19 @@ def read_greenhouse_conditions(default: bool = False) -> None | DataFrame:
             return None
     return data
 
-def write_greenhouse_conditions(data: DataFrame) -> bool:
+
+def write_greenhouse_conditions(data: DataFrame | None) -> bool:
+    """
+    Write the greenhouse conditions to the database.
+    Args:
+        data (DataFrame | None): The greenhouse conditions to write to the database. If data is a
+            None or data is empty, then it will automatically return False.
+
+    Returns:
+        bool: True if the data was written successfully, False otherwise.
+    """
+    if data is None or data.empty:
+        return False
     engine: Engine = create_engine(
         url=DB_CONN_STRING,
     )
@@ -105,14 +123,20 @@ def write_greenhouse_conditions(data: DataFrame) -> bool:
             )
             conn.commit()
             return True
-        except Exception as e:
+        except (SQLAlchemyError, ValueError) as e:
             print(e)
             conn.rollback()
             return False
 
 
 def reset_greenhouse_conditions() -> bool:
+    """
+    Reset the greenhouse conditions to the default values.
+    """
     return write_greenhouse_conditions(data=read_greenhouse_conditions(default=True))
 
 def revert_greenhouse_conditions() -> bool:
+    """
+    Revert the greenhouse conditions to the last saved values.
+    """
     return write_greenhouse_conditions(data=read_greenhouse_conditions())
