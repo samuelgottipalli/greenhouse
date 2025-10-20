@@ -16,11 +16,8 @@ st.logo(image=r"images\favicon.png", icon_image=r"images\favicon.png", size="lar
 st.title(body="Weather Data")
 
 
-
-
-
 @st.fragment(run_every=timedelta(minutes=15))
-def get_weather_data():
+def get_weather_data(weathertoast: DeltaGenerator):
     """
     Fetch weather data from the database.
     """
@@ -101,8 +98,8 @@ def get_weather_data():
                 data["MEASURE_DATE"] = data["MEASURE_DATE"].dt.strftime("%H:%M")
                 data["SUNRISE_TIME"] = data["SUNRISE_TIME"].dt.strftime("%H:%M")
                 data["SUNSET_TIME"] = data["SUNSET_TIME"].dt.strftime("%H:%M")
-            weathertoast: DeltaGenerator = st.toast(
-                body="Loadoing charts...", icon=":material/hourglass:"
+            weathertoast.toast(
+                body="Loading charts...", icon=":material/hourglass:"
             )
             metrics_container = st.container(border=True, horizontal=True)
             with metrics_container:
@@ -295,4 +292,4 @@ update_datetime()
 weathertoast: DeltaGenerator = st.toast(
     body="Fetching weather data...", icon=":material/hourglass:"
 )
-get_weather_data()
+get_weather_data(weathertoast)
