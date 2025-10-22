@@ -5,7 +5,7 @@ from os import getenv
 
 import local_utils as lu
 import streamlit as st
-from config import weather_code_descr
+from config import weather_code_descr, wind_direction_descr
 from pandas import DataFrame, to_datetime, read_sql
 from sqlalchemy import Engine
 from sqlalchemy.engine import create_engine
@@ -136,7 +136,8 @@ def get_weather_data(weathertoast: DeltaGenerator):
                         ),
                         delta=str(
                             round(
-                                data.iloc[-1]["TEMPERATURE"] - data.iloc[-2]["TEMPERATURE"],
+                                data.iloc[-1]["TEMPERATURE"]
+                                - data.iloc[-2]["TEMPERATURE"],
                                 2,
                             )
                         )
@@ -148,7 +149,7 @@ def get_weather_data(weathertoast: DeltaGenerator):
                         ),
                         delta_color="off",
                         border=True,
-                        chart_data=data[["TEMPERATURE"]],
+                        chart_data=data[["TEMPERATURE", "MEASURE_DATE"]],
                     )
                     middle.metric(
                         label="Humidity",
@@ -235,14 +236,20 @@ def get_weather_data(weathertoast: DeltaGenerator):
                     )
                     right.metric(
                         label="Wind Direction",
-                        value=str(data.iloc[-1]["WIND_DIRECTION"]) + " "
+                        value=str(data.iloc[-1]["WIND_DIRECTION"])
+                        + " "
                         + str(
-                            units.loc[units["measurename"] == "direction", unit_col].values[
-                                0
-                            ]
-                        ),
+                            units.loc[
+                                units["measurename"] == "direction", unit_col
+                            ].values[0]
+                        )
+                        + " - "
+                        + wind_direction_descr[
+                            round(data.iloc[-1]["WIND_DIRECTION"] / 22.5,0)
+                        ].get("short"),
                         border=True,
                     )
+                    right.metric(label="Data last updated at", value=str(data.iloc[-1]["MEASURE_DATE"]))
 
                 if st.checkbox("Show raw data"):
                     st.subheader("Raw data")
