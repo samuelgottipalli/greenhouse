@@ -29,3 +29,22 @@ weather_code_descr: dict[int, str] = {
     96: "Thunderstorm with slight hail ⛈️⚪",
     99: "Thunderstorm with heavy hail ⛈️⚪",
 }
+
+wind_direction_descr: dict[int, dict[str, str]] = {
+    0: {"short": "N", "long": "North"},
+    1: {"short": "NNE", "long": "North-northeast"},
+    2: {"short": "NE", "long": "Northeast"},
+    3: {"short": "ENE", "long": "East-northeast"},
+    4: {"short": "E", "long": "East"},
+    5: {"short": "ESE", "long": "East-southeast"},
+    6: {"short": "SE", "long": "Southeast"},
+    7: {"short": "SSE", "long": "South-southeast"},
+    8: {"short": "S", "long": "South"},
+    9: {"short": "SSW", "long": "South-southwest"},
+    10: {"short": "SW", "long": "Southwest"},
+    11: {"short": "WSW", "long": "West-southwest"},
+    12: {"short": "W", "long": "West"},
+    13: {"short": "WNW", "long": "West-northwest"},
+    14: {"short": "NW", "long": "Northwest"},
+    15: {"short": "NNW", "long": "North-northwest"},
+}
