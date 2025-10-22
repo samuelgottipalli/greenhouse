@@ -149,7 +149,7 @@ def get_weather_data(weathertoast: DeltaGenerator):
                         ),
                         delta_color="off",
                         border=True,
-                        chart_data=data[["TEMPERATURE", "MEASURE_DATE"]],
+                        chart_data=data[["TEMPERATURE",]],
                     )
                     middle.metric(
                         label="Humidity",
