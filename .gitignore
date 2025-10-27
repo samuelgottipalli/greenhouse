@@ -11,3 +11,5 @@ DB.Browser.for.SQLite-v3.13.1-win64
 *.txt
 Noto*
 test.py
+*.pyc
+__pycache__/
