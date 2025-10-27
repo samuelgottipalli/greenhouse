@@ -8,7 +8,7 @@ import local_utils as lu
 from paho.mqtt.publish import single
 from paho.mqtt.subscribe import simple
 from paho.mqtt.properties import MQTTException
-
+import json
 
 lu.get_config()
 
@@ -38,7 +38,7 @@ def publish_relay_status(device_id:str, relay_id:str, action_id:str) -> None | L
             port=port,
             # retain=True,
             client_id=device_id,
-            keepalive=5,
+            # keepalive=5,
         )
         return True
     except (MQTTException, OSError, ValueError) as e:
@@ -57,36 +57,8 @@ def subscribe_from_pico() -> dict[str, float | None]:
     port: int = int(getenv(key="MQTT_PORT", default='1883'))
     device_id = "001"
 
-    def _get_topic_value(topic: str) -> float | None:
-        msg = simple(topic, hostname=hostname, port=port, retained=True, msg_count=2)
-        if not msg or getattr(msg, "payload", None) is None:
-            return msg.payload
-        try:
-            payload = msg.payload
-            # If payload is bytes, decode; otherwise convert to string
-            if isinstance(payload, bytes):
-                text = payload.decode()
-            else:
-                text = str(payload)
-            return round(float(text), 2)
-        except (UnicodeDecodeError, ValueError, TypeError, AttributeError):
-            return msg.payload
-
-    msg1 = simple("001/1", hostname=hostname)
+    msg1 = simple(topics=f"{device_id}/#", hostname=hostname, port=port)
     if msg1 is not None and getattr(msg1, "payload", None) is not None:
-        print(msg1.topic, msg1.payload)
-    msg2 = simple("001/2", hostname=hostname)
-    if msg2 is not None and getattr(msg2, "payload", None) is not None:
-        print(msg2.topic, msg2.payload)
-    msg3 = simple("001/3", hostname=hostname)
-    if msg3 is not None and getattr(msg3, "payload", None) is not None:
-        print(msg3.topic, msg3.payload)
-    msg4 = simple("001/4", hostname=hostname)
-    if msg4 is not None and getattr(msg4, "payload", None) is not None:
-        print(msg4.topic, msg4.payload)
-    # pico_temp = _get_topic_value("#")
-    # pico_temp = _get_topic_value("001/002")
-    # pico_humidity = _get_topic_value("001/008")
-    # pico_light = _get_topic_value("001/006")
-    # return pico_temp
-    # return {"pico_temp": pico_temp, "pico_humidity": pico_humidity, "pico_light": pico_light}
+        return json.loads(msg1.payload.decode('utf-8'))
+    else:
+        return {}
