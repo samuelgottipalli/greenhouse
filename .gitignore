@@ -7,4 +7,9 @@ venv
 *.zip
 *.tar.gz
 DB.Browser.for.SQLite-v3.13.1-win64
-__pycache__
+*.ttf
+*.txt
+Noto*
+test.py
+*.pyc
+__pycache__/
