@@ -28,3 +28,6 @@ picoside/device/config.json
 # secrets: keep only the *.example templates in git
 .env
 !.env.example
+
+# live data: create with `python -m scripts.upgrade_db`, back up separately
+server/data/*.db

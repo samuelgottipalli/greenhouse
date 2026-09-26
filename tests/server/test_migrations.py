@@ -110,3 +110,10 @@ def test_unknown_layout_is_refused(db_file):
 
 def test_upgrade_defaults_to_configured_database(seeded_db):
     assert str(TEST_DB_PATH.name) in migrations.upgrade()
+
+
+def test_fresh_clone_creates_missing_data_folder(tmp_path):
+    # server/data/ is not in git, so a fresh clone may not have it (R-02).
+    target = tmp_path / "data" / "greenhouse.db"
+    assert "Created" in migrations.upgrade(target)
+    assert query(target, "SELECT count(*) FROM watering_schedule") == [(8,)]

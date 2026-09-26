@@ -57,7 +57,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-17 | Low | Server | Mixed time zones: UTC for relay log and weather, local for Pico timestamps and watering schedule | Code | **Fixed**: UTC in storage and on the wire; only watering start times are local, by design |
 | S-18 | Low | Web | App preferences live only in the browser session and defaults are duplicated on four pages | Code | Partial: defaults in one place (`ui.py`); still per session |
 | R-01 | Low | Repo | `picoside/` committed with CRLF; any edit rewrites every line in the diff | Code | **Fixed**: `.gitattributes` stores text as LF (device files LF everywhere); repository renormalized |
-| R-02 | Low | Repo | SQLite database files are committed alongside the code | Code | Open: moved to `server/data/`, still tracked |
+| R-02 | Low | Repo | SQLite database files are committed alongside the code | Code | **Fixed**: database untracked and git-ignored; `python -m scripts.upgrade_db` creates and seeds a new one |
 | R-03 | Low | Repo | No CI; tests did not exist before this review | n/a | **Fixed**: `.github/workflows/tests.yml` runs the full suite (Python 3.11, Ubuntu) on every push and pull request |
 
 ---
