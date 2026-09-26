@@ -1,35 +1,52 @@
 ## Greenhouse Project AI Agent Guidelines
 
-This project consists of two main components: `picoside` (MicroPython device) and `serverside` (Python Dash web application).
+This project has two components: `picoside/device` (MicroPython firmware for a Raspberry Pi Pico W)
+and `server` (Streamlit web app plus background services). The old Dash app (`serverside`) and the
+GPS module have been removed; do not reintroduce them.
 
-### 1. Architecture Overview
+Start with `README.md` for the overview, `docs/FINDINGS.md` for known defects, `docs/PLAN.md` for
+planned work and `docs/MQTT.md` for the message contract.
 
-*   **Picoside**: An ESP32-based MicroPython device responsible for sensor readings (DHT, LDR), relay control, GPS data acquisition, LCD display management, and MQTT communication. The core logic resides in `picoside/main.py`.
-*   **Serverside**: A Python Dash web application providing a "Control Center" for monitoring and managing the greenhouse. It displays an overview, device information, and weather conditions. The main application entry point is `serverside/app.py`.
+### 1. Layout
 
-### 2. Data Flow and Communication
+*   **`picoside/device/`**: exactly what is copied to the Pico.
+    *   `main.py`: boot and the loop around `Controller.tick()`, with a watchdog.
+    *   `controller.py`: main-loop logic (timers, buttons, screens, commands, telemetry).
+    *   Hardware modules: `net.py` (Wi-Fi/MQTT with reconnect and outbox), `clock.py` (NTP, UTC to
+        local with a DST rule), `display.py`, `relays.py`, `sensors.py`, `buttons.py` (IRQ handlers
+        only queue events), `config.py` (defaults and legacy key upgrade).
+    *   `lib/`: vendored third-party code (`lcd_api`, `i2c_lcd`, `umqtt.simple`).
+*   **`picoside/setup_config.py`**: runs on a PC and writes `device/config.json` (git-ignored).
+*   **`server/`** (run everything from this folder):
+    *   `app.py`: Streamlit entry point (`streamlit run app.py`). Pages live in `views/` and use
+        `ui.page_setup()`.
+    *   `core/`: `settings.py` (the only place `.env` is read), `db.py` (all SQL), `schema.sql`
+        (schema v2), `migrations.py`, `mqtt.py`, `weather_api.py`, `timeutil.py`,
+        `conversions.py`, `weather_codes.py`.
+    *   `services/`: `automation.py` and `weather_collector.py` (`python -m services.<name>`).
+    *   `scripts/upgrade_db.py`: creates or migrates the database (`python -m scripts.upgrade_db`).
 
-*   **Picoside to Serverside**: Sensor data, GPS data, and relay statuses are published by the Pico to an MQTT broker via `picoside/mqtt_comm.py`.
-*   **Serverside to Picoside**: Commands and settings can be sent from the Dash application to the Pico via MQTT using `serverside/pub_to_pico.py`.
-*   **Data Storage**: `serverside/subs_from_pico.py` subscribes to MQTT topics and stores incoming data into the `serverside/greenhouse.db` SQLite database.
-*   **Web Application Data Retrieval**: The Dash application queries `serverside/greenhouse.db` to display information. External weather data is fetched via `serverside/weather_api.py`.
+### 2. Conventions
 
-### 3. Key Files and Directories
+*   Timestamps are UTC text `YYYY-MM-DD HH:MM:SS` in columns ending `_utc`, and on the wire as
+    `ts_utc`. Times of day are local `HH:MM`; durations are integer minutes.
+*   Units go in names (`temperature_c`, `wind_speed_kmh`). Store SI units and convert for display
+    with `core/conversions.py`.
+*   Database tables are STRICT with integer IDs. `relay_events` stores `state` (0/1) and `source`
+    (`auto`/`web`/`device`). Change the schema only through `core/migrations.py`, bumping
+    `PRAGMA user_version`.
+*   Device code must run on MicroPython: no type annotations, no `str.ljust`/`rjust` (use
+    `"{:<20}".format`), and always use `time.ticks_diff`/`ticks_add` for ticks.
+*   Google-style docstrings (`Args:` / `Returns:`) on all modules and functions.
+*   Never commit real secrets (`server/.env`, `picoside/device/config.json`).
 
-*   **`picoside/main.py`**: Main MicroPython application logic.
-*   **`picoside/config.json`**: Device-specific configuration for the Pico.
-*   **`serverside/app.py`**: Main Dash web application entry point.
-*   **`serverside/greenhouse.db`**: SQLite database for storing application data.
-*   **`serverside/app_*.py`**: Modules within `serverside` that define different sections/tabs of the Dash dashboard (e.g., `app_overview.py`, `app_device_info.py`, `app_weather.py`).
+### 3. Testing
 
-### 4. Developer Workflows
-
-*   **Picoside Development**: Requires a MicroPython development environment. Code is typically flashed to the ESP32 device. Refer to MicroPython documentation for flashing procedures.
-*   **Serverside Development**: Run the Dash application using `python serverside/app.py`. The application will be accessible via a web browser, usually at `localhost:8050`.
-*   **Database Interaction**: The `greenhouse.db` is a SQLite database. You can use standard SQLite tools for inspection and debugging.
-
-### 5. Project-Specific Conventions
-
-*   **Configuration**: Pico device settings are managed in `picoside/config.json`.
-*   **MQTT**: All inter-component communication relies heavily on MQTT. Understand the topics and message formats used.
-*   **Dash UI**: The Dash application uses `dash-bootstrap-components` for styling and includes client-side callbacks for theme and unit switching.
+*   Run `python -m pytest` from the repository root. Install the tools with
+    `pip install -r requirements-dev.txt`.
+*   `tests/server/`: DB, migrations, MQTT, weather, automation and Streamlit `AppTest` page tests,
+    against a temporary seeded database (`tests/support.py`).
+*   `tests/picoside/`: firmware on CPython with fake hardware (`pico_fakes.py`, ticks wrap at
+    2**30), plus an `mpy-cross` compile check of every device file.
+*   Every change needs a test. Known defects are `known_bug` tests marked
+    `xfail(strict=True)`. Remove the marker in the change that fixes the bug.

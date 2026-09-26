@@ -13,3 +13,14 @@ Noto*
 test.py
 *.pyc
 __pycache__/
+
+# test artifacts
+tests/.tmp/
+.pytest_cache/
+!requirements*.txt
+
+# database backups written by scripts.upgrade_db
+*.v1-backup-*.db
+
+# device config holds Wi-Fi credentials; generate it with picoside/setup_config.py
+picoside/device/config.json
