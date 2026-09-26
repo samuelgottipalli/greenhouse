@@ -135,6 +135,55 @@ def test_settings_page_without_settings_shows_error(seeded_db, db_conn):
     assert "not found" in at.error[0].value
 
 
+def test_control_first_toggle_off_sends_off(seeded_db, db_conn, published):
+    # Formerly known bug S-03: the first toggle after page load sent "on".
+    at = run_page("views/control.py")
+    at.toggle(key="2").set_value(False).run()  # fan on -> off
+    assert published == [{"relay_id": 2, "state": 0, "source": "web"}]
+    assert latest_event(db_conn, 2) == (0, "web")
+    assert at.toggle(key="2").value is False
+
+
+def test_control_toggle_on_then_off(seeded_db, db_conn, published):
+    at = run_page("views/control.py")
+    at.toggle(key="4").set_value(True).run()
+    at.toggle(key="4").set_value(False).run()
+    assert [p["state"] for p in published] == [1, 0]
+    assert latest_event(db_conn, 4) == (0, "web")
+
+
+def test_control_shows_changes_made_elsewhere(seeded_db, db_conn):
+    at = run_page("views/control.py")
+    assert at.toggle(key="3").value is False
+    db_conn.execute(
+        "INSERT INTO relay_events (device_id, relay_id, event_utc, state, source) "
+        "VALUES (1, 3, '2031-01-01 00:00:00', 1, 'auto')"
+    )
+    db_conn.commit()
+    at.run()
+    assert at.toggle(key="3").value is True
+
+
+def test_control_page_with_no_relay_history(seeded_db, db_conn, published):
+    # S-09: the page used to crash when relay_events was empty.
+    db_conn.execute("DELETE FROM relay_events")
+    db_conn.commit()
+    at = run_page("views/control.py")
+    assert not at.exception
+    assert [t.value for t in at.toggle] == [False, False, False, False]
+    at.toggle(key="1").set_value(True).run()
+    assert published == [{"relay_id": 1, "state": 1, "source": "web"}]
+
+
+def test_control_page_without_relays_shows_error(seeded_db, db_conn):
+    db_conn.execute("PRAGMA foreign_keys = OFF")
+    db_conn.execute("DELETE FROM relays")
+    db_conn.commit()
+    at = run_page("views/control.py")
+    assert not at.exception
+    assert "not found" in at.error[0].value
+
+
 # --- Known bugs (see docs/FINDINGS.md). Remove the marker when fixed. -----
 
 
@@ -159,9 +208,3 @@ def test_weather_page_handles_north_wind(seeded_db):
     assert not run_page("views/weather.py").exception
 
 
-@pytest.mark.known_bug
-@pytest.mark.xfail(strict=True, reason="S-03: first toggle after page load sends the opposite action")
-def test_control_first_toggle_off_sends_off(seeded_db, published):
-    at = run_page("views/control.py")
-    at.toggle(key="2").set_value(False).run()  # fan on -> off
-    assert published == [{"relay_id": 2, "state": 0, "source": "web"}]

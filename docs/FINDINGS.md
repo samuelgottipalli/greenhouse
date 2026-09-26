@@ -31,7 +31,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-01 | Critical | Server | No service stores Pico sensor data; automation runs on stale readings | Code + DB | Open (PLAN 2.3) |
 | S-06 | Critical | Server | Automation loop bugs: heater commands go to the fan, conflicting fan logic, busy loop | Test + Code | Open: ported unchanged, defects marked in the code |
 | S-02 | High | Server | Saving settings stores `HH:MM:SS`; the automation service then crashes parsing `HH:MM` | Test | **Fixed**: schema stores `HH:MM` and whole minutes |
-| S-03 | High | Web | First toggle after page load sends the opposite command | Test | Open |
+| S-03 | High | Web | First toggle after page load sends the opposite command | Test | **Fixed**: the callback reads the new toggle value and time when clicked; toggles always show the logged state |
 | S-04 | High | Web | Weather page crashes if there are fewer than two readings for today | Test | Open |
 | S-05 | High | Web | Weather page crashes when wind is from 348.75-360 degrees | Test | Open |
 | S-07 | High | Web | Weather unit conversions are wrong (apparent temp, precipitation, snowfall) | Code | Open |
@@ -46,7 +46,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | P-12 | Medium | Pico | First sensor reading comes 5 minutes after boot, so the LCD shows no values until then | Code | **Fixed**: first read and publish at boot |
 | P-13 | Low | Pico | Vendored `umqtt` printed debug output on every message check and had no socket timeout | Code | **Fixed** |
 | S-08 | Medium | Web | Hysteresis buffers are shown as °F but stored and used as °C | Code | Open |
-| S-09 | Medium | Web | Control and Settings pages crash on an empty database | Code | Partial: Settings shows an error; Control still crashes |
+| S-09 | Medium | Web | Control and Settings pages crash on an empty database | Code | **Fixed**: Settings and Control show an error when the tables are missing; Control shows relays with no history as off |
 | S-10 | Medium | Server | New DB engine per query, never disposed; no indexes on the growing log tables | Test + Code | Partial: one cached engine, foreign keys on, index on `relay_events`; no read cache yet |
 | S-11 | Medium | Server | Device `001`, relay IDs and names hard-coded; four near-identical copy-pasted blocks | Code | Partial: device from `DEVICE_ID`, names from the DB, toggles built in a loop; automation still hard-codes relay IDs |
 | S-12 | Medium | Web | Windows-only paths (`imagesavicon.png`, `help.md` vs `HELP.md`) break on Linux / Raspberry Pi | Code | **Fixed**: paths built from `__file__`; runs from any directory |
