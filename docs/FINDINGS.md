@@ -58,7 +58,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-18 | Low | Web | App preferences live only in the browser session and defaults are duplicated on four pages | Code | Partial: defaults in one place (`ui.py`); still per session |
 | R-01 | Low | Repo | `picoside/` committed with CRLF; any edit rewrites every line in the diff | Code | **Fixed**: `.gitattributes` stores text as LF (device files LF everywhere); repository renormalized |
 | R-02 | Low | Repo | SQLite database files are committed alongside the code | Code | Open: moved to `server/data/`, still tracked |
-| R-03 | Low | Repo | No CI; tests did not exist before this review | n/a | Open |
+| R-03 | Low | Repo | No CI; tests did not exist before this review | n/a | **Fixed**: `.github/workflows/tests.yml` runs the full suite (Python 3.11, Ubuntu) on every push and pull request |
 
 ---
 

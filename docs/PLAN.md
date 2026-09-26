@@ -33,7 +33,7 @@ Goal: no secrets in the repo, a clean and reproducible setup, and tests running 
 | 0.2 ✅ | Add `.gitattributes` (`* text=auto eol=lf`, `*.db binary`) and make one EOL-normalising commit. | R-01 | `git ls-files --eol` shows `i/lf` for all text files. | 30 min |
 | 0.3 ✅ | Replace `requirements.txt` with a UTF-8 file listing only runtime packages, add `requirements-dev.txt` (pytest), and fix the `*.txt` rule in `.gitignore`. | S-16 | In a fresh venv, `pip install -r requirements-dev.txt` then `pytest` passes; the runtime file has 10 or fewer packages. | 1 h |
 | 0.4 🟡 | Untrack `greenhouse.db`. Add `scripts/init_db.py` to create the schema from `greenhouse.sql` and seed the lookup and default rows, reusing the seed data in `tests/support.py`. | R-02 | A fresh clone plus `init_db.py` gives an app where every page renders. | 2 h |
-| 0.5 | Add a GitHub Actions workflow that runs `pytest` on push and PR (Python 3.11). | R-03 | A PR shows a green check; a deliberately failing test turns it red. | 1 h |
+| 0.5 ✅ | Add a GitHub Actions workflow that runs `pytest` on push and PR (Python 3.11). | R-03 | A PR shows a green check; a deliberately failing test turns it red. | 1 h |
 
 ---
 
