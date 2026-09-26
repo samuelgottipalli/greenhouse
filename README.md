@@ -143,8 +143,9 @@ python picoside/setup_config.py          # asks for Wi-Fi, broker, device ID and
 mpremote cp -r picoside/device/. :       # copy everything in device/ onto the Pico
 ```
 
-`config.json` contains your Wi-Fi password, so it is git-ignored. The copy committed before that
-rule still needs removing from git (FINDINGS SEC-01). `config.example.json` shows every setting.
+`config.json` (your Wi-Fi password) and `server/.env` (broker login) are git-ignored; only the
+`config.example.json` and `.env.example` templates are committed. For a fresh clone, copy
+`server/.env.example` to `server/.env` and run the setup script above.
 
 ## Running the tests
 

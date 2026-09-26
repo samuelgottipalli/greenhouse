@@ -24,3 +24,7 @@ tests/.tmp/
 
 # device config holds Wi-Fi credentials; generate it with picoside/setup_config.py
 picoside/device/config.json
+
+# secrets: keep only the *.example templates in git
+.env
+!.env.example

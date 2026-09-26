@@ -29,7 +29,7 @@ Goal: no secrets in the repo, a clean and reproducible setup, and tests running 
 
 | Step | Work | Fixes | Done when | Effort |
 |---|---|---|---|---|
-| 0.1 | Change the Wi-Fi password and any real values in `.env` / `secrets.toml`. Untrack those files and `picoside/config.json`, and commit `config.example.json`, `.env.example` and `secrets.example.toml`. Optionally purge history with `git filter-repo` (needs a force-push). | SEC-01 | `git ls-files` lists no secret files; the templates exist; the old Wi-Fi password no longer works. | 2 h |
+| 0.1 🟡 | Change the Wi-Fi password and any real values in `.env` / `secrets.toml`. Untrack those files and `picoside/config.json`, and commit `config.example.json`, `.env.example` and `secrets.example.toml`. Optionally purge history with `git filter-repo` (needs a force-push). | SEC-01 | `git ls-files` lists no secret files; the templates exist; the old Wi-Fi password no longer works. | 2 h |
 | 0.2 | Add `.gitattributes` (`* text=auto eol=lf`, `*.db binary`) and make one EOL-normalising commit. | R-01 | `git ls-files --eol` shows `i/lf` for all text files. | 30 min |
 | 0.3 ✅ | Replace `requirements.txt` with a UTF-8 file listing only runtime packages, add `requirements-dev.txt` (pytest), and fix the `*.txt` rule in `.gitignore`. | S-16 | In a fresh venv, `pip install -r requirements-dev.txt` then `pytest` passes; the runtime file has 10 or fewer packages. | 1 h |
 | 0.4 🟡 | Untrack `greenhouse.db`. Add `scripts/init_db.py` to create the schema from `greenhouse.sql` and seed the lookup and default rows, reusing the seed data in `tests/support.py`. | R-02 | A fresh clone plus `init_db.py` gives an app where every page renders. | 2 h |
@@ -106,7 +106,7 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 |---|---|---|
 | Review | Overview, findings, docstrings, test harness, `serverside` retired | Done |
 | Housekeeping | GPS removed; `server/` and `picoside/device/` layouts; schema v2 plus migration; Pico main loop rewritten | Done |
-| 0 | 0.3 ✅ · 0.4 🟡 (`scripts.upgrade_db` creates or migrates the database; the file is still tracked) · 0.1, 0.2, 0.5 open | In progress |
+| 0 | 0.1 🟡 (files untracked with templates; credentials not yet rotated) · 0.3 ✅ · 0.4 🟡 (`scripts.upgrade_db` creates or migrates the database; the file is still tracked) · 0.2, 0.5 open | In progress |
 | 1 | 1.2 ✅ (schema) · 1.6 ✅ · 1.7 ✅ (NTP + DST rule instead of GPS) · 1.9 ✅ · 1.1, 1.3–1.5, 1.8 open | In progress |
 | 2 | 2.1 ✅ · 2.2 ✅ (needs a hardware check) · 2.4 🟡 (credentials supported on both sides; broker not locked down) · 2.3 open | In progress |
 | 3 | 3.1 🟡 (one engine, index on `relay_events`; no read cache or benchmark) · 3.2 🟡 (all code done; 7-day soak not run) · 3.3, 3.4 open | In progress |

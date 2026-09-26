@@ -22,7 +22,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 
 | ID | Severity | Area | Finding | Evidence | Status |
 |----|----------|------|---------|----------|--------|
-| SEC-01 | Critical | Repo | Wi-Fi password and app secrets are committed to git | Code | **Open.** `config.example.json` added, and the device config is git-ignored; the credentials still need rotating and the files untracking (PLAN 0.1) |
+| SEC-01 | Critical | Repo | Wi-Fi password and app secrets are committed to git | Code | Partial: `server/.env` and `picoside/device/config.json` are untracked and git-ignored, with `.env.example` / `config.example.json` templates. **Still to do:** change the Wi-Fi password (and MQTT password, if real), since old commits keep the values; optionally rewrite history |
 | SEC-02 | High | MQTT | Broker traffic is unauthenticated and unencrypted; anyone on the LAN can switch relays | Code | Partial: both sides can now send a username and password; the broker does not require them yet |
 | SEC-03 | High | Web | Web app has no login; anyone who can reach the port can switch the heater or water | Code | Open |
 | P-01 | Critical | Pico | Boot crashes as soon as a real MQTT broker is configured | Test | **Fixed**: callback set before subscribe; test passes |
