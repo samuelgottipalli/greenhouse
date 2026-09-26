@@ -1,0 +1,13 @@
+# Store text with LF line endings in the repository; the working-tree ending
+# follows each developer's core.autocrlf setting.
+* text=auto
+
+# Scripts that run on Linux / the Pico must keep LF even in a Windows checkout.
+*.sh text eol=lf
+*.service text eol=lf
+picoside/device/** text=auto eol=lf
+
+# Binary files: never convert or diff as text.
+*.db binary
+*.png binary
+*.mpy binary
