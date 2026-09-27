@@ -118,7 +118,7 @@ been removed. It is still in the git history.
 | Dashboard: weather page, settings pages, control toggles | ✅ Mostly works (see findings S-03 to S-09) |
 | Server → device: commands move the relays | 🟡 Both sides now agree on the message format; not yet tried on the hardware |
 | Device → server: readings, relay changes and online status stored | 🟡 `services/ingest.py` built and tested end to end; not yet tried on the hardware |
-| Automation service | ⚠️ Runs, but has logic bugs (S-06) and acts on old data |
+| Automation | ✅ Tested rules on the server; the controller runs the same rules itself when the network is down, and cuts the heater if its sensor fails |
 | Security | 🟡 Dashboard login and a locked-down broker config are ready to switch on (RUNBOOK); the old Wi-Fi password in git history still needs changing (SEC-01) |
 
 Details and fixes are in [docs/FINDINGS.md](docs/FINDINGS.md) and [docs/PLAN.md](docs/PLAN.md).

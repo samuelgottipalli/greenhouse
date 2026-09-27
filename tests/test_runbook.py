@@ -29,7 +29,7 @@ def test_python_modules_exist():
     "message",
     ["Connecting to WiFi...", "WiFi connected. Syncing clock...", "Connecting to MQTT...",
      "WiFi unavailable, will retry.", "Clock not set", "IP address:", "NoMQTT", "NoWiFi",
-     "No Wi-Fi SSID set", "No MQTT broker set", "MQTT connect failed"],
+     "No Wi-Fi SSID set", "No MQTT broker set", "MQTT connect failed", "LOCAL"],
 )
 def test_lcd_and_console_messages_exist(message):
     assert message in RUNBOOK

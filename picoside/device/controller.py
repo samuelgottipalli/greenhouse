@@ -19,12 +19,22 @@ together with relay button 1 it shows the IP address. A relay button toggles
 its relay (1-4); pressing it twice within ``DOUBLE_PRESS_MS`` toggles the paired
 spare relay (5-8) instead. Non-main screens return to main after 10 s.
 
+Safety and local mode (see ``local_rules.py``):
+
+* If the DHT22 has not given a good reading for 5 minutes, the heater is
+  switched off, online or not.
+* If the MQTT link has been down for 2 minutes, the controller runs the
+  automation rules itself with the last settings the server sent (kept in
+  ``settings.json``) and shows ``LOCAL`` on the LCD. Changes are reported as
+  ``auto`` once the link is back.
+
 Every relay change, whatever its source, is published as a retained state
 message, and all eight states are re-published whenever the MQTT link comes
 up (boot or reconnect), so the server's view stays in step.
 """
 import time
 
+import local_rules
 from clock import format_uptime
 
 SCREEN_MAIN = 0
@@ -36,6 +46,8 @@ NTP_RETRY_MS = 5 * 60 * 1000
 TOGGLE_BUTTON = 0
 PAIRED_RELAY = {1: 5, 2: 6, 3: 7, 4: 8}
 COMMAND_SOURCES = ("web", "auto")
+LOCAL_MODE_AFTER_MS = 2 * 60 * 1000
+DHT_MAX_AGE_MS = 5 * 60 * 1000
 
 
 class Controller:
@@ -69,6 +81,8 @@ class Controller:
         self.net = net
         self.clock = clock
         net.on_command = self.handle_command
+        net.on_settings = self.handle_settings
+        self.settings = local_rules.load_settings()
 
         self.screen = SCREEN_MAIN
         self.screen_since = 0
@@ -85,6 +99,9 @@ class Controller:
         self._publish_ms = config["publish_interval_s"] * 1000
         self._ntp_ms = config["ntp_resync_hours"] * 3600 * 1000
         self._was_online = False
+        self._link_down_since = None
+        self._last_dht_ok = None
+        self.local_mode = False
 
     # --- lifecycle ------------------------------------------------------
 
@@ -121,9 +138,13 @@ class Controller:
         if self.net.mqtt_ok and not self._was_online:
             self.publish_all_states()
         self._was_online = self.net.mqtt_ok
+        self._track_link(now)
         if self._due(self._last_sensor, self._sensor_ms, now):
-            self.read_sensors()
+            self.read_sensors(now)
             self._last_sensor = now
+            self.apply_safety(now)
+            if self.local_mode:
+                self.apply_local_rules(now)
         if self._due(self._last_publish, self._publish_ms, now):
             self.publish_telemetry()
             self._last_publish = now
@@ -146,12 +167,87 @@ class Controller:
 
     # --- sensors and telemetry -------------------------------------------
 
-    def read_sensors(self):
-        """Read the DHT22 and LDR; keep the last good DHT values on failure."""
+    def read_sensors(self, now=None):
+        """
+        Read the DHT22 and LDR; keep the last good DHT values on failure.
+
+        Args:
+            now (int | None): ``ticks_ms`` now, recorded for a good DHT read.
+        """
         temperature, humidity = self.sensors.read_dht()
         if temperature is not None:
             self.temperature, self.humidity = temperature, humidity
+            self._last_dht_ok = time.ticks_ms() if now is None else now
         self.light = self.sensors.read_ldr()
+
+    def dht_fresh(self, now):
+        """Tell whether the last good DHT22 reading is recent enough to act on."""
+        return self._last_dht_ok is not None and time.ticks_diff(now, self._last_dht_ok) <= DHT_MAX_AGE_MS
+
+    # --- safety and local mode -------------------------------------------
+
+    def _track_link(self, now):
+        """Enter local mode after the MQTT link has been down for 2 minutes; leave it when back."""
+        if self.net.mqtt_ok:
+            self._link_down_since = None
+            self.local_mode = False
+            return
+        if self._link_down_since is None:
+            self._link_down_since = now
+        self.local_mode = time.ticks_diff(now, self._link_down_since) >= LOCAL_MODE_AFTER_MS
+
+    def _relay_number(self, name):
+        """Find a relay number by its configured name (None if not configured)."""
+        for number in range(1, 9):
+            if self.relays.name(number) == name:
+                return number
+        return None
+
+    def apply_safety(self, now):
+        """Switch the heater off if the temperature sensor has gone quiet, online or not."""
+        heater = self._relay_number("heater")
+        if heater and self.relays.state(heater) and not self.dht_fresh(now):
+            print("No temperature for 5 minutes: heater off")
+            self.switch_relay(heater, 0, "auto", now)
+
+    def apply_local_rules(self, now):
+        """Run the automation rules on the device (local mode)."""
+        fresh = self.dht_fresh(now)
+        states = {}
+        for name in ("fan", "heater", "water"):
+            number = self._relay_number(name)
+            if number:
+                states[name] = self.relays.state(number)
+        targets = local_rules.decide(
+            self.settings,
+            self.temperature if fresh else None,
+            self.humidity if fresh else None,
+            states,
+            self.clock.local_minutes(),
+        )
+        for name, target in targets.items():
+            number = self._relay_number(name)
+            if number and self.relays.state(number) != target:
+                self.switch_relay(number, target, "auto", now)
+
+    def handle_settings(self, payload):
+        """
+        Keep the automation settings the server publishes, for local mode.
+
+        Args:
+            payload (dict): Settings message (see ``local_rules.valid_settings``).
+
+        Returns:
+            bool: True if they were new and valid (and saved to flash).
+        """
+        if not local_rules.valid_settings(payload):
+            print("Ignoring invalid settings:", payload)
+            return False
+        if payload == self.settings:
+            return False
+        self.settings = payload
+        local_rules.save_settings(payload)
+        return True
 
     def publish_telemetry(self):
         """Publish (or queue) a sensor and relay snapshot."""
@@ -290,11 +386,13 @@ class Controller:
         Summarise connectivity for the LCD.
 
         Returns:
-            str: ``"OK"``, ``"NoMQTT"`` or ``"NoWiFi"``.
+            str: ``"OK"``, ``"NoMQTT"`` or ``"NoWiFi"``, followed by
+            ``" LOCAL"`` while local mode is running.
         """
         if self.net.mqtt_ok:
             return "OK"
-        return "NoMQTT" if self.net.wifi_ok else "NoWiFi"
+        status = "NoMQTT" if self.net.wifi_ok else "NoWiFi"
+        return status + " LOCAL" if self.local_mode else status
 
     def screen_lines(self):
         """

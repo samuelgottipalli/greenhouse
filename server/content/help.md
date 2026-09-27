@@ -39,7 +39,8 @@ System status at a glance:
 *   One switch per device: **Fan**, **Heater**, **Light** and **Water**.
 *   Flip a switch to turn that device on or off. The badge next to it shows the last recorded
     state.
-*   A device you switch here stays as you set it for 60 minutes; after that the automation service follows your Greenhouse Settings again. If greenhouse readings are more than 15 minutes old, automation switches the heater off for safety.
+*   A device you switch here stays as you set it for 60 minutes; after that the automation service follows your Greenhouse Settings again.
+*   If the controller is offline the switches are disabled. The controller then runs your Greenhouse Settings itself (its screen shows LOCAL), and it always switches the heater off if its temperature sensor stops responding for 5 minutes.
 
 ### Settings › App Settings
 

@@ -17,7 +17,7 @@ import pytest
 from pico_fakes import FakeADC, FakeDHT22, FakeLcd, FakePin, FakeTicks, FakeWDT, FakeWLAN
 from support import PICO_DIR
 
-DEVICE_MODULES = ("config", "clock", "display", "relays", "sensors", "buttons", "net", "controller", "main")
+DEVICE_MODULES = ("config", "clock", "display", "relays", "sensors", "buttons", "net", "local_rules", "controller", "main")
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def ticks():
 
 
 @pytest.fixture
-def fake_env(monkeypatch, ticks):
+def fake_env(monkeypatch, ticks, tmp_path):
     """Install the fake MicroPython modules and put the device code on sys.path."""
     machine = types.ModuleType("machine")
     machine.Pin = FakePin
@@ -52,6 +52,7 @@ def fake_env(monkeypatch, ticks):
         monkeypatch.setitem(sys.modules, name, module)
     for name in ("ticks_ms", "ticks_diff", "ticks_add", "sleep_ms"):
         monkeypatch.setattr(time, name, getattr(ticks, name), raising=False)
+    monkeypatch.chdir(tmp_path)  # device code writes settings.json to the current folder
     monkeypatch.syspath_prepend(str(PICO_DIR / "lib"))
     monkeypatch.syspath_prepend(str(PICO_DIR))
     for name in DEVICE_MODULES + ("umqtt", "umqtt.simple"):

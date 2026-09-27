@@ -100,3 +100,23 @@ def test_reboot_resets_server_view_of_relays(device):
     # Relays that already matched the log were not logged again.
     heater = db.latest_relay_states().set_index("relay_id").loc[3]
     assert heater["event_utc"] == "2025-10-27 01:00:00"
+
+
+def test_server_settings_are_accepted_by_device(device, monkeypatch):
+    # P-15: the retained settings message the server publishes is what local mode needs.
+    from core.automation import device_settings
+
+    sent = []
+    monkeypatch.setattr(mqtt, "single", lambda **kw: sent.append(kw))
+    thresholds = db.read_thresholds().set_index("name")
+    limits = {name: (row.value, row.buffer) for name, row in thresholds.iterrows()}
+    schedule = db.read_watering_schedule()
+    slots = list(zip(schedule["start_local"], schedule["duration_min"].astype(int)))
+    assert mqtt.publish_device_settings(device_settings(limits, slots))
+    (message,) = sent
+    assert message["retain"] is True
+    assert ("subscribe", message["topic"]) in FakeClient.instances[-1].calls
+    FakeClient.instances[-1].incoming.append((message["topic"].encode(), message["payload"].encode()))
+    device.tick()
+    assert device.settings["heater_on_temp_c"] == [18.0, 2.0]
+    assert device.settings["watering"][0] == ["06:00", 30]

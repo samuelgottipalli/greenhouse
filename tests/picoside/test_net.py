@@ -60,7 +60,9 @@ class FakeClient:
             err, self.fail_next = self.fail_next, None
             raise err
         while self.incoming:
-            self.cb(b"greenhouse/1/relay/set", self.incoming.pop(0))
+            item = self.incoming.pop(0)
+            topic, payload = item if isinstance(item, tuple) else (b"greenhouse/1/relay/set", item)
+            self.cb(topic, payload)
 
     def ping(self):
         self.calls.append("ping")
@@ -246,7 +248,8 @@ def test_ip_address(make_net):
 # --- real umqtt.simple over a fake broker socket ----------------------------
 
 CONNACK_OK = b"\x20\x02\x00\x00"
-SUBACK_OK = b"\x90\x03\x00\x01\x00"
+SUBACK_OK = b"\x90\x03\x00\x01\x00"  # packet id 1: relay/set
+SUBACK_2_OK = b"\x90\x03\x00\x02\x00"  # packet id 2: settings
 
 
 def publish_packet(topic: bytes, payload: bytes) -> bytes:
@@ -288,7 +291,7 @@ class FakeBrokerSocket:
 
 @pytest.fixture
 def broker(monkeypatch, fake_env):
-    sock = FakeBrokerSocket(CONNACK_OK + SUBACK_OK)
+    sock = FakeBrokerSocket(CONNACK_OK + SUBACK_OK + SUBACK_2_OK)
     usocket = types.ModuleType("usocket")
     usocket.socket = lambda: sock
     usocket.getaddrinfo = lambda host, port: [(None, None, None, None, ("127.0.0.1", port))]

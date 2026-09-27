@@ -195,7 +195,9 @@ Do these with the dashboard open. Each maps to a sign-off line in step 9.
 | f | Double-press button **1** quickly | Relay **5** toggles, relay 1 does not |
 | g | Press the screen button | LCD cycles Relay 1 … Relay 8, then back to main |
 | h | Hold button 1 and press the screen button | LCD shows `IP address:` and the Pico's IP; relay 1 unchanged |
-| i | Stop the broker for 2 min: `sudo systemctl stop mosquitto`, then `start` | LCD shows `NoMQTT`, then `OK` again; Home goes Offline, then Online; no gap in the 24 h chart beyond the outage |
+| i | Stop the broker for 4 min: `sudo systemctl stop mosquitto`, then `start` | LCD shows `NoMQTT`, then `NoMQTT LOCAL` after 2 min; Remote Control switches are disabled; after `start`, `OK` again, Home goes Online, and the readings from the outage appear in the 24 h chart |
+| i2 | During an outage (as in i), warm or cool the sensor past the heater trigger | Relay 3 follows the heater rule on its own (local mode); after reconnecting Home shows the change as (auto) |
+| i3 | Unplug the DHT22 data wire with the heater on | Within ~5.5 min relay 3 switches off by itself, even with the network up |
 | j | **Greenhouse Settings**: set "Turn on heater at" just above the current temperature, then Save | Within ~5 s relay 3 clicks and Home shows Heater On (auto). Put the setting back afterwards. |
 | k | Power-cycle the Pico | Boots to the main screen without help; all relays start **off** |
 
@@ -222,6 +224,7 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 - [ ] 8c–d: web toggle moves the relay and the state is confirmed (P-03, PLAN 2.2)
 - [ ] 8e–h: buttons, double press, screens and IP combo (P-11)
 - [ ] 8i: recovers from a broker outage; queued readings arrive (P-05)
+- [ ] 8i2–i3: local mode and the sensor-fault heater cut-off work on the hardware (P-15)
 - [ ] 8j: automation switches the heater (source auto)
 - [ ] 8k: relays off after a power cycle
 - [ ] ⏳ LCD clock still correct 48 h after boot, including across midnight (P-02, PLAN 1.7)
@@ -251,7 +254,9 @@ Device 1, last 24 h: 287 of 288 expected readings (99.7%)
 | Clock off by exactly 1 h | Time zone with an unsupported DST rule | `setup_config.py` warns about this; the LCD shows standard time all year |
 | Board resets every ~8 s | Watchdog on while stopped at the REPL, or a crash loop | Set `"watchdog": false` while debugging; read the REPL for the error |
 | Relays on when they should be off | Active-low relay board | `"relay_active_low": true` in `config.json` |
-| Heater switches off by itself | Readings older than 15 min, so automation turns the heater off for safety | Get telemetry flowing again (see `NoMQTT` above) |
+| Heater switches off by itself | The controller's sensor gave no reading for 5 min (safety cut-off), or server readings are over 15 min old | Check the DHT22 wiring; get telemetry flowing again |
+| LCD shows `LOCAL` | MQTT has been down for over 2 min, so the controller is running the rules itself | Normal during outages; fix the link (see `NoMQTT`). Check `settings.json` exists on the Pico (`mpremote ls :`) |
+| Remote Control switches are greyed out | The controller reported offline | Wait for it to reconnect; it is running its own rules meanwhile |
 | Dashboard asks for a password you don't know | `APP_PASSWORD_HASH` set in `.env` | Run `python -m scripts.set_password` again and restart `greenhouse-web` |
 
 ## Rolling back

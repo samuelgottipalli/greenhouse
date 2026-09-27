@@ -86,3 +86,9 @@ def test_topic_matcher():
     assert matches("greenhouse/+/relay/+/state", "greenhouse/1/relay/8/state")
     assert not matches("greenhouse/1/telemetry", "greenhouse/1/telemetry/x")
     assert matches("greenhouse/#", "greenhouse/1/relay/set")
+
+
+def test_device_can_read_its_settings():
+    assert allowed("greenhouse-device-1", "read", "greenhouse/1/settings")
+    assert not allowed("greenhouse-device-1", "write", "greenhouse/1/settings")
+    assert not allowed("greenhouse-device-1", "read", "greenhouse/2/settings")

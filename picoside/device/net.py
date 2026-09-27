@@ -13,6 +13,7 @@ Topics (``<prefix>/<device_id>/...``, see docs/MQTT.md):
 * ``relay/<n>/state``: relay state after every change (retained).
 * ``status``: ``"online"``, or ``"offline"`` via the last will (retained).
 * ``relay/set``: commands ``{"relay": n, "state": 0|1}`` (subscribed).
+* ``settings``: automation settings for local mode (subscribed, retained).
 """
 import json
 import time
@@ -31,6 +32,7 @@ class Network:
         mqtt_ok (bool): True while the MQTT session is believed healthy.
         outbox (list[tuple[str, str, bool]]): Unsent ``(topic, payload, retain)``.
         on_command (callable | None): Called with each decoded command dict.
+        on_settings (callable | None): Called with each decoded settings dict.
         feed (callable | None): Called before slow operations (watchdog feed).
     """
 
@@ -56,6 +58,7 @@ class Network:
         self.mqtt_ok = False
         self.outbox = []
         self.on_command = None
+        self.on_settings = None
         self.feed = None
         self._base = "{}/{}".format(config["mqtt_topic_prefix"], config["device_id"])
         self._keepalive_ms = config["mqtt_keepalive_s"] * 1000
@@ -143,6 +146,7 @@ class Network:
             client.set_last_will(self.topic("status"), "offline", retain=True)
             client.connect()
             client.subscribe(self.topic("relay/set"))
+            client.subscribe(self.topic("settings"))
             client.publish(self.topic("status"), "online", retain=True)
         except Exception as err:  # OSError, MQTTException, bad broker name, ...
             print("MQTT connect failed:", err)
@@ -164,7 +168,8 @@ class Network:
 
     def _on_message(self, topic, msg):
         """
-        Decode an incoming command and pass it to ``on_command``.
+        Decode an incoming message and pass it to ``on_settings`` (settings
+        topic) or ``on_command`` (everything else).
 
         Args:
             topic (bytes): Topic the message arrived on.
@@ -175,7 +180,13 @@ class Network:
         except ValueError:
             print("Ignoring non-JSON message on", topic)
             return
-        if self.on_command and isinstance(command, dict):
+        if not isinstance(command, dict):
+            return
+        name = topic.decode() if isinstance(topic, bytes) else topic
+        if name.endswith("/settings"):
+            if self.on_settings:
+                self.on_settings(command)
+        elif self.on_command:
             self.on_command(command)
 
     def _schedule_retry(self, now, success):

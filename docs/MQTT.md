@@ -17,6 +17,7 @@ the time it received the message.
 | `greenhouse/1/relay/<n>/state` | device → server | **yes** | 0 | Relay state after every change |
 | `greenhouse/1/status` | device → server | **yes** | 0 | `online` (plain text), or `offline` sent by the broker as the device's last will |
 | `greenhouse/1/relay/set` | server → device | no | 1 | Relay command |
+| `greenhouse/1/settings` | server → device | **yes** | 1 | Automation settings for local mode |
 
 ## Telemetry
 
@@ -80,6 +81,30 @@ The server sends commands to `relay/set` using `core.mqtt.publish_relay_command`
 The device ignores invalid commands. It confirms a valid command by
 publishing the relay's state message, so the server should treat that state
 message, not its own command, as the confirmation.
+
+## Settings and local mode
+
+The automation service publishes the current thresholds and watering schedule, retained, whenever
+they change. The device therefore gets the latest copy each time it connects, and saves it to
+`settings.json` on its flash:
+
+```json
+{"fan_on_temp_c": [32.0, 2.0], "fan_on_humidity_pct": [50.0, 2.0],
+ "heater_on_temp_c": [18.0, 2.0], "watering": [["06:00", 30], ["00:00", 0], ["00:00", 0], ["00:00", 0]]}
+```
+
+Each threshold is `[value, buffer]`. Each watering slot is `[local start "HH:MM", minutes]`, and 0
+minutes means the slot is off.
+
+- **Local mode:** if the device's MQTT link has been down for 2 minutes, it applies the same fan,
+  heater and watering rules itself (`picoside/device/local_rules.py`, checked against the server's
+  rules in the tests). The LCD shows `LOCAL`. Its changes are queued as `auto` state messages
+  and delivered when the link returns. Without saved settings it only enforces safety: heater
+  and water off.
+- **Sensor fault, always on:** if the DHT22 has given no good reading for 5 minutes, the device
+  switches the heater off itself.
+- **Server:** while the device reports `offline`, the automation service sends nothing (the broker
+  would drop it) and the dashboard disables its switches.
 
 ## How the server stores these messages
 

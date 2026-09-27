@@ -23,3 +23,14 @@ def db_conn(seeded_db):
     conn = sqlite3.connect(seeded_db)
     yield conn
     conn.close()
+
+
+@pytest.fixture(autouse=True)
+def no_real_mqtt(monkeypatch):
+    """Make any MQTT publish a test did not mock fail at once, as if no broker were running."""
+    from core import mqtt
+
+    def refuse(**kwargs):
+        raise ConnectionRefusedError("tests never talk to a real broker")
+
+    monkeypatch.setattr(mqtt, "single", refuse)

@@ -112,3 +112,44 @@ def test_failed_publish_is_not_logged_and_retried(seeded_db, db_conn, monkeypatc
     assert db.latest_relay_states().set_index("relay").loc["heater", "state"] == 0
     automation.run_once(now=FRESH_NOW)
     assert len([c for c in calls if c["relay_id"] == 3]) == 2  # tried again next pass
+
+
+# --- controller local mode support (P-15) --------------------------------------
+
+@pytest.fixture
+def settings_sent(monkeypatch):
+    automation._published_settings.clear()
+    published = []
+    monkeypatch.setattr(automation, "publish_device_settings",
+                        lambda payload, device_id: published.append(payload) or True)
+    return published
+
+
+def test_settings_published_once_and_on_change(sent, settings_sent):
+    automation.run_once(now=FRESH_NOW)
+    automation.run_once(now=FRESH_NOW)
+    assert len(settings_sent) == 1
+    assert settings_sent[0]["heater_on_temp_c"] == [18.0, 2.0]
+    db.save_settings({"heater_on_temp_c": (15.0, 1.0)}, {})
+    automation.run_once(now=FRESH_NOW)
+    assert len(settings_sent) == 2 and settings_sent[1]["heater_on_temp_c"] == [15.0, 1.0]
+
+
+def test_settings_retried_after_publish_failure(sent, monkeypatch):
+    automation._published_settings.clear()
+    attempts = []
+    monkeypatch.setattr(automation, "publish_device_settings", lambda payload, device_id: attempts.append(1) or False)
+    automation.run_once(now=FRESH_NOW)
+    automation.run_once(now=FRESH_NOW)
+    assert len(attempts) == 2
+
+
+def test_automation_stands_back_while_controller_offline(sent, settings_sent, db_conn):
+    add_reading(db_conn, 1, 5.0)  # cold: heater would switch on
+    db_conn.execute("INSERT INTO device_status VALUES (1, 'offline', '2025-10-22 22:41:00')")
+    db_conn.commit()
+    assert automation.run_once(now=FRESH_NOW) == []
+    assert sent == []
+    db_conn.execute("UPDATE device_status SET status = 'online'")
+    db_conn.commit()
+    assert [a.relay for a in automation.run_once(now=FRESH_NOW)] == ["heater"]

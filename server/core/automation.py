@@ -19,6 +19,10 @@ Rules
 * **Manual override**: a relay last switched from the web app or a device
   button is left alone for ``MANUAL_OVERRIDE`` after that change.
 * **Light**: not automated yet (PLAN 4.7).
+* **Controller offline**: nothing is decided. Commands to a disconnected
+  controller are dropped by the broker, and the controller runs the same
+  rules itself in local mode (``picoside/device/local_rules.py``) with the
+  settings from :func:`device_settings`.
 
 A relay with no recorded state gets its target state once, so the log and the
 device agree from the start.
@@ -156,6 +160,25 @@ def watering_now(schedule: list[tuple[str, int]], now_local: datetime) -> bool:
     return False
 
 
+def device_settings(thresholds: dict[str, tuple[float, float]], schedule: list[tuple[str, int]]) -> dict:
+    """
+    Build the settings message the controller keeps for local mode.
+
+    Args:
+        thresholds (dict): Threshold name to ``(value, buffer)``.
+        schedule (list): Watering slots, ``(start_local, duration_min)``.
+
+    Returns:
+        dict: ``fan_on_temp_c``, ``fan_on_humidity_pct`` and
+        ``heater_on_temp_c`` as ``[value, buffer]``, and ``watering`` as
+        ``[["HH:MM", minutes], ...]``.
+    """
+    payload = {name: [float(v), float(b)] for name, (v, b) in thresholds.items()
+               if name in ("fan_on_temp_c", "fan_on_humidity_pct", "heater_on_temp_c")}
+    payload["watering"] = [[start, int(minutes)] for start, minutes in schedule]
+    return payload
+
+
 def decide(
     thresholds: dict[str, tuple[float, float]],
     schedule: list[tuple[str, int]],
@@ -163,6 +186,7 @@ def decide(
     states: dict[str, RelayState],
     now: datetime,
     zone: tzinfo,
+    device_online: bool = True,
 ) -> list[Action]:
     """
     Work out which relays to switch.
@@ -175,10 +199,14 @@ def decide(
             (``"fan"``, ``"heater"``, ``"water"``); missing means unknown.
         now (datetime): Current time, aware.
         zone (tzinfo): Zone of the watering schedule.
+        device_online (bool): False while the controller reports offline;
+            then nothing is decided (its local mode is in charge).
 
     Returns:
         list[Action]: Changes to make, at most one per relay.
     """
+    if not device_online:
+        return []
     temp = fresh_value(readings, "temperature", now)
     humidity = fresh_value(readings, "humidity", now)
     targets = {

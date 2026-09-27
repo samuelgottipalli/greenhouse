@@ -269,6 +269,20 @@ class Clock:
         """
         return format_timestamp(self._gmtime()) if self.is_set() else None
 
+    def local_minutes(self):
+        """
+        Return the local time of day in minutes (for watering slots).
+
+        Returns:
+            int | None: Minutes since local midnight, or None if the clock is
+            not set.
+        """
+        if not self.is_set():
+            return None
+        now = self.utc_seconds()
+        fields = from_epoch(now + utc_offset_minutes(now, self.std_offset, self.rule) * 60)
+        return fields[3] * 60 + fields[4]
+
     def local_str(self):
         """
         Return the current local time for the LCD.

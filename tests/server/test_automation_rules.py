@@ -153,3 +153,22 @@ def test_manual_override_expires():
 def test_unknown_relay_state_gets_target_once():
     actions = decide(LIMITS, NO_WATER, readings(20, 50), {}, NOW, LA)
     assert relays(actions) == {"fan": 0, "heater": 0, "water": 0}
+
+
+# --- controller offline (P-15) ------------------------------------------------
+
+def test_nothing_decided_while_controller_offline():
+    cold_and_stale = readings(5, 90, age=READING_MAX_AGE * 2)
+    assert decide(LIMITS, [("06:00", 30)], cold_and_stale, states(heater=1), NOW, LA, device_online=False) == []
+
+
+def test_device_settings_payload():
+    from core.automation import device_settings
+
+    payload = device_settings(LIMITS, [("06:00", 30), ("00:00", 0)])
+    assert payload == {
+        "fan_on_temp_c": [30.0, 2.0],
+        "fan_on_humidity_pct": [70.0, 5.0],
+        "heater_on_temp_c": [10.0, 2.0],
+        "watering": [["06:00", 30], ["00:00", 0]],
+    }

@@ -5,7 +5,9 @@ Run from the ``server/`` folder with ``python -m services.automation``. Every
 ``POLL_SECONDS`` it loads the current thresholds, watering schedule, latest
 sensor readings and latest relay states, asks ``core.automation.decide`` what
 to change, and for each change publishes an MQTT command and logs a relay
-event with source ``"auto"``. The rules themselves (hysteresis, stale-data
+event with source ``"auto"``. It also keeps the controller's copy of the
+settings current (retained ``settings`` topic) for the controller's local
+mode, and stands back while the controller reports offline. The rules themselves (hysteresis, stale-data
 safety, manual override, watering windows) are documented and tested in
 ``core/automation.py``.
 
@@ -18,13 +20,49 @@ from time import sleep
 from zoneinfo import ZoneInfo
 
 from core import db, settings
-from core.automation import Reading, RelayState, decide
-from core.mqtt import publish_relay_command
+from core.automation import Reading, RelayState, decide, device_settings
+from core.mqtt import publish_device_settings, publish_relay_command
 from core.timeutil import parse_utc_timestamp
 
 log = logging.getLogger(__name__)
 
 POLL_SECONDS = 5
+
+# Last settings payload the broker accepted, per device (published when it changes).
+_published_settings: dict[int, dict] = {}
+
+
+def sync_device_settings(limits, slots, device_id: int) -> bool:
+    """
+    Publish the controller's local-mode settings if they changed.
+
+    Args:
+        limits (dict): Threshold name to ``(value, buffer)``.
+        slots (list): Watering slots.
+        device_id (int): Device.
+
+    Returns:
+        bool: True if a new copy was published.
+    """
+    payload = device_settings(limits, slots)
+    if _published_settings.get(device_id) == payload:
+        return False
+    if publish_device_settings(payload, device_id=device_id):
+        _published_settings[device_id] = payload
+        log.info("Published settings for device %s", device_id)
+        return True
+    return False
+
+
+def device_is_online(device_id: int) -> bool:
+    """
+    Tell whether the controller can receive commands.
+
+    Returns:
+        bool: False only if it last reported offline (unknown counts as online).
+    """
+    status = db.device_status(device_id=device_id)
+    return status is None or status["status"] == "online"
 
 
 def load_inputs(device_id: int = settings.DEVICE_ID):
@@ -74,8 +112,12 @@ def run_once(now: datetime | None = None, device_id: int = settings.DEVICE_ID) -
         log.warning("Settings or relays missing; run `python -m scripts.upgrade_db`")
         return []
     limits, slots, readings, states, relay_ids = inputs
+    sync_device_settings(limits, slots, device_id)
     now = now or datetime.now(timezone.utc)
-    actions = decide(limits, slots, readings, states, now, ZoneInfo(settings.TIMEZONE))
+    online = device_is_online(device_id)
+    if not online:
+        log.info("Controller %s offline: its local mode is in charge", device_id)
+    actions = decide(limits, slots, readings, states, now, ZoneInfo(settings.TIMEZONE), online)
     sent = []
     for action in actions:
         relay_id = relay_ids[action.relay]

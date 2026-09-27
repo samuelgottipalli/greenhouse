@@ -30,6 +30,39 @@ def device_topic(device_id: int, suffix: str) -> str:
     return f"{settings.MQTT_TOPIC_PREFIX}/{device_id}/{suffix}"
 
 
+def publish_device_settings(settings_payload: dict, device_id: int = settings.DEVICE_ID) -> bool:
+    """
+    Publish the automation settings the controller uses in local mode.
+
+    Sent retained to ``<prefix>/<device_id>/settings``, so the controller gets
+    the latest copy whenever it connects (see docs/MQTT.md).
+
+    Args:
+        settings_payload (dict): Output of ``core.automation.device_settings``.
+        device_id (int): Target device.
+
+    Returns:
+        bool: True if the broker accepted the message.
+    """
+    auth = None
+    if settings.MQTT_USERNAME:
+        auth = {"username": settings.MQTT_USERNAME, "password": settings.MQTT_PASSWORD}
+    try:
+        single(
+            topic=device_topic(device_id, "settings"),
+            payload=json.dumps(settings_payload, sort_keys=True),
+            qos=1,
+            retain=True,
+            hostname=settings.MQTT_HOST,
+            port=settings.MQTT_PORT,
+            auth=auth,
+        )
+    except (OSError, ValueError) as err:
+        log.error("Could not publish device settings: %s", err)
+        return False
+    return True
+
+
 def publish_relay_command(
     relay_id: int,
     state: int,
