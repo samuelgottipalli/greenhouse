@@ -118,6 +118,7 @@ class FakeLcd:
 
 class FakeWLAN:
     PM_POWERSAVE = 0xA11C82
+    PM_NONE = 0x10
 
     def __init__(self, mode=None):
         self.mode = mode

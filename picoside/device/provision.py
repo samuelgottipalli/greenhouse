@@ -24,6 +24,7 @@ stay off throughout, and the watchdog is not running yet.
 
 Everything except :func:`run_setup` is plain logic, tested on CPython.
 """
+import gc
 import json
 import os
 import time
@@ -36,6 +37,9 @@ BUTTON_HOLD_MS = 1500
 UNVERIFIED_FILE = "wifi_unverified"
 CODE_PREFIX = "GH1-"
 MAX_REQUEST = 4096
+MAX_PENDING = 6
+SEND_CHUNK = 1024
+IDLE_MS = 3000
 PLACEHOLDER_BROKERS = ("", "YOUR_MQTT_BROKER")
 
 REASON_NEW = "new"
@@ -442,12 +446,12 @@ INTROS = {
 }
 
 
-def _page(title, body):
-    """Wrap page content in the shared HTML skeleton."""
-    return ("<!doctype html><html><head><meta charset='utf-8'>"
+def _page_parts(title, parts):
+    """Wrap page content (a list of pieces) in the shared HTML skeleton."""
+    head = ("<!doctype html><html><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-            "<title>" + html_escape(title) + "</title><style>" + STYLE + "</style></head><body>"
-            + body + "</body></html>")
+            "<title>" + html_escape(title) + "</title><style>" + STYLE + "</style></head><body>")
+    return [head] + parts + ["</body></html>"]
 
 
 def _input(label, name, value="", kind="text", hint="", extra=""):
@@ -458,17 +462,30 @@ def _input(label, name, value="", kind="text", hint="", extra=""):
 
 
 def _zone_options(selected):
-    """``<option>`` elements for every zone and fixed offset."""
+    """``<option>`` elements for every zone and fixed offset, one piece each."""
     parts = []
     for name, _offset, _rule in zones.ZONES + tuple(zones.fixed_offsets()):
         mark = " selected" if name == selected else ""
         parts.append("<option value='" + name + "'" + mark + ">" + name.replace("_", " ") + "</option>")
-    return "".join(parts)
+    return parts
 
 
 def render_setup_page(config, networks, reason, values=None, errors=()):
     """
-    Build the setup form.
+    Build the setup form as one string (see :func:`setup_page_parts`).
+
+    Returns:
+        str: HTML.
+    """
+    return "".join(setup_page_parts(config, networks, reason, values, errors))
+
+
+def setup_page_parts(config, networks, reason, values=None, errors=()):
+    """
+    Build the setup form as a list of small pieces.
+
+    The whole page is about 8 KB; the Pico often has no single free block
+    that big once its code is loaded, so the page is kept and sent in pieces.
 
     Args:
         config (dict): Current configuration (passwords are never shown).
@@ -479,7 +496,7 @@ def render_setup_page(config, networks, reason, values=None, errors=()):
         errors (list[str]): Problems to show at the top.
 
     Returns:
-        str: HTML.
+        list[str]: HTML pieces.
     """
     values = values or {}
     ssid = values.get("ssid", config["wifi_ssid"])
@@ -514,8 +531,11 @@ def render_setup_page(config, networks, reason, values=None, errors=()):
                hint="Leave empty to keep the current one." if config["mqtt_password"] else ""),
         _input("Controller number", "device", values.get("device", config["device_id"]), "number"),
         "</details>",
-        "<label>Time zone<select name='tz' id='tz'>" +
-        _zone_options(values.get("tz", config["timezone"])) + "</select></label>",
+        "<label>Time zone<select name='tz' id='tz'>",
+    ]
+    parts += _zone_options(values.get("tz", config["timezone"]))
+    parts += [
+        "</select></label>",
         "<button type='submit'>Save and connect</button></form>",
     ]
     if reason == REASON_NEW and not values.get("tz"):
@@ -523,7 +543,7 @@ def render_setup_page(config, networks, reason, values=None, errors=()):
         parts.append("<script>try{var z=Intl.DateTimeFormat().resolvedOptions().timeZone,"
                      "s=document.getElementById('tz');for(var i=0;i<s.options.length;i++)"
                      "if(s.options[i].value==z)s.selectedIndex=i;}catch(e){}</script>")
-    return _page("Greenhouse setup", "".join(parts))
+    return _page_parts("Greenhouse setup", parts)
 
 
 def _shown_broker(config):
@@ -541,17 +561,44 @@ def render_saved_page(ssid):
     Returns:
         str: HTML.
     """
-    return _page("Saved", (
+    return "".join(saved_page_parts(ssid))
+
+
+def saved_page_parts(ssid):
+    """The page shown after saving, as a list of pieces."""
+    return _page_parts("Saved", [
         "<h1>Saved!</h1><p>The controller is restarting and joining <b>" + html_escape(ssid) +
-        "</b>. Its screen shows the time and temperature when it's connected.</p>"
+        "</b>. Its screen shows the time and temperature when it's connected.</p>",
         "<p>You can close this page and reconnect your phone to your usual Wi-Fi.</p>"
         "<p class='hint'>If the controller can't join the network, this setup hotspot comes "
-        "back so you can fix it.</p>"))
+        "back so you can fix it.</p>"])
+
+
+def response_parts(parts, status="200 OK", headers=()):
+    """
+    Build an HTTP response as a list of small byte strings.
+
+    Args:
+        parts (list[str]): HTML pieces (may be empty).
+        status (str): Status line text.
+        headers (tuple[str, ...]): Extra header lines.
+
+    Returns:
+        list[bytes]: Headers first, then the encoded pieces.
+    """
+    body = [part.encode("utf-8") for part in parts]
+    length = 0
+    for chunk in body:
+        length += len(chunk)
+    lines = ["HTTP/1.1 " + status, "Content-Type: text/html; charset=utf-8",
+             "Content-Length: " + str(length), "Cache-Control: no-store", "Connection: close"]
+    lines.extend(headers)
+    return [("\r\n".join(lines) + "\r\n\r\n").encode("utf-8")] + body
 
 
 def http_response(body, status="200 OK", headers=()):
     """
-    Build a complete HTTP response.
+    Build a complete HTTP response as one byte string (tests and small replies).
 
     Args:
         body (str): HTML (may be empty).
@@ -561,11 +608,7 @@ def http_response(body, status="200 OK", headers=()):
     Returns:
         bytes: The response.
     """
-    data = body.encode("utf-8")
-    lines = ["HTTP/1.1 " + status, "Content-Type: text/html; charset=utf-8",
-             "Content-Length: " + str(len(data)), "Cache-Control: no-store", "Connection: close"]
-    lines.extend(headers)
-    return ("\r\n".join(lines) + "\r\n\r\n").encode("utf-8") + data
+    return b"".join(response_parts([body] if body else [], status, headers))
 
 
 # --- DNS -------------------------------------------------------------------
@@ -634,8 +677,21 @@ class Portal:
         self.rescan = rescan
         self.ip = ip
         self.saved = None
+        self.pending = []  # [connection, bytes so far, ticks when opened]
 
     def respond(self, raw):
+        """
+        Answer one HTTP request, as one byte string (see :meth:`respond_parts`).
+
+        Args:
+            raw (bytes): The request.
+
+        Returns:
+            bytes: The response.
+        """
+        return b"".join(self.respond_parts(raw))
+
+    def respond_parts(self, raw):
         """
         Answer one HTTP request.
 
@@ -646,46 +702,133 @@ class Portal:
             raw (bytes): The request.
 
         Returns:
-            bytes: The response.
+            list[bytes]: The response in small pieces.
         """
         method, path, query, form = parse_request(raw)
         if method is None:
-            return http_response("", "400 Bad Request")
+            return response_parts([], "400 Bad Request")
         if path == "/save" and method == "POST":
             changes, errors = form_to_settings(form, self.config)
             if errors:
-                return http_response(render_setup_page(self.config, self.networks, self.reason, form, errors))
+                return response_parts(setup_page_parts(self.config, self.networks, self.reason, form, errors))
             self.saved = changes
-            return http_response(render_saved_page(changes["wifi_ssid"]))
+            return response_parts(saved_page_parts(changes["wifi_ssid"]))
         if path == "/":
             if query.get("rescan") and self.rescan:
                 self.networks = self.rescan() or self.networks
-            return http_response(render_setup_page(self.config, self.networks, self.reason, query))
-        return http_response("", "302 Found", ("Location: http://" + self.ip + "/",))
+            return response_parts(setup_page_parts(self.config, self.networks, self.reason, query))
+        return response_parts([], "302 Found", ("Location: http://" + self.ip + "/",))
 
     def poll(self):
-        """Answer any waiting DNS query and web request. Never raises."""
-        if self.dns is not None:
-            try:
-                query, sender = self.dns.recvfrom(512)
-                reply = dns_reply(query, self.ip)
-                if reply:
-                    self.dns.sendto(reply, sender)
-            except OSError:
-                pass
+        """
+        Answer waiting DNS queries and serve web requests. Never raises or blocks.
+
+        Phones and browsers open several connections at once, some of which
+        stay idle, so connections are read without waiting: each one is
+        answered as soon as its whole request has arrived, and one that stays
+        idle for ``IDLE_MS`` (or is the oldest when ``MAX_PENDING`` are open)
+        is closed.
+        """
+        self._poll_dns()
         if self.http is None:
             return
-        try:
-            conn, _addr = self.http.accept()
-        except OSError:
+        while True:
+            try:
+                conn, _addr = self.http.accept()
+            except OSError:
+                break
+            if len(self.pending) >= MAX_PENDING:
+                self._close(self.pending.pop(0)[0])
+            conn.setblocking(False)
+            self.pending.append([conn, b"", time.ticks_ms()])
+        for entry in list(self.pending):
+            self._service(entry)
+
+    def _poll_dns(self):
+        """Answer up to a few waiting DNS queries."""
+        if self.dns is None:
             return
+        for _ in range(4):
+            try:
+                query, sender = self.dns.recvfrom(512)
+            except OSError:
+                return
+            reply = dns_reply(query, self.ip)
+            if reply:
+                try:
+                    self.dns.sendto(reply, sender)
+                except OSError:
+                    pass
+
+    def _service(self, entry):
+        """Read what has arrived on one connection; answer it once complete."""
+        conn, data, opened = entry
+        closed = False
         try:
-            conn.settimeout(5)
-            conn.sendall(self.respond(read_request(conn)))
-        except Exception as err:
-            print("Setup page error:", err)
-        finally:
+            chunk = conn.recv(512)
+            if chunk:
+                data = entry[1] = data + chunk
+            else:
+                closed = True
+        except OSError:
+            pass  # nothing yet
+        if request_complete(data):
+            self.pending.remove(entry)
+            try:
+                gc.collect()
+                conn.settimeout(5)
+                send_in_pieces(conn, self.respond_parts(data))
+            except Exception as err:
+                print("Setup page error:", err)
+            self._close(conn)
+        elif closed or time.ticks_diff(time.ticks_ms(), opened) > IDLE_MS:
+            self.pending.remove(entry)
+            self._close(conn)
+
+    @staticmethod
+    def _close(conn):
+        """Close a connection, ignoring errors."""
+        try:
             conn.close()
+        except OSError:
+            pass
+
+
+def send_in_pieces(conn, parts, size=SEND_CHUNK):
+    """
+    Send many small byte strings, grouped into packets of about ``size`` bytes.
+
+    Args:
+        conn: Connected socket.
+        parts (list[bytes]): Response pieces.
+        size (int): Target bytes per send.
+    """
+    batch = []
+    batched = 0
+    for part in parts:
+        batch.append(part)
+        batched += len(part)
+        if batched >= size:
+            conn.sendall(b"".join(batch))
+            batch, batched = [], 0
+    if batch:
+        conn.sendall(b"".join(batch))
+
+
+def request_complete(data):
+    """
+    Tell whether a whole HTTP request (headers and any body) has arrived.
+
+    Args:
+        data (bytes): What has been received so far.
+
+    Returns:
+        bool: True when it can be answered (also when it is too long to wait for).
+    """
+    if len(data) >= MAX_REQUEST:
+        return True
+    head, sep, body = data.partition(b"\r\n\r\n")
+    return bool(sep) and len(body) >= min(content_length(head), MAX_REQUEST - len(head) - 4)
 
 
 def read_request(conn):
@@ -712,6 +855,26 @@ def read_request(conn):
             break
         data += chunk
     return data
+
+
+def disable_power_save(wlan):
+    """
+    Keep the Wi-Fi radio fully awake while the hotspot runs.
+
+    In its default power-save mode the Pico W's radio misses packets from
+    the phone, which drops off the hotspot or sees pages stall. Setup mode is
+    short, so the extra power doesn't matter.
+
+    Args:
+        wlan: ``network.WLAN`` interface.
+    """
+    mode = getattr(wlan, "PM_NONE", None)
+    if mode is None:
+        return
+    try:
+        wlan.config(pm=mode)
+    except Exception as err:  # not supported by this firmware
+        print("Wi-Fi power save setting unavailable:", err)
 
 
 def run_setup(config, display, reason, save=None):
@@ -742,12 +905,13 @@ def run_setup(config, display, reason, save=None):
     ap = network.WLAN(network.AP_IF)
     ap.config(essid=name, password=password)
     ap.active(True)
+    disable_power_save(ap)
     ip = ap.ifconfig()[0] or AP_IP
 
     http = socket.socket()
     http.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     http.bind(("0.0.0.0", 80))
-    http.listen(2)
+    http.listen(MAX_PENDING + 2)  # phones open several connections at once
     http.setblocking(False)
     dns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dns.bind(("0.0.0.0", 53))

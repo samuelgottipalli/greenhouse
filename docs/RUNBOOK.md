@@ -432,6 +432,7 @@ server's firewall.
 | LCD shows `LOCAL` | MQTT has been down for over 2 min, so the controller is running the rules itself | Normal during outages; fix the link (see `NoMQTT`). Check `settings.json` exists on the Pico (`mpremote ls :`) |
 | Remote Control switches are greyed out | The controller reported offline | Wait for it to reconnect; it is running its own rules meanwhile |
 | No `GreenhouseSetup-…` network appears | The controller isn't in setup mode | Hold the screen button from before power-on until the screen says setup; a controller with working settings starts normally otherwise |
+| Joined `GreenhouseSetup-…` but `192.168.4.1` doesn't load | The phone sends it over mobile data because the hotspot has no internet | Turn mobile data off during setup, or choose *Stay connected* when the phone warns about no internet; reload `http://192.168.4.1` (not https) |
 | Phone won't stay on the setup network ("no internet") | The phone prefers networks with internet | Choose *Stay connected* / *Use without internet*, then browse to `http://192.168.4.1` |
 | Setup page: "setup code wasn't recognised" | The code was cut short when copying | Copy it again from **Settings › Controllers**, or scan the QR code |
 | Controllers page: *Update controller* greyed out | The controller is offline, or the server's address is unknown | Wait until it's online; set `PUBLIC_HOST` in `server/.env` |

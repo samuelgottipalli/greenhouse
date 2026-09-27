@@ -33,23 +33,29 @@ WATCHDOG_DELAY_MS = 30000
 
 def run():
     """Build everything, boot, and loop forever."""
-    from buttons import Buttons
-    from clock import Clock
+    import gc
+
     from config import config_problems, load_config
-    from controller import Controller
     from display import Display
-    from net import Network
     from provision import REASON_WIFI_FAILED, button_held, clear_unverified, is_unverified, run_setup, setup_reason
-    from relays import Relays
-    from sensors import Sensors
 
     config = load_config()
     display = Display(config)
     screen_button = machine.Pin(config["button_toggle_pin"], machine.Pin.IN, machine.Pin.PULL_UP)
     reason = setup_reason(config, button_held(screen_button, display))
     if reason:
+        # Setup mode needs the memory; the controller code isn't loaded yet.
+        gc.collect()
         run_setup(config, display, reason)
         return
+
+    from buttons import Buttons
+    from clock import Clock
+    from controller import Controller
+    from net import Network
+    from relays import Relays
+    from sensors import Sensors
+
     for problem in config_problems(config):
         display.show_message("Config: " + problem)
         time.sleep(2)
@@ -63,6 +69,8 @@ def run():
     if net.wifi_ok:
         clear_unverified()
     elif is_unverified():
+        del controller, net
+        gc.collect()
         run_setup(config, display, REASON_WIFI_FAILED)
         return
 

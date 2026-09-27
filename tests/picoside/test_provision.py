@@ -178,6 +178,16 @@ class ChunkedConn:
         return self.chunks.pop(0) if self.chunks else b""
 
 
+def test_request_complete(pico):
+    done = pico.provision.request_complete
+    assert not done(b"")
+    assert not done(b"GET / HTTP/1.1\r\nHost: x\r\n")
+    assert done(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+    assert not done(b"POST /save HTTP/1.1\r\nContent-Length: 10\r\n\r\nssid=")
+    assert done(b"POST /save HTTP/1.1\r\nContent-Length: 10\r\n\r\nssid=abcde")
+    assert done(b"x" * pico.provision.MAX_REQUEST)
+
+
 def test_read_request_waits_for_the_whole_body(pico):
     raw = b"POST /save HTTP/1.1\r\nContent-Length: 20\r\n\r\nssid=abc&password=xy"
     assert pico.provision.read_request(ChunkedConn(raw)) == raw
@@ -446,6 +456,101 @@ def test_portal_poll_over_real_sockets(pico, blank):
         dns.close()
 
 
+def test_page_is_sent_in_small_pieces(pico, blank):
+    """The Pico often has no free 8 KB block, so no piece of the page may be that big."""
+    portal = pico.provision.Portal(blank, [("home", -50)], "new")
+    parts = portal.respond_parts(get("/"))
+    assert b"".join(parts) == portal.respond(get("/"))
+    assert len(b"".join(parts)) > 6000 and max(len(p) for p in parts) < 1500
+    head, _, body = b"".join(parts).partition(b"\r\n\r\n")
+    assert b"Content-Length: " + str(len(body)).encode() in head
+
+    sent = []
+
+    class Conn:
+        def sendall(self, data):
+            sent.append(data)
+
+    pico.provision.send_in_pieces(Conn(), parts)
+    assert b"".join(sent) == b"".join(parts)
+    assert len(sent) < len(parts) and max(len(s) for s in sent) < 2600
+
+
+def test_power_save_helper_copes_with_old_firmware(pico):
+    class Old:
+        pass
+
+    class Refuses:
+        PM_NONE = 1
+
+        def config(self, **kw):
+            raise ValueError("unknown config param")
+
+    pico.provision.disable_power_save(Old())
+    pico.provision.disable_power_save(Refuses())
+
+
+def test_idle_connection_does_not_block_others(pico, blank, ticks):
+    """Browsers open spare connections that send nothing; the page must still load at once."""
+    http = socket.socket()
+    http.bind(("127.0.0.1", 0))
+    http.listen(4)
+    http.setblocking(False)
+    portal = pico.provision.Portal(blank, [], "new", http, None)
+    address = http.getsockname()
+    idle = socket.create_connection(address, timeout=5)
+    real = socket.create_connection(address, timeout=5)
+    import time
+
+    try:
+        time.sleep(0.05)
+        portal.poll()  # accepts both; the idle one has nothing to read
+        real.sendall(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+        time.sleep(0.05)
+        portal.poll()
+        response = b""
+        while chunk := real.recv(4096):
+            response += chunk
+        assert response.startswith(b"HTTP/1.1 200")
+        assert len(portal.pending) == 1  # the idle one is still waiting
+        ticks.advance(pico.provision.IDLE_MS + 1)
+        portal.poll()
+        assert portal.pending == []
+        assert idle.recv(10) == b""  # closed
+    finally:
+        idle.close()
+        real.close()
+        http.close()
+
+
+def test_too_many_connections_close_the_oldest(pico, blank):
+    class Conn:
+        def __init__(self):
+            self.closed = False
+
+        def setblocking(self, flag):
+            pass
+
+        def recv(self, n):
+            raise OSError(11)
+
+        def close(self):
+            self.closed = True
+
+    conns = [Conn() for _ in range(pico.provision.MAX_PENDING + 1)]
+    waiting = list(conns)
+
+    class Listener:
+        def accept(self):
+            if not waiting:
+                raise OSError(11)
+            return waiting.pop(0), ("192.168.4.2", 1)
+
+    portal = pico.provision.Portal(blank, [], "new", Listener(), None)
+    portal.poll()
+    assert conns[0].closed and len(portal.pending) == pico.provision.MAX_PENDING
+
+
 # --- saving ------------------------------------------------------------------
 
 
@@ -466,6 +571,9 @@ class FakeConn:
         self.sent = b""
 
     def settimeout(self, _t):
+        pass
+
+    def setblocking(self, _flag):
         pass
 
     def recv(self, _n):
@@ -549,6 +657,7 @@ def test_run_setup_saves_and_restarts(pico, blank, hardware, tmp_path):
 
     ap = hardware.wlans[1]
     assert ap.settings["essid"] == "GreenhouseSetup-3F2A" and len(ap.settings["password"]) == 8
+    assert ap.pm == FakeWLAN.PM_NONE  # power save off: it made phones drop off the hotspot
     assert display.lines[1] == "GreenhouseSetup-3F2A" and ap.settings["password"] in display.lines[2]
     assert ("0.0.0.0", 80) in sockets.bound and ("0.0.0.0", 53) in sockets.bound
     assert b"greenhouse-net" in sockets.conns[0].sent  # scanned network offered
