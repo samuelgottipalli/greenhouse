@@ -267,21 +267,30 @@ def ap_credentials(unique_id, random_bytes):
     return "GreenhouseSetup-" + suffix, "{:08d}".format(number % 100000000)
 
 
-def scan_networks(sta):
+def scan_networks(sta, attempts=3):
     """
     List nearby Wi-Fi networks, strongest first, one entry per name.
 
+    The first scan after the radio is switched on often comes back empty on
+    the Pico W, so an empty result is retried a couple of times.
+
     Args:
         sta: ``network.WLAN(STA_IF)``, active.
+        attempts (int): Scans to try while nothing is found.
 
     Returns:
         list[tuple[str, int]]: ``(ssid, rssi_dbm)``; hidden networks left out.
     """
-    try:
-        found = sta.scan()
-    except Exception as err:
-        print("Wi-Fi scan failed:", err)
-        return []
+    found = []
+    for attempt in range(attempts):
+        try:
+            found = sta.scan()
+        except Exception as err:
+            print("Wi-Fi scan failed:", err)
+            found = []
+        if found:
+            break
+        time.sleep_ms(500)
     best = {}
     for entry in found:
         try:

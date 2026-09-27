@@ -211,6 +211,17 @@ def test_scan_networks_dedupes_and_sorts(pico):
     assert pico.provision.scan_networks(wlan) == [("strong", -40), ("weak", -60)]
 
 
+def test_scan_retries_an_empty_first_result(pico):
+    """Seen on the real Pico W: the first scan after switching the radio on is empty."""
+    wlan = FakeWLAN()
+    results = [[], [(b"home", b"", 6, -40, 3, 0)]]
+    wlan.scan = lambda: results.pop(0)
+    assert pico.provision.scan_networks(wlan) == [("home", -40)]
+    empty = FakeWLAN()
+    empty.networks = []
+    assert pico.provision.scan_networks(empty) == []
+
+
 def test_scan_failure_gives_empty_list(pico):
     class Broken:
         def scan(self):

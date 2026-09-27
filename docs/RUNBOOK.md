@@ -252,6 +252,22 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 - [ ] Update over Wi-Fi: *Update controller* installs a changed file; a deliberately broken file rolls back after 3 restarts (PLAN 5.3)
 - [ ] Watchdog re-enabled; loads reconnected
 
+### Bench results so far
+
+2026-09-27, Pico W on USB (MicroPython 1.29.0), standalone mode, no server yet:
+
+| Check | Result |
+|---|---|
+| All controller code loads on the Pico | ✅ 130 KB of memory still free with everything loaded |
+| Setup hotspot and page (5.1) | ✅ after fixes: pages in 0.2–0.8 s, including bursts and idle connections; form checks work over Wi-Fi |
+| DHT22 and light sensor | ✅ 25.8 °C, 21 % RH, light ~22 400 (three steady reads) |
+| Relay outputs 1–8 | ✅ every pin switches on and off and ends off. Still to confirm by eye/ear: each relay clicks, and **on** means on (else set `"relay_active_low": true`) |
+| Controller loop in standalone/local mode | ✅ 75 s with no errors |
+| Hardware watchdog | ✅ stopping the program resets the board after ~8 s (reset cause 3 = watchdog) |
+| Update rollback on the board (5.3) | ✅ a broken `controller.py` crash-looped and `boot.py` restored the old files on the 4th start |
+| Wi-Fi to the home network | ✖ network visible (-40 dBm, channel 7) but never connects: most likely the saved Wi-Fi password is old. Re-run setup (hold the screen button at power-on) and type the current password |
+| NTP clock, MQTT, updates over Wi-Fi, buttons | ⏳ need Wi-Fi, the server, or a person at the board |
+
 Check 24 hours of telemetry on the server (exit code 0 means at least 99 % arrived):
 
 ```bash
