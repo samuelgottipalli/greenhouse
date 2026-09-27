@@ -20,7 +20,7 @@ tests/.tmp/
 !requirements*.txt
 
 # database backups written by scripts.upgrade_db
-*.v1-backup-*.db
+*.v[0-9]-backup-*.db
 
 # device config holds Wi-Fi credentials; generate it with picoside/setup_config.py
 picoside/device/config.json
@@ -31,3 +31,6 @@ picoside/device/config.json
 
 # live data: create with `python -m scripts.upgrade_db`, back up separately
 server/data/*.db
+
+# test coverage data
+.coverage

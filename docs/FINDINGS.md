@@ -41,7 +41,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | P-07 | Medium | Pico | `ticks_ms` wrap-around: uptime and double-press detection break after ~12 days | Code | **Fixed**, with a wrap test |
 | P-08 | Low | Pico | Five separate `Display` objects and config loads at import | Code | **Fixed**: one of each, passed in |
 | P-09 | Low | Pico | `relay_control` assigns a local instead of the global `last_relay_display_update` | Code | **Fixed** (loop rewritten) |
-| P-10 | Low | Pico | LDR is a raw ADC value but the light threshold is labelled in lumens | Code | Open (renamed `light_on_level` / `light_raw`) |
+| P-10 | Low | Pico | LDR is a raw ADC value but the light threshold is labelled in lumens | Code | **Fixed**: measure 6 is now `light_raw` in raw ADC units end to end (schema v3); calibration and light automation are PLAN 4.7 |
 | P-11 | High | Pico | Screen and IP buttons are swapped (pull-up reads 0 when pressed), and the 500 ms debounce made double-press impossible | Code | **Fixed** (found during the rewrite) |
 | P-12 | Medium | Pico | First sensor reading comes 5 minutes after boot, so the LCD shows no values until then | Code | **Fixed**: first read and publish at boot |
 | P-13 | Low | Pico | Vendored `umqtt` printed debug output on every message check and had no socket timeout | Code | **Fixed** |

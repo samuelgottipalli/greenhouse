@@ -1,4 +1,4 @@
--- Greenhouse database schema, version 2.
+-- Greenhouse database schema, version 3.
 --
 -- Conventions
 --   * Tables are STRICT: SQLite rejects values of the wrong type (needs SQLite >= 3.37).
@@ -98,4 +98,18 @@ CREATE TABLE weather_readings (
     sunset_utc             TEXT
 ) STRICT;
 
-PRAGMA user_version = 2;
+-- Latest online/offline status per device, from its MQTT status topic.
+CREATE TABLE device_status (
+    device_id   INTEGER PRIMARY KEY REFERENCES devices (device_id) ON DELETE CASCADE,
+    status      TEXT    NOT NULL CHECK (status IN ('online', 'offline')),
+    updated_utc TEXT    NOT NULL
+        CHECK (updated_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
+) STRICT;
+
+-- Dashboard display preferences (units, formats, zone), shared by all sessions.
+CREATE TABLE app_preferences (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+) STRICT;
+
+PRAGMA user_version = 3;

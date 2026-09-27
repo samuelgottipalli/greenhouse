@@ -22,7 +22,7 @@ def query(path, sql):
 
 def test_fresh_install(db_file):
     assert "Created" in migrations.upgrade(db_file)
-    assert query(db_file, "PRAGMA user_version") == [(2,)]
+    assert query(db_file, "PRAGMA user_version") == [(migrations.SCHEMA_VERSION,)]
     assert query(db_file, "SELECT * FROM devices") == [(1, "picow1")]
     assert query(db_file, "SELECT count(*) FROM relays") == [(8,)]
     assert query(db_file, "SELECT count(*) FROM thresholds") == [(8,)]  # 4 x 2 profiles
@@ -38,7 +38,7 @@ def test_migrate_v1(db_file):
     message = migrations.upgrade(db_file)
     assert "Migrated" in message and "'dropped_events': 1" in message
 
-    assert query(db_file, "PRAGMA user_version") == [(2,)]
+    assert query(db_file, "PRAGMA user_version") == [(migrations.SCHEMA_VERSION,)]
     assert not {"d_actions", "relay_status", "weather_data"} & {
         r[0] for r in query(db_file, "SELECT name FROM sqlite_master")
     }
@@ -117,3 +117,48 @@ def test_fresh_clone_creates_missing_data_folder(tmp_path):
     target = tmp_path / "data" / "greenhouse.db"
     assert "Created" in migrations.upgrade(target)
     assert query(target, "SELECT count(*) FROM watering_schedule") == [(8,)]
+
+
+def make_v2(path):
+    """Turn a fresh current database back into the version 2 layout."""
+    migrations.upgrade(path)
+    conn = sqlite3.connect(path)
+    conn.execute("DROP TABLE device_status")
+    conn.execute("DROP TABLE app_preferences")
+    conn.execute("UPDATE measures SET name = 'light_intensity', si_unit = 'lm', us_unit = 'lm' WHERE measure_id = 6")
+    conn.execute("INSERT INTO sensor_readings VALUES (1, 6, '2026-01-01 00:00:00', 30000)")
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+
+
+def test_upgrade_v2_to_v3(db_file):
+    make_v2(db_file)
+    assert "from version 2 to 3" in migrations.upgrade(db_file)
+    assert query(db_file, "PRAGMA user_version") == [(3,)]
+    assert query(db_file, "SELECT name, si_unit FROM measures WHERE measure_id = 6") == [("light_raw", "raw")]
+    assert query(db_file, "SELECT count(*) FROM device_status") == [(0,)]
+    assert query(db_file, "SELECT count(*) FROM app_preferences") == [(0,)]
+    assert query(db_file, "SELECT value FROM sensor_readings WHERE measure_id = 6") == [(30000.0,)]
+
+
+def test_v1_migration_renames_light_measure(db_file):
+    build_v1_db(db_file)
+    migrations.upgrade(db_file)
+    assert query(db_file, "SELECT name FROM measures WHERE measure_id = 6") == [("light_raw",)]
+
+
+def test_v2_upgrade_writes_backup(db_file):
+    make_v2(db_file)
+    migrations.upgrade(db_file)
+    (backup,) = db_file.parent.glob("greenhouse.v2-backup-*.db")
+    assert query(backup, "PRAGMA user_version") == [(2,)]
+
+
+def test_future_version_is_refused(db_file):
+    migrations.upgrade(db_file)
+    conn = sqlite3.connect(db_file)
+    conn.execute("PRAGMA user_version = 99")
+    conn.close()
+    with pytest.raises(RuntimeError, match="unsupported schema version 99"):
+        migrations.upgrade(db_file)

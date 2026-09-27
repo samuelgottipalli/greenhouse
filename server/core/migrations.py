@@ -4,9 +4,12 @@ Create or upgrade the greenhouse SQLite database.
 * An empty or missing database gets ``schema.sql`` plus the reference data in
   this module (one device, its relays, measures and default settings).
 * A version 1 database (the original ``d_*`` / ``relay_conditions`` /
-  ``weather_data`` tables) is backed up next to itself and converted to
-  version 2 in one transaction, keeping all data.
-* A version 2 database is left alone.
+  ``weather_data`` tables) is backed up next to itself and converted to the
+  current version in one transaction, keeping all data.
+* A version 2 database gets the version 3 additions (``device_status``,
+  ``app_preferences``, and the light measure renamed to ``light_raw`` because
+  the LDR reports raw ADC counts, not lumens).
+* A current database is left alone.
 
 Run it with ``python -m scripts.upgrade_db`` from the ``server/`` folder.
 """
@@ -21,7 +24,7 @@ from core.timeutil import duration_to_minutes, format_time_of_day
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION: int = 2
+SCHEMA_VERSION: int = 3
 SCHEMA_FILE: Path = Path(__file__).with_name("schema.sql")
 MIN_SQLITE: tuple[int, int, int] = (3, 37, 0)  # STRICT tables
 
@@ -35,7 +38,7 @@ MEASURES: list[tuple[int, str, str, str]] = [
     (3, "distance_long", "km", "mi"),
     (4, "distance_short", "cm", "in"),
     (5, "distance_medium", "m", "ft"),
-    (6, "light_intensity", "lm", "lm"),
+    (6, "light_raw", "raw", "raw"),
     (7, "pressure", "hPa", "inHg"),
     (8, "humidity", "% (RH)", "% (RH)"),
     (9, "direction", "°", "°"),
@@ -260,6 +263,7 @@ def migrate_v1(conn: sqlite3.Connection) -> dict[str, int]:
             "INSERT INTO measures SELECT CAST(measureid AS INTEGER), measurename, "
             "COALESCE(siunit, ''), COALESCE(englishunit, '') FROM d_measures"
         )
+        rename_light_measure(conn)
         v1_relays = {int(r): n for r, n in conn.execute("SELECT relayid, relayname FROM d_relays")}
         for (device_id,) in conn.execute("SELECT device_id FROM devices").fetchall():
             conn.executemany(
@@ -310,6 +314,42 @@ def migrate_v1(conn: sqlite3.Connection) -> dict[str, int]:
     return counts
 
 
+V3_TABLES: tuple[str, ...] = ("device_status", "app_preferences")
+
+
+def rename_light_measure(conn: sqlite3.Connection) -> None:
+    """
+    Give measure 6 an honest name and unit: the LDR reports raw ADC counts.
+
+    Args:
+        conn (sqlite3.Connection): Open connection, inside a transaction.
+    """
+    conn.execute(
+        "UPDATE measures SET name = 'light_raw', si_unit = 'raw', us_unit = 'raw' "
+        "WHERE name = 'light_intensity'"
+    )
+
+
+def migrate_v2(conn: sqlite3.Connection) -> None:
+    """
+    Add the version 3 tables and rename the light measure, in one transaction.
+
+    Args:
+        conn (sqlite3.Connection): Connection to a version 2 database.
+    """
+    conn.execute("BEGIN")
+    try:
+        for statement in schema_statements():
+            if any(f"CREATE TABLE {table} " in statement for table in V3_TABLES):
+                conn.execute(statement)
+        rename_light_measure(conn)
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
 def upgrade(path: Path | None = None) -> str:
     """
     Bring a database file to the current schema version.
@@ -338,14 +378,17 @@ def upgrade(path: Path | None = None) -> str:
         if version == 0:
             create_new(conn)
             return f"Created {path} at schema version {SCHEMA_VERSION}"
+        if version not in (1, 2):
+            raise RuntimeError(f"{path} has unsupported schema version {version}")
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup = path.with_name(f"{path.stem}.v{version}-backup-{stamp}{path.suffix}")
+        conn.close()
+        shutil.copy2(path, backup)
+        conn = connect(path)
         if version == 1:
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            backup = path.with_name(f"{path.stem}.v1-backup-{stamp}{path.suffix}")
-            conn.close()
-            shutil.copy2(path, backup)
-            conn = connect(path)
             counts = migrate_v1(conn)
             return f"Migrated {path} from version 1 (backup: {backup.name}): {counts}"
-        raise RuntimeError(f"{path} has unsupported schema version {version}")
+        migrate_v2(conn)
+        return f"Upgraded {path} from version 2 to {SCHEMA_VERSION} (backup: {backup.name})"
     finally:
         conn.close()
