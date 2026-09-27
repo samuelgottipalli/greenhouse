@@ -1,4 +1,6 @@
 """Tests for server/core/weather_api.py and services/weather_collector.py."""
+from datetime import datetime, timedelta
+
 import pytest
 
 from core import db, settings, weather_api
@@ -67,13 +69,27 @@ def test_fetch_weather_formats_url(configured, monkeypatch):
         def json(self):
             return SAMPLE_RESPONSE
 
-    monkeypatch.setattr(weather_api, "get", lambda url: calls.append(url) or FakeResponse())
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(weather_api, "get", lambda url, timeout: calls.append((url, timeout)) or FakeResponse())
     assert weather_api.fetch_weather() == SAMPLE_RESPONSE
-    assert calls == ["https://example.test/?lat=1.5&lon=-2.5"]
+    assert calls == [("https://example.test/?lat=1.5&lon=-2.5", 10)]
+
+
+def test_fetch_weather_http_error(configured, monkeypatch):
+    from requests import HTTPError
+
+    class ServerError:
+        def raise_for_status(self):
+            raise HTTPError("503")
+
+    monkeypatch.setattr(weather_api, "get", lambda url, timeout: ServerError())
+    assert weather_api.fetch_weather() is None
 
 
 def test_fetch_weather_network_error(configured, monkeypatch):
-    def boom(url):
+    def boom(url, timeout):
         raise ConnectionError("offline")
 
     monkeypatch.setattr(weather_api, "get", boom)
@@ -89,3 +105,55 @@ def test_collect_once_stores_a_row(seeded_db, monkeypatch):
 def test_collect_once_without_data(seeded_db, monkeypatch):
     monkeypatch.setattr(weather_collector, "fetch_weather", lambda: None)
     assert weather_collector.collect_once() is False
+
+
+# --- collector scheduling (S-13) --------------------------------------------
+
+
+class FakeTime:
+    def __init__(self, start):
+        self.now = start
+        self.sleeps = []
+
+    def __call__(self):
+        return self.now
+
+    def pause(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += timedelta(seconds=seconds)
+
+
+@pytest.mark.parametrize(
+    "moment, slot",
+    [("10:00:00", "10:00"), ("10:14:59", "10:00"), ("10:15:00", "10:15"), ("10:59:30", "10:45")],
+)
+def test_slot_start(moment, slot):
+    start = weather_collector.slot_start(datetime.fromisoformat(f"2026-09-26T{moment}.123"))
+    assert start.strftime("%H:%M:%S.%f") == f"{slot}:00.000000"
+
+
+def test_one_collection_per_slot(monkeypatch):
+    calls = []
+    monkeypatch.setattr(weather_collector, "collect_once", lambda: calls.append(clock.now) or True)
+    clock = FakeTime(datetime(2026, 9, 26, 10, 7, 3))
+    weather_collector.run(now=clock, pause=clock.pause, max_passes=6 * 60)  # one hour of 10 s polls
+    slots = [c.strftime("%H:%M") for c in calls]
+    assert slots == ["10:07", "10:15", "10:30", "10:45", "11:00"]
+
+
+def test_slow_pass_does_not_miss_a_slot(monkeypatch):
+    calls = []
+    monkeypatch.setattr(weather_collector, "collect_once", lambda: calls.append(clock.now) or True)
+    clock = FakeTime(datetime(2026, 9, 26, 10, 14, 55))
+    real_pause = clock.pause
+    clock.pause = lambda s: real_pause(s + 20)  # every sleep overruns by 20 s
+    weather_collector.run(now=clock, pause=clock.pause, max_passes=3)
+    assert [c.strftime("%H:%M") for c in calls] == ["10:14", "10:15"]
+
+
+def test_failed_fetch_is_retried_once(monkeypatch):
+    results = iter([False, True, False, False])
+    monkeypatch.setattr(weather_collector, "collect_once", lambda: next(results))
+    clock = FakeTime(datetime(2026, 9, 26, 10, 14, 50))
+    weather_collector.run(now=clock, pause=clock.pause, max_passes=3)
+    assert clock.sleeps[:2] == [30, 10]  # retry after 30 s, then normal polling

@@ -15,6 +15,8 @@ from core.timeutil import from_open_meteo
 
 log = logging.getLogger(__name__)
 
+REQUEST_TIMEOUT_S = 10
+
 WeatherResponse = dict[str, str | int | float | dict[str, str | int | float | list[str]]]
 
 
@@ -31,7 +33,8 @@ def fetch_weather() -> WeatherResponse | None:
         return None
     url = settings.WEATHER_API.format(LATITUDE=settings.LATITUDE, LONGITUDE=settings.LONGITUDE)
     try:
-        response = get(url)
+        response = get(url, timeout=REQUEST_TIMEOUT_S)
+        response.raise_for_status()
     except Exception as err:
         log.error("Weather API request failed: %s", err)
         return None

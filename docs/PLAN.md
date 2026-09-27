@@ -50,7 +50,7 @@ Goal: everything that exists today behaves correctly. Most steps turn one `known
 | 1.5 ✅ | Convert the buffers between °C and °F deltas on the Settings page. Show empty states on the Control and Settings pages when tables are empty. | S-08, S-09 | New tests: a 2 °F buffer saves as 1.11 °C; both pages render with empty tables. | 3 h |
 | 1.6 ✅ | Pico MQTT: call `set_callback` before `subscribe`, and catch all connect errors. | P-01 | `test_real_client_connects_subscribes_and_receives` passes; the device boots against a real broker (manual check). | 1 h |
 | 1.7 ✅ | Pico clock: GPS removed. The RTC is kept in UTC by NTP (at boot, then daily, retrying every 5 min until the first success). The LCD shows local time from `utc_offset_minutes` plus a `us`/`eu`/`none` DST rule, which `picoside/setup_config.py` derives from an IANA zone name. | P-02, S-17 (Pico side) | Offsets match `zoneinfo` for every hour of 2026–27 in six zones (`test_clock.py`); the device clock still reads correctly 48 h after boot (manual check). | 4 h |
-| 1.8 | Weather collector: add `timeout=10` to requests, fire once per 15-minute slot by tracking the last slot, and retry once. | S-13 | Tests with mocked time show exactly one fetch per slot; a hung request times out. | 2 h |
+| 1.8 ✅ | Weather collector: add `timeout=10` to requests, fire once per 15-minute slot by tracking the last slot, and retry once. | S-13 | Tests with mocked time show exactly one fetch per slot; a hung request times out. | 2 h |
 | 1.9 ✅ | Portability: build paths from `Path(__file__).parent`, use forward-slash image paths, and fix the `HELP.md` name. | S-12 | Page tests pass when run from the repo root without `chdir`; the app starts on Linux. | 1 h |
 
 ---

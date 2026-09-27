@@ -50,7 +50,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-10 | Medium | Server | New DB engine per query, never disposed; no indexes on the growing log tables | Test + Code | Partial: one cached engine, foreign keys on, index on `relay_events`; no read cache yet |
 | S-11 | Medium | Server | Device `001`, relay IDs and names hard-coded; four near-identical copy-pasted blocks | Code | Partial: device from `DEVICE_ID`, names from the DB, toggles built in a loop; automation still hard-codes relay IDs |
 | S-12 | Medium | Web | Windows-only paths (`imagesavicon.png`, `help.md` vs `HELP.md`) break on Linux / Raspberry Pi | Code | **Fixed**: paths built from `__file__`; runs from any directory |
-| S-13 | Medium | Server | Weather collector: no HTTP timeout, can double-fire or miss a slot | Code | Open |
+| S-13 | Medium | Server | Weather collector: no HTTP timeout, can double-fire or miss a slot | Code | **Fixed**: 10 s HTTP timeout, HTTP errors detected, one collection per 15-minute slot, one retry after 30 s |
 | S-14 | Medium | Server | Background services are bare `while True` scripts with `print` logging and no supervision | Code | Partial: `logging` module; no supervision yet |
 | S-15 | Medium | Web | Home and "Greenhouse Weather" (indoor data) pages are empty placeholders | Code | Open |
 | S-16 | Low | Repo | `requirements.txt` is UTF-16, pins 104 packages (Snowflake, boto3, Jupyter...), and `*.txt` is git-ignored | Code | **Fixed**: 6 runtime packages, plus `requirements-dev.txt` |
