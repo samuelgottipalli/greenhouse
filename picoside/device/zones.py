@@ -20,8 +20,6 @@ ZONES = (
     ("America/St_Johns", -210, "us"),
     ("Pacific/Honolulu", -600, "none"),
     ("America/Toronto", -300, "us"),
-    ("America/Vancouver", -480, "us"),
-    ("America/Edmonton", -420, "us"),
     ("America/Winnipeg", -360, "us"),
     ("America/Regina", -360, "none"),
     ("America/Mexico_City", -360, "none"),

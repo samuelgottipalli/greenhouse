@@ -24,7 +24,7 @@ def test_find_bootsel(tmp_path):
 
 
 def test_drive_candidates():
-    assert pico.drive_candidates("windows")[0].anchor.startswith("D:")
+    assert str(pico.drive_candidates("windows")[0]).startswith("D:")
     assert pico.drive_candidates("macos")[0].as_posix() == "/Volumes/RPI-RP2"
     assert all("RP" in p.name for p in pico.drive_candidates("linux"))
 
