@@ -20,7 +20,8 @@ its relay (1-4); pressing it twice within ``DOUBLE_PRESS_MS`` toggles the paired
 spare relay (5-8) instead. Non-main screens return to main after 10 s.
 
 Every relay change, whatever its source, is published as a retained state
-message so the server's view stays in step.
+message, and all eight states are re-published whenever the MQTT link comes
+up (boot or reconnect), so the server's view stays in step.
 """
 import time
 
@@ -83,6 +84,7 @@ class Controller:
         self._sensor_ms = config["sensor_interval_s"] * 1000
         self._publish_ms = config["publish_interval_s"] * 1000
         self._ntp_ms = config["ntp_resync_hours"] * 3600 * 1000
+        self._was_online = False
 
     # --- lifecycle ------------------------------------------------------
 
@@ -116,6 +118,9 @@ class Controller:
 
         self.handle_buttons(now)
         self.net.poll(now)
+        if self.net.mqtt_ok and not self._was_online:
+            self.publish_all_states()
+        self._was_online = self.net.mqtt_ok
         if self._due(self._last_sensor, self._sensor_ms, now):
             self.read_sensors()
             self._last_sensor = now
@@ -173,6 +178,17 @@ class Controller:
             now (int | None): ``ticks_ms`` now.
         """
         self.relays.set(number, state)
+        self.publish_state(number, source)
+        self.show_screen(number, time.ticks_ms() if now is None else now)
+
+    def publish_state(self, number, source):
+        """
+        Publish (or queue) one relay's current state as a retained message.
+
+        Args:
+            number (int): Relay number, 1-8.
+            source (str): ``"device"``, ``"web"`` or ``"auto"``.
+        """
         self.net.publish("relay/{}/state".format(number), {
             "device_id": self.config["device_id"],
             "relay": number,
@@ -180,7 +196,18 @@ class Controller:
             "source": source,
             "ts_utc": self.clock.utc_str(),
         }, retain=True)
-        self.show_screen(number, time.ticks_ms() if now is None else now)
+
+    def publish_all_states(self):
+        """
+        Report every relay's state; called each time the MQTT link comes up.
+
+        After a reboot all relays are off, which the server would otherwise
+        not know about. The server logs only states that differ from its
+        record, so a plain reconnect adds nothing. Reported as ``"auto"`` so
+        the server's automation (not a manual override) decides what next.
+        """
+        for number in range(1, 9):
+            self.publish_state(number, "auto")
 
     def handle_command(self, command):
         """

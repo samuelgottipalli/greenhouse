@@ -53,9 +53,14 @@ every relay's current state.
 {"device_id": 1, "relay": 2, "state": 1, "source": "web", "ts_utc": "2026-09-26 19:00:03"}
 ```
 
+All eight states are also re-published whenever the device's MQTT link comes up (after boot or a
+reconnect). A reboot switches every relay off, and this is how the server learns about it.
+
 `source` is one of:
 - `device`: a button press on the device.
 - `web` or `auto`: copied from the command that caused the change.
+- `auto` is also used for the re-published states after boot or reconnect, so server automation
+  (not a manual override) decides what happens next.
 
 These values match `relay_events.source` in the database.
 

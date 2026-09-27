@@ -58,6 +58,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-18 | Low | Web | App preferences live only in the browser session and defaults are duplicated on four pages | Code | **Fixed**: preferences saved in `app_preferences` and loaded by every new session; defaults in one place (`ui.py`) |
 | S-19 | High | Server | Relay changes were logged even when the MQTT publish failed, so the log (and the dashboard) showed switches that never happened | Test | **Fixed**: events are logged only after the broker accepts the command; automation retries next pass |
 | S-20 | Medium | Web | Remote Control accepted toggles while the controller was offline; the command was lost but the change was logged | Test | **Fixed**: toggles are disabled with a warning while the controller reports offline |
+| P-14 | High | Pico | After a reboot all relays are off, but the server still showed (and automation assumed) their old states | Test | **Fixed**: every relay state is re-published when the MQTT link comes up; the server logs only real differences |
 | R-01 | Low | Repo | `picoside/` committed with CRLF; any edit rewrites every line in the diff | Code | **Fixed**: `.gitattributes` stores text as LF (device files LF everywhere); repository renormalized |
 | R-02 | Low | Repo | SQLite database files are committed alongside the code | Code | **Fixed**: database untracked and git-ignored; `python -m scripts.upgrade_db` creates and seeds a new one |
 | R-03 | Low | Repo | No CI; tests did not exist before this review | n/a | **Fixed**: `.github/workflows/tests.yml` runs the full suite (Python 3.11, Ubuntu) on every push and pull request |
@@ -177,6 +178,12 @@ discarded. Relays 5–8 could never be reached. Found while rewriting the loop.
 The vendored `umqtt.simple.wait_msg` printed the client and socket objects on every call. With
 `check_msg()` in the main loop, that would have been 20 prints per second. The client also had no
 socket timeout, so a silent broker could block the loop indefinitely.
+
+### P-14: Relay state lost on reboot (High, fixed)
+Relays start off at boot, but nothing told the server. The dashboard kept showing the old states,
+and automation, believing the fan or heater was already on, never re-sent the command. The
+controller now re-publishes all eight states whenever its MQTT link comes up. The ingest service
+logs only states that differ from its record, so reconnects without a reboot add nothing.
 
 ---
 

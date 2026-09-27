@@ -238,7 +238,7 @@ def test_slow_second_press_is_two_single_presses(ctl, ticks):
     press(ctl, 3, ticks)
     run_for(ctl, ticks, 500)
     assert ctl.relays.state(3) == 0
-    assert len(ctl.net.of("relay/3/state")) == 2
+    assert [p["source"] for p in ctl.net.of("relay/3/state")].count("device") == 2
 
 
 def test_held_button_waits_for_release(ctl, ticks):
@@ -315,3 +315,35 @@ def test_network_status(ctl):
     assert ctl.network_status() == "OK"
     ctl.net.mqtt_ok = False
     assert ctl.network_status() == "NoMQTT"
+
+
+# --- state resync (P-14) ------------------------------------------------------
+
+def states_published(ctl):
+    return [(p["relay"], p["state"], p["source"]) for s, p, _ in ctl.net.published if s.startswith("relay/")]
+
+
+def test_all_states_published_when_link_comes_up(ctl):
+    ctl.tick()
+    assert states_published(ctl) == [(n, 0, "auto") for n in range(1, 9)]
+    ctl.net.published.clear()
+    ctl.tick()
+    assert states_published(ctl) == []  # only on the transition
+
+
+def test_states_republished_after_reconnect(ctl):
+    ctl.tick()
+    ctl.handle_command({"relay": 2, "state": 1})
+    ctl.net.mqtt_ok = False
+    ctl.tick()
+    ctl.net.published.clear()
+    ctl.net.mqtt_ok = True
+    ctl.tick()
+    assert (2, 1, "auto") in states_published(ctl)
+    assert len(states_published(ctl)) == 8
+
+
+def test_no_state_burst_while_offline(ctl):
+    ctl.net.mqtt_ok = False
+    ctl.tick()
+    assert states_published(ctl) == []

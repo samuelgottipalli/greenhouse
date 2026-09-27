@@ -88,3 +88,15 @@ def test_every_device_payload_field_is_documented(device):
             continue
         for field in json.loads(body):
             assert f'"{field}"' in docs, (topic, field)
+
+
+def test_reboot_resets_server_view_of_relays(device):
+    # P-14: fixture log says the fan is on; a freshly booted device has it off.
+    assert db.latest_relay_states().set_index("relay_id").loc[2, "state"] == 1
+    device.tick()
+    deliver_to_server(device)
+    fan = db.latest_relay_states().set_index("relay_id").loc[2]
+    assert (fan["state"], fan["source"]) == (0, "auto")
+    # Relays that already matched the log were not logged again.
+    heater = db.latest_relay_states().set_index("relay_id").loc[3]
+    assert heater["event_utc"] == "2025-10-27 01:00:00"
