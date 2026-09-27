@@ -13,7 +13,7 @@ import streamlit as st
 from core import db
 from core.indoor_report import PERIODS, age_text, display_value, history_by_measure, is_stale
 from core.timeutil import utc_timestamp
-from ui import display_zone, page_setup
+from ui import current_device, display_zone, page_setup
 
 page_setup("Greenhouse Weather", layout="wide")
 st.title("Greenhouse Weather Data")
@@ -24,7 +24,7 @@ units = st.session_state["units"]
 unit_labels = db.unit_labels(units) or {}
 unit_labels.pop("light_raw", None)  # raw ADC counts: no unit to show
 now = datetime.now(timezone.utc)
-latest = db.latest_sensor_readings()
+latest = db.latest_sensor_readings(device_id=current_device())
 
 if latest is None:
     st.info(
@@ -57,7 +57,7 @@ for column, (measure, label) in zip(columns, LABELS.items()):
 
 period = st.segmented_control("Period", list(PERIODS), default="24 hours") or "24 hours"
 since = utc_timestamp(now - timedelta(days=PERIODS[period]))
-history = db.sensor_history(since, bucket=None if PERIODS[period] == 1 else "hour")
+history = db.sensor_history(since, device_id=current_device(), bucket=None if PERIODS[period] == 1 else "hour")
 if history is None:
     st.info(f"No readings in the last {period}.")
     st.stop()

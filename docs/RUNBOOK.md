@@ -265,6 +265,26 @@ What watches what, and how often:
 | Server | systemd restart | on exit | A crashed service restarts after 5 s |
 | Server | Automation data checks | every 5 s | Readings older than 15 min: heater off; controller offline: automation stands back |
 
+## Adding another controller
+
+```bash
+server$ cd ~/greenhouse/server && ../venv/bin/python -m scripts.add_device 2 picow2
+```
+
+This registers device 2 with relays 1-8 and default settings, and prints the Mosquitto ACL block
+and broker login it needs. Then:
+
+1. Add the printed block to `/etc/mosquitto/greenhouse.acl`, create the login with
+   `mosquitto_passwd`, and restart mosquitto.
+2. Run `picoside/setup_config.py` for the new Pico with Device ID `2` and user
+   `greenhouse-device-2`. It gives the Pico its own MQTT client ID, which matters: two controllers
+   with the same client ID keep disconnecting each other.
+3. Copy the code to it as in step 7.
+
+The dashboard shows a **Controller** picker in the sidebar once there are two or more, and every
+page, the switches and Greenhouse Settings then apply to the chosen controller. The automation
+service handles all controllers on every pass, each with its own settings.
+
 ## Running on battery
 
 The defaults already favour low power: Wi-Fi power-save mode, an MQTT ping every 2 minutes

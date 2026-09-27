@@ -23,7 +23,7 @@ from core.conversions import (
     fahrenheit_to_celsius,
 )
 from core.timeutil import format_time_of_day
-from ui import page_setup
+from ui import current_device, page_setup
 
 page_setup("Greenhouse Settings")
 st.title("Greenhouse Settings")
@@ -57,7 +57,7 @@ def revert() -> None:
 
 def restore_defaults() -> None:
     """Button callback: copy the default profile over the current settings."""
-    if db.restore_default_settings():
+    if db.restore_default_settings(device_id=current_device()):
         clear_form()
         st.session_state["settings_notice"] = ("Greenhouse Settings restored to defaults!", ":material/check_circle:")
     else:
@@ -69,8 +69,8 @@ if notice := st.session_state.pop("settings_notice", None):
 
 us_units = st.session_state["units"] == "US"
 units = db.unit_labels(st.session_state["units"])
-thresholds = db.read_thresholds()
-schedule = db.read_watering_schedule()
+thresholds = db.read_thresholds(device_id=current_device())
+schedule = db.read_watering_schedule(device_id=current_device())
 if thresholds is None or schedule is None or units is None:
     st.error("Greenhouse settings not found! Run `python -m scripts.upgrade_db` to create them.")
     st.stop()
@@ -162,6 +162,7 @@ with st.container(horizontal=True, horizontal_alignment="right"):
                 "heater_on_temp_c": (heater_on_temp, heater_on_temp_buffer),
             },
             schedule=water_slots,
+            device_id=current_device(),
         )
         if saved:
             st.toast(body="Greenhouse Settings saved!", icon=":material/check_circle:")

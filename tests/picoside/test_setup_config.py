@@ -64,3 +64,10 @@ def test_main_writes_config(setup_config, monkeypatch):
     written = json.loads(setup_config.CONFIG_FILE.read_text())
     assert written["wifi_ssid"] == "mynet" and written["device_id"] == 2
     assert (written["timezone"], written["utc_offset_minutes"], written["dst_rule"]) == ("America/New_York", -300, "us")
+
+
+def test_client_id_is_unique_per_device(setup_config):
+    base = json.loads(setup_config.EXAMPLE_FILE.read_text())
+    one, _ = setup_config.build_config(base, {"device_id": 1, "timezone": "UTC"})
+    two, _ = setup_config.build_config(base, {"device_id": 2, "timezone": "UTC"})
+    assert (one["mqtt_client_id"], two["mqtt_client_id"]) == ("greenhouse-device-1", "greenhouse-device-2")

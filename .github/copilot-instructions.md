@@ -27,7 +27,7 @@ planned work, `docs/MQTT.md` for the message contract and `docs/RUNBOOK.md` for 
     *   `core/health.py`: `Heartbeat` (DB heartbeat + systemd watchdog); every service beats once per good pass.
     *   `services/`: `ingest.py`, `automation.py` and `weather_collector.py` (`python -m services.<name>`).
     *   `core/retention.py`: nightly roll-up of readings older than 90 days (run by `scripts/retention.py` via a systemd timer).
-    *   `scripts/`: `upgrade_db` (create/migrate DB), `set_password` (dashboard login), `bench` (query timings), `telemetry_report`, `retention`.
+    *   `scripts/`: `upgrade_db` (create/migrate DB), `add_device` (register a controller), `set_password` (dashboard login), `bench` (query timings), `telemetry_report`, `retention`.
 *   **`deploy/`**: systemd units + `install_services.py`; `mosquitto/` broker config and ACL.
 
 ### 2. Conventions

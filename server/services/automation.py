@@ -136,7 +136,8 @@ def main(pause=sleep, max_passes: int | None = None, heartbeat: Heartbeat | None
     """
     Run the automation loop.
 
-    A heartbeat is recorded after each pass that completes; a pass that
+    Each pass automates every registered device. A heartbeat is recorded
+    after each pass that completes; a pass that
     raises does not beat, so repeated failures show as "down" and the
     systemd watchdog restarts the service.
 
@@ -151,11 +152,12 @@ def main(pause=sleep, max_passes: int | None = None, heartbeat: Heartbeat | None
     while max_passes is None or passes < max_passes:
         passes += 1
         try:
-            sent = run_once()
+            devices = db.list_devices() or {}
+            sent = [action for device_id in devices for action in run_once(device_id=device_id)]
         except Exception:
             log.exception("Automation pass failed")
         else:
-            heartbeat.beat(True, f"{len(sent)} changes last pass")
+            heartbeat.beat(True, f"{len(devices)} devices, {len(sent)} changes last pass")
         pause(POLL_SECONDS)
 
 

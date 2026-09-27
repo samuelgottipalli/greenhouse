@@ -104,7 +104,7 @@ def test_automation_beats_only_after_good_passes(seeded_db, monkeypatch):
 
     results = iter([[], RuntimeError("db locked"), []])
 
-    def run_once():
+    def run_once(device_id=1):
         result = next(results)
         if isinstance(result, Exception):
             raise result
@@ -113,7 +113,7 @@ def test_automation_beats_only_after_good_passes(seeded_db, monkeypatch):
     monkeypatch.setattr(automation, "run_once", run_once)
     hb = Recorder()
     automation.main(pause=lambda s: None, max_passes=3, heartbeat=hb)
-    assert hb.beats == [(True, "0 changes last pass")] * 2
+    assert hb.beats == [(True, "1 devices, 0 changes last pass")] * 2
 
 
 def test_weather_heartbeat_reflects_last_slot(monkeypatch):

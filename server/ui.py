@@ -89,9 +89,41 @@ def require_login() -> bool:
     return False
 
 
+def current_device() -> int:
+    """
+    Return the controller the dashboard is showing.
+
+    Returns:
+        int: Device ID chosen in the sidebar (``DEVICE_ID`` until one is chosen).
+    """
+    return st.session_state.get("device_id", settings.DEVICE_ID)
+
+
+def device_selector() -> None:
+    """
+    Offer a controller picker in the sidebar when more than one is registered.
+
+    The choice is kept in ``st.session_state["device_id"]`` and used by every
+    page through :func:`current_device`.
+    """
+    devices = db.list_devices() or {}
+    if current_device() not in devices and devices:
+        st.session_state["device_id"] = next(iter(devices))
+    if len(devices) < 2:
+        return
+    ids = list(devices)
+    st.session_state["device_id"] = st.sidebar.selectbox(
+        "Controller",
+        ids,
+        index=ids.index(current_device()),
+        format_func=lambda device_id: f"{devices[device_id]} (#{device_id})",
+    )
+
+
 def page_setup(title: str, layout: str = "centered") -> None:
     """
-    Configure the page, show the logo and make sure preferences exist.
+    Configure the page, show the logo, make sure preferences exist and show
+    the controller picker.
 
     Call this first on every page.
 
@@ -102,6 +134,7 @@ def page_setup(title: str, layout: str = "centered") -> None:
     st.set_page_config(page_title=title, page_icon=FAVICON, layout=layout)
     st.logo(FAVICON, icon_image=FAVICON, size="large")
     init_preferences()
+    device_selector()
 
 
 def display_zone() -> str:

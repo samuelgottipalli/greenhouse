@@ -7,6 +7,12 @@ This guide explains how to use the Greenhouse Control System web app.
 If a dashboard password has been set, enter it to continue. Use **Log out** at the bottom of
 the sidebar when you are done on a shared computer.
 
+## Several controllers
+
+If more than one greenhouse controller is registered, pick one in the **Controller** box at the top
+of the sidebar. Every page (readings, switches and settings) then shows and changes that
+controller only.
+
 ## Navigation
 
 Pick a page from the sidebar on the left.

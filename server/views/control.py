@@ -12,7 +12,7 @@ import streamlit as st
 from core import db
 from core.mqtt import publish_relay_command
 from core.timeutil import utc_timestamp
-from ui import page_setup
+from ui import current_device, page_setup
 
 page_setup("Greenhouse Control")
 
@@ -37,13 +37,15 @@ def insert_relay_status(relay_id: int, relay: str) -> None:
     name = relay.capitalize()
     action = "On" if state else "Off"
 
-    if not publish_relay_command(relay_id=relay_id, state=state, source="web"):
+    device_id = current_device()
+    if not publish_relay_command(relay_id=relay_id, state=state, source="web", device_id=device_id):
         # Not sent, so nothing changed: don't log it (the toggle snaps back on rerun).
         st.toast(body=f"Could not reach the MQTT broker; {name} was not switched.", icon=":material/error:")
         return
     st.toast(body=f"{name} status '{action}' published via MQTT", icon=":material/published_with_changes:")
 
-    if db.log_relay_event(relay_id=relay_id, state=state, source="web", event_utc=utc_timestamp()):
+    if db.log_relay_event(relay_id=relay_id, state=state, source="web", device_id=device_id,
+                          event_utc=utc_timestamp()):
         st.toast(body=f"{name} turned {action} via app", icon=":material/thumb_up:")
     else:
         st.toast("Unable to insert relay status data into DB.", icon=":material/error:")
@@ -59,10 +61,10 @@ def relay_rows() -> list[dict] | None:
         relay has no events yet), in ``CONTROLLED_RELAYS`` order; None if the
         relay list could not be read.
     """
-    names = db.relay_names()
+    names = db.relay_names(device_id=current_device())
     if names is None:
         return None
-    states = db.latest_relay_states()
+    states = db.latest_relay_states(device_id=current_device())
     latest = {} if states is None else states.set_index("relay_id").to_dict("index")
     ids = {name: relay_id for relay_id, name in names.items()}
     rows = []
@@ -129,5 +131,5 @@ with st.expander("ℹ️ About this app", expanded=False):
     st.write("The automation service may switch devices based on the Greenhouse Settings.")
     st.write("Use the toggles below to turn the devices on or off manually.")
 
-status = db.device_status()
+status = db.device_status(device_id=current_device())
 load_page(relay_rows(), offline=status is not None and status["status"] == "offline")

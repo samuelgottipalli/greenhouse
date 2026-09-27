@@ -108,6 +108,18 @@ def unit_labels(units: str) -> dict[str, str] | None:
     return None if data is None else dict(zip(data["name"], data["unit"]))
 
 
+def list_devices() -> dict[int, str] | None:
+    """
+    Return every registered controller.
+
+    Returns:
+        dict[int, str] | None: Device ID to name, in ID order; None on error or
+        if there are none.
+    """
+    data = _read("SELECT device_id, name FROM devices ORDER BY device_id")
+    return None if data is None else dict(zip(data["device_id"], data["name"]))
+
+
 def relay_names(device_id: int = settings.DEVICE_ID) -> dict[int, str] | None:
     """
     Return the relay names of a device.

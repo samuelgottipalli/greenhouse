@@ -91,6 +91,8 @@ def build_config(base: dict, answers: dict) -> tuple[dict, str | None]:
     for key in ("mqtt_user", "mqtt_password"):
         if config.get(key) == "":
             config[key] = None
+    # Each controller needs its own MQTT client ID, or they disconnect each other.
+    config["mqtt_client_id"] = f"greenhouse-device-{config.get('device_id', 1)}"
     return config, warning
 
 

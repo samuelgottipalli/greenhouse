@@ -17,7 +17,7 @@ import streamlit as st
 from core import db
 from core.health import format_duration, service_health, signal_quality
 from core.indoor_report import age_text, is_stale
-from ui import page_setup
+from ui import current_device, page_setup
 
 page_setup("Home")
 st.title("Greenhouse")
@@ -34,7 +34,7 @@ controller, readings, relays = st.columns(3)
 
 with controller.container(border=True):
     st.caption("Controller")
-    status = db.device_status()
+    status = db.device_status(device_id=current_device())
     if status is None:
         st.badge("Unknown", icon=":material/help:", color="gray")
         st.write("No status received yet.")
@@ -56,7 +56,7 @@ with controller.container(border=True):
 
 with readings.container(border=True):
     st.caption("Greenhouse readings")
-    latest = db.latest_sensor_readings()
+    latest = db.latest_sensor_readings(device_id=current_device())
     if latest is None:
         st.badge("None yet", icon=":material/help:", color="gray")
     else:
@@ -69,7 +69,7 @@ with readings.container(border=True):
 
 with relays.container(border=True):
     st.caption("Relays")
-    states = db.latest_relay_states()
+    states = db.latest_relay_states(device_id=current_device())
     if states is None:
         st.write("No relay changes logged yet.")
     else:
