@@ -126,7 +126,7 @@ def main() -> int:
         "wifi_password": ask("Wi-Fi password", base.get("wifi_password"), secret=True),
         "mqtt_broker": ask("MQTT broker host or IP", base.get("mqtt_broker")),
         "mqtt_port": int(ask("MQTT broker port", base.get("mqtt_port", 1883))),
-        "mqtt_user": ask("MQTT username (blank for none)", base.get("mqtt_user")),
+        "mqtt_user": ask("MQTT username (e.g. greenhouse-device-1; blank for none)", base.get("mqtt_user")),
         "mqtt_password": ask("MQTT password (blank for none)", base.get("mqtt_password"), secret=True),
         "device_id": int(ask("Device ID (matches the server database)", base.get("device_id", 1))),
     }

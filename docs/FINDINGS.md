@@ -23,7 +23,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | ID | Severity | Area | Finding | Evidence | Status |
 |----|----------|------|---------|----------|--------|
 | SEC-01 | Critical | Repo | Wi-Fi password and app secrets are committed to git | Code | Partial: `server/.env` and `picoside/device/config.json` are untracked and git-ignored, with `.env.example` / `config.example.json` templates. **Still to do:** change the Wi-Fi password (and MQTT password, if real), since old commits keep the values; optionally rewrite history |
-| SEC-02 | High | MQTT | Broker traffic is unauthenticated and unencrypted; anyone on the LAN can switch relays | Code | Partial: both sides can now send a username and password; the broker does not require them yet |
+| SEC-02 | High | MQTT | Broker traffic is unauthenticated and unencrypted; anyone on the LAN can switch relays | Code | **Fixed in repo**: `deploy/mosquitto/` turns off anonymous access and limits each account to its own topics (tested against the topics the code uses); both sides send credentials. Applying it on the broker is RUNBOOK step 2 |
 | SEC-03 | High | Web | Web app has no login; anyone who can reach the port can switch the heater or water | Code | Open |
 | P-01 | Critical | Pico | Boot crashes as soon as a real MQTT broker is configured | Test | **Fixed**: callback set before subscribe; test passes |
 | P-02 | Critical | Pico | Clock "sync" re-applies the time-zone offset; after the first midnight the clock loops | Code | **Fixed**: GPS removed; RTC kept in UTC via NTP (re-synced daily); local time from offset plus DST rule |

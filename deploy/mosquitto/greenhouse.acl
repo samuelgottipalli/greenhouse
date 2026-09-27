@@ -1,0 +1,13 @@
+# Topic access for the greenhouse (docs/MQTT.md). Copy to /etc/mosquitto/greenhouse.acl.
+
+# The server (web app, automation, ingest) reads everything and sends commands.
+user greenhouse-server
+topic readwrite greenhouse/#
+
+# Controller 1 may only report about itself and read its own commands.
+# For another controller, copy this block and change the 1s.
+user greenhouse-device-1
+topic write greenhouse/1/telemetry
+topic write greenhouse/1/status
+topic write greenhouse/1/relay/+/state
+topic read greenhouse/1/relay/set
