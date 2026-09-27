@@ -6,8 +6,10 @@ Usage (from the ``server/`` folder)::
     python -m scripts.add_device 2 picow2
 
 Adds the device with relays 1-8 (water, fan, heater, light, spares) and the
-default thresholds and watering schedule, then prints the Mosquitto ACL block
-and the settings its ``config.json`` needs. The dashboard shows a controller
+default thresholds and watering schedule, makes a broker password for it
+(kept in ``data/device_credentials.json`` so the Controllers page can show its
+setup code), then prints the Mosquitto ACL block and the command that creates
+its broker login. The dashboard shows a controller
 picker in the sidebar once there are two or more, and the automation service
 starts automating the new one on its next pass.
 """
@@ -15,7 +17,7 @@ import argparse
 import sqlite3
 import sys
 
-from core import migrations, settings
+from core import device_credentials, migrations, settings
 
 ACL_TEMPLATE = """user greenhouse-device-{id}
 topic write {prefix}/{id}/telemetry
@@ -68,13 +70,16 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as err:
         print(f"Error: {err}", file=sys.stderr)
         return 1
+    user = device_credentials.device_user(args.device_id)
+    password = device_credentials.new_password()
+    device_credentials.save(args.device_id, user, password)
     print(f"Added device {args.device_id} ({args.name}).\n")
-    print("1. Add to /etc/mosquitto/greenhouse.acl, then restart mosquitto:\n")
+    print("1. Add to /etc/mosquitto/greenhouse.acl:\n")
     print(ACL_TEMPLATE.format(id=args.device_id, prefix=settings.MQTT_TOPIC_PREFIX))
-    print(f"\n2. Create its broker login:  sudo mosquitto_passwd /etc/mosquitto/greenhouse.passwd "
-          f"greenhouse-device-{args.device_id}")
-    print(f"3. Run picoside/setup_config.py for the new Pico: Device ID {args.device_id}, MQTT user "
-          f"greenhouse-device-{args.device_id} (it sets a unique MQTT client ID).")
+    print(f"\n2. Create its broker login, then restart mosquitto:\n"
+          f"   sudo mosquitto_passwd -b /etc/mosquitto/greenhouse.passwd {user} {password}\n"
+          f"   sudo systemctl restart mosquitto")
+    print("3. Connect the new controller: Settings, Controllers in the dashboard shows its setup code.")
     return 0
 
 

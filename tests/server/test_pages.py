@@ -18,6 +18,7 @@ PAGES = [
     "views/weather.py",
     "views/control.py",
     "views/greenhouse_settings.py",
+    "views/controllers.py",
 ]
 
 

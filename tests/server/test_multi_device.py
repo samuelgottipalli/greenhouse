@@ -40,10 +40,16 @@ def test_add_device_rejects_duplicates_and_bad_input(two_devices, args):
         add_device.add_device(*args, path=two_devices)
 
 
-def test_add_device_script_prints_acl(seeded_db, capsys):
+def test_add_device_script_prints_acl(seeded_db, capsys, monkeypatch, tmp_path):
+    from core import device_credentials
+
+    monkeypatch.setattr(device_credentials, "CREDENTIALS_FILE", tmp_path / "creds.json")
     assert add_device.main(["5", "north-house"]) == 0
     out = capsys.readouterr().out
     assert "user greenhouse-device-5" in out and "topic read greenhouse/5/settings" in out
+    login = device_credentials.get(5)
+    assert login["user"] == "greenhouse-device-5"
+    assert f"mosquitto_passwd -b /etc/mosquitto/greenhouse.passwd greenhouse-device-5 {login['password']}" in out
     assert add_device.main(["5", "north-house"]) == 1
 
 

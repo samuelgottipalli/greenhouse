@@ -37,6 +37,7 @@ pages = {
     "Settings": [
         st.Page("views/app_settings.py", title="App Settings", url_path="appsettings"),
         st.Page("views/greenhouse_settings.py", title="Greenhouse Settings", url_path="greenhousesettings"),
+        st.Page("views/controllers.py", title="Controllers", url_path="controllers"),
         st.Page(about_page, title="About", url_path="about"),
         st.Page(help_page, title="Help", url_path="help"),
     ],

@@ -71,6 +71,10 @@ MQTT_USERNAME: str | None = (getenv("MQTT_USERNAME") or "").strip() or None
 MQTT_PASSWORD: str | None = (getenv("MQTT_PASSWORD") or "").strip() or None
 MQTT_TOPIC_PREFIX: str = getenv("MQTT_TOPIC_PREFIX", "greenhouse")
 
+# Address controllers use to reach this computer (broker and firmware updates);
+# blank = MQTT_HOST if it names another machine, else the detected LAN address.
+PUBLIC_HOST: str = (getenv("PUBLIC_HOST") or "").strip()
+
 # Dashboard login: hash from `python -m scripts.set_password`; empty = no login.
 APP_PASSWORD_HASH: str | None = (getenv("APP_PASSWORD_HASH") or "").strip() or None
 

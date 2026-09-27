@@ -32,6 +32,10 @@ picoside/device/config.json
 # live data: create with `python -m scripts.upgrade_db`, back up separately
 server/data/*.db
 
+# controller broker passwords (shown as setup codes on the dashboard)
+server/data/device_credentials.json
+server/data/*.tmp
+
 # test coverage data
 .coverage
 
