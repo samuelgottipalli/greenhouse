@@ -16,6 +16,8 @@ Topics (``<prefix>/<device_id>/...``, see docs/MQTT.md):
 * ``status``: ``"online"``, or ``"offline"`` via the last will (retained).
 * ``relay/set``: commands ``{"relay": n, "state": 0|1}`` (subscribed).
 * ``settings``: automation settings for local mode (subscribed, retained).
+* ``firmware/update``: an over-the-air update manifest (subscribed).
+* ``firmware``: installed version and update progress (published, retained).
 """
 import json
 import time
@@ -35,6 +37,7 @@ class Network:
         outbox (list[tuple[str, str, bool]]): Unsent ``(topic, payload, retain)``.
         on_command (callable | None): Called with each decoded command dict.
         on_settings (callable | None): Called with each decoded settings dict.
+        on_firmware (callable | None): Called with each decoded update manifest.
         feed (callable | None): Called before slow operations (watchdog feed).
     """
 
@@ -61,6 +64,7 @@ class Network:
         self.outbox = []
         self.on_command = None
         self.on_settings = None
+        self.on_firmware = None
         self.feed = None
         self._base = "{}/{}".format(config["mqtt_topic_prefix"], config["device_id"])
         self._keepalive_ms = config["mqtt_keepalive_s"] * 1000
@@ -195,6 +199,7 @@ class Network:
             client.connect()
             client.subscribe(self.topic("relay/set"))
             client.subscribe(self.topic("settings"))
+            client.subscribe(self.topic("firmware/update"))
             client.publish(self.topic("status"), "online", retain=True)
         except Exception as err:  # OSError, MQTTException, bad broker name, ...
             print("MQTT connect failed:", err)
@@ -217,7 +222,8 @@ class Network:
     def _on_message(self, topic, msg):
         """
         Decode an incoming message and pass it to ``on_settings`` (settings
-        topic) or ``on_command`` (everything else).
+        topic), ``on_firmware`` (update topic) or ``on_command`` (everything
+        else).
 
         Args:
             topic (bytes): Topic the message arrived on.
@@ -234,6 +240,9 @@ class Network:
         if name.endswith("/settings"):
             if self.on_settings:
                 self.on_settings(command)
+        elif name.endswith("/firmware/update"):
+            if self.on_firmware:
+                self.on_firmware(command)
         elif self.on_command:
             self.on_command(command)
 

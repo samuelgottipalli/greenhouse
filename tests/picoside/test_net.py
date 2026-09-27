@@ -286,6 +286,7 @@ def test_ip_address(make_net):
 CONNACK_OK = b"\x20\x02\x00\x00"
 SUBACK_OK = b"\x90\x03\x00\x01\x00"  # packet id 1: relay/set
 SUBACK_2_OK = b"\x90\x03\x00\x02\x00"  # packet id 2: settings
+SUBACK_3_OK = b"\x90\x03\x00\x03\x00"  # packet id 3: firmware/update
 
 
 def publish_packet(topic: bytes, payload: bytes) -> bytes:
@@ -327,7 +328,7 @@ class FakeBrokerSocket:
 
 @pytest.fixture
 def broker(monkeypatch, fake_env):
-    sock = FakeBrokerSocket(CONNACK_OK + SUBACK_OK + SUBACK_2_OK)
+    sock = FakeBrokerSocket(CONNACK_OK + SUBACK_OK + SUBACK_2_OK + SUBACK_3_OK)
     usocket = types.ModuleType("usocket")
     usocket.socket = lambda: sock
     usocket.getaddrinfo = lambda host, port: [(None, None, None, None, ("127.0.0.1", port))]

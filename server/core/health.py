@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 HEARTBEAT_EVERY_S = 30
 STALE_AFTER_S = 120
-SERVICES: tuple[str, ...] = ("ingest", "automation", "weather")
+SERVICES: tuple[str, ...] = ("ingest", "automation", "weather", "firmware")
 
 
 def sd_notify(message: str) -> bool:

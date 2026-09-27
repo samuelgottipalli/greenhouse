@@ -155,7 +155,7 @@ def test_page_asks_for_missing_password(page):
     assert not at.exception
     assert not at.code
     at.text_input[0].input("typed-pw")
-    at.button[0].click().run()
+    next(b for b in at.button if b.label == "Save password").click().run()
     assert not at.exception
     from core import device_credentials
 

@@ -12,3 +12,5 @@ topic write greenhouse/1/status
 topic write greenhouse/1/relay/+/state
 topic read greenhouse/1/relay/set
 topic read greenhouse/1/settings
+topic write greenhouse/1/firmware
+topic read greenhouse/1/firmware/update

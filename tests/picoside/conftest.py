@@ -18,7 +18,7 @@ from pico_fakes import FakeADC, FakeDHT22, FakeLcd, FakePin, FakeTicks, FakeWDT,
 from support import PICO_DIR
 
 DEVICE_MODULES = ("config", "clock", "display", "relays", "sensors", "buttons", "net", "local_rules", "controller",
-                  "zones", "provision", "main")
+                  "zones", "provision", "ota", "boot", "main")
 
 
 @pytest.fixture

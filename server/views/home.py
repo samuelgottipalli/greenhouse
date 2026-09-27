@@ -2,7 +2,8 @@
 Home page: system health at a glance.
 
 * Controller: online/offline, plus the health it reports in telemetry
-  (uptime, Wi-Fi signal, free memory, when it was last heard from).
+  (uptime, Wi-Fi signal, free memory, when it was last heard from), and a
+  link to the Controllers page when a software update is available.
 * Readings: how old the latest greenhouse reading is (fresh or stale).
 * Relays: the logged state of each controlled relay and who set it.
 * Services: heartbeat of ingest, automation and weather (ok, degraded,
@@ -15,7 +16,7 @@ from datetime import datetime, timezone
 
 import streamlit as st
 
-from core import db
+from core import db, firmware
 from core.health import format_duration, service_health, signal_quality
 from core.indoor_report import age_text, is_stale
 from ui import current_device, page_setup
@@ -58,6 +59,8 @@ with controller.container(border=True):
             dbm = f" ({status['rssi_dbm']} dBm)" if status["rssi_dbm"] is not None else ""
             memory = f" · {status['mem_free'] // 1024} KB free" if status["mem_free"] is not None else ""
             st.write(f"Wi-Fi {signal}{dbm}{memory}")
+        if status["firmware_version"] and status["firmware_version"] != firmware.available_version():
+            st.markdown(":material/system_update: Software update available (Settings, Controllers)")
 
 with readings.container(border=True):
     st.caption("Greenhouse readings")

@@ -75,6 +75,9 @@ MQTT_TOPIC_PREFIX: str = getenv("MQTT_TOPIC_PREFIX", "greenhouse")
 # blank = MQTT_HOST if it names another machine, else the detected LAN address.
 PUBLIC_HOST: str = (getenv("PUBLIC_HOST") or "").strip()
 
+# Port of services/firmware_server.py (controller code for over-the-air updates).
+FIRMWARE_PORT: int = int(getenv("FIRMWARE_PORT") or "8081")
+
 # Dashboard login: hash from `python -m scripts.set_password`; empty = no login.
 APP_PASSWORD_HASH: str | None = (getenv("APP_PASSWORD_HASH") or "").strip() or None
 

@@ -32,7 +32,8 @@ def test_text_files_are_utf8():
     assert bad == []
 
 
-@pytest.mark.parametrize("secret", ["server/.env", "picoside/device/config.json", "server/data/greenhouse.db"])
+@pytest.mark.parametrize("secret", ["server/.env", "picoside/device/config.json", "server/data/greenhouse.db",
+                                    "server/data/device_credentials.json"])
 def test_secrets_and_data_are_not_tracked(secret):
     assert secret not in tracked_files()
 

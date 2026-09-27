@@ -72,11 +72,11 @@ def test_service_health_statuses(seeded_db):
     db.record_heartbeat("automation", False, "db locked", updated_utc=utc_timestamp(NOW - timedelta(seconds=20)))
     db.record_heartbeat("weather", True, "", updated_utc=utc_timestamp(NOW - timedelta(minutes=10)))
     status = {e["service"]: e["status"] for e in health.service_health(NOW)}
-    assert status == {"ingest": "ok", "automation": "degraded", "weather": "down"}
+    assert status == {"ingest": "ok", "automation": "degraded", "weather": "down", "firmware": "unknown"}
 
 
 def test_service_health_unknown(seeded_db):
-    assert [e["status"] for e in health.service_health(NOW)] == ["unknown"] * 3
+    assert [e["status"] for e in health.service_health(NOW)] == ["unknown"] * 4
 
 
 @pytest.mark.parametrize("rssi, text", [(-50, "good"), (-60, "good"), (-70, "fair"), (-80, "weak"), (None, "unknown")])

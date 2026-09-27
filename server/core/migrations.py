@@ -29,7 +29,7 @@ from core.timeutil import duration_to_minutes, format_time_of_day
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION: int = 5
+SCHEMA_VERSION: int = 6
 SCHEMA_FILE: Path = Path(__file__).with_name("schema.sql")
 MIN_SQLITE: tuple[int, int, int] = (3, 37, 0)  # STRICT tables
 
@@ -425,7 +425,26 @@ def migrate_v4(conn: sqlite3.Connection) -> None:
     _step(conn, V5_DDL, 5, fix_light_default)
 
 
-STEPS = {2: migrate_v2, 3: migrate_v3, 4: migrate_v4}
+V6_DDL: tuple[str, ...] = (
+    "ALTER TABLE device_status ADD COLUMN firmware_version TEXT",
+    "ALTER TABLE device_status ADD COLUMN firmware_state TEXT",
+    "ALTER TABLE device_status ADD COLUMN firmware_detail TEXT",
+    "ALTER TABLE device_status ADD COLUMN firmware_utc TEXT "
+    f"CHECK (firmware_utc IS NULL OR firmware_utc {TIMESTAMP_CHECK})",
+)
+
+
+def migrate_v5(conn: sqlite3.Connection) -> None:
+    """
+    Upgrade version 5 to 6: controller firmware version and update status.
+
+    Args:
+        conn (sqlite3.Connection): Connection to a version 5 database.
+    """
+    _step(conn, V6_DDL, 6)
+
+
+STEPS = {2: migrate_v2, 3: migrate_v3, 4: migrate_v4, 5: migrate_v5}
 
 
 def backup_to(conn: sqlite3.Connection, target: Path) -> None:

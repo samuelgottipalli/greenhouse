@@ -24,7 +24,9 @@ topic write {prefix}/{id}/telemetry
 topic write {prefix}/{id}/status
 topic write {prefix}/{id}/relay/+/state
 topic read {prefix}/{id}/relay/set
-topic read {prefix}/{id}/settings"""
+topic read {prefix}/{id}/settings
+topic write {prefix}/{id}/firmware
+topic read {prefix}/{id}/firmware/update"""
 
 
 def add_device(device_id: int, name: str, path=None) -> None:

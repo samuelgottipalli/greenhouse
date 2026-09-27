@@ -106,7 +106,7 @@ def test_bad_messages_are_ignored(seeded_db, topic, payload):
 
 
 def test_subscriptions():
-    assert ingest.subscriptions("gh") == ["gh/+/telemetry", "gh/+/relay/+/state", "gh/+/status"]
+    assert ingest.subscriptions("gh") == ["gh/+/telemetry", "gh/+/relay/+/state", "gh/+/status", "gh/+/firmware"]
 
 
 def test_client_wiring(seeded_db, monkeypatch):

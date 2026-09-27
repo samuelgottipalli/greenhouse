@@ -18,6 +18,8 @@ the time it received the message.
 | `greenhouse/1/status` | device → server | **yes** | 0 | `online` (plain text), or `offline` sent by the broker as the device's last will |
 | `greenhouse/1/relay/set` | server → device | no | 1 | Relay command |
 | `greenhouse/1/settings` | server → device | **yes** | 1 | Automation settings for local mode |
+| `greenhouse/1/firmware/update` | server → device | no | 1 | Over-the-air update manifest |
+| `greenhouse/1/firmware` | device → server | **yes** | 0 | Installed version and update progress |
 
 ## Telemetry
 
@@ -115,10 +117,43 @@ minutes means the slot is off.
 - **Server:** while the device reports `offline`, the automation service sends nothing (the broker
   would drop it) and the dashboard disables its switches.
 
+## Over-the-air updates
+
+**Update controller** on the dashboard's Controllers page publishes a manifest of the code in
+`picoside/device/` (`server/core/firmware.py`) to `firmware/update`. It is not retained, so the
+controller must be online:
+
+```json
+{"version": "3f9a0c1b2d4e", "url": "http://192.168.1.20:8081/",
+ "files": [{"path": "controller.py", "sha256": "9b1c…(64 hex digits)", "size": 17342}]}
+```
+
+- `version`: the first 12 hex digits of a SHA-256 over every file's path and hash, so it changes
+  whenever any file does.
+- `url`: the server's `greenhouse-firmware` service. The controller downloads
+  `<url>files/<path>` for each file whose hash differs from its own copy.
+- `files`: every updatable file. `boot.py`, `main.py` and the settings files are never listed,
+  and the controller refuses paths outside its folder.
+
+The controller checks every download's size and hash before changing anything, then swaps the
+files in and restarts. If the new code hasn't reached the broker after 3 starts or 10 minutes,
+`boot.py` restores the old files (`picoside/device/ota.py` explains the steps).
+
+The controller reports on `firmware`, retained, each time its link comes up and during an update:
+
+```json
+{"device_id": 1, "version": "3f9a0c1b2d4e", "state": "running", "detail": "", "ts_utc": "2026-09-27 10:00:00"}
+```
+
+- `version`: the installed version, or `unknown` for code copied by hand before updates existed.
+- `state`: `running`, `updating`, `restarting`, `updated` (first report after a successful
+  update), `failed` (nothing changed) or `rolled_back`.
+- `detail`: a short explanation, e.g. why an update failed.
+
 ## How the server stores these messages
 
 `services/ingest.py` subscribes to `<prefix>/+/telemetry`,
-`<prefix>/+/relay/+/state` and `<prefix>/+/status`:
+`<prefix>/+/relay/+/state`, `<prefix>/+/status` and `<prefix>/+/firmware`:
 
 - **Telemetry** goes to `sensor_readings`, one row per non-null value
   (`temperature_c` becomes `temperature`, `humidity_pct` becomes `humidity`,
@@ -128,6 +163,8 @@ minutes means the slot is off.
   state. The web app and automation log their own commands, so the device's
   echo is not stored twice.
 - **Status** goes to `device_status`.
+- **Firmware** goes to `device_status` too (`firmware_version`, `firmware_state`,
+  `firmware_detail`, `firmware_utc`).
 
 The contract is checked end to end in
 `tests/picoside/test_contract_with_server.py`.

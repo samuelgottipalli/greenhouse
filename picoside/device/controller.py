@@ -34,11 +34,19 @@ Safety and local mode (see ``local_rules.py``):
 Every relay change, whatever its source, is published as a retained state
 message, and all eight states are re-published whenever the MQTT link comes
 up (boot or reconnect), so the server's view stays in step.
+
+Updates (see ``ota.py``): an update message is kept and applied on the next
+tick (outside the MQTT callback): download, check, swap, restart. Reaching
+the broker confirms a new version; one that hasn't after 10 minutes restarts
+the board so ``boot.py`` can count the failed start. The installed version
+and how the last update went are published on ``firmware`` whenever the link
+comes up.
 """
 import gc
 import time
 
 import local_rules
+import ota
 from clock import format_uptime
 
 SCREEN_MAIN = 0
@@ -66,7 +74,7 @@ class Controller:
         uptime_ms (int): Milliseconds since :meth:`start`.
     """
 
-    def __init__(self, config, display, sensors, relays, buttons, net, clock):
+    def __init__(self, config, display, sensors, relays, buttons, net, clock, reset=None):
         """
         Args:
             config (dict): Parsed config (intervals, ``device_id``).
@@ -76,6 +84,7 @@ class Controller:
             buttons (buttons.Buttons): Button event source.
             net (net.Network): Wi-Fi/MQTT link; its ``on_command`` is set here.
             clock (clock.Clock): UTC/local time and NTP.
+            reset (callable | None): Restarts the board (default ``machine.reset``).
         """
         self.config = config
         self.display = display
@@ -86,7 +95,11 @@ class Controller:
         self.clock = clock
         net.on_command = self.handle_command
         net.on_settings = self.handle_settings
+        net.on_firmware = self.handle_firmware
         self.settings = local_rules.load_settings()
+        self._reset = reset
+        self.firmware_request = None
+        self.update_on_trial = ota.is_pending()
 
         self.screen = SCREEN_MAIN
         self.screen_since = 0
@@ -143,7 +156,14 @@ class Controller:
         self.net.poll(now)
         if self.net.mqtt_ok and not self._was_online:
             self.publish_all_states()
+            self.report_firmware()
         self._was_online = self.net.mqtt_ok
+        if self.firmware_request is not None:
+            request, self.firmware_request = self.firmware_request, None
+            self.apply_update(request)
+        if self.update_on_trial and self.uptime_ms > ota.CONFIRM_WITHIN_MS:
+            print("Update not confirmed in time: restarting")
+            self.reset()
         was_local = self.local_mode
         self._track_link(now)
         read = self._due(self._last_sensor, self._sensor_ms, now)
@@ -275,6 +295,102 @@ class Controller:
             "mem_free": gc.mem_free() if hasattr(gc, "mem_free") else None,
             "rssi_dbm": self.net.rssi(),
         })
+
+    # --- over-the-air updates --------------------------------------------
+
+    def reset(self):
+        """Restart the board."""
+        if self._reset is None:
+            import machine
+
+            self._reset = machine.reset
+        self._reset()
+
+    def publish_firmware(self, state, detail=""):
+        """
+        Publish (or queue) the installed version and update progress, retained.
+
+        Args:
+            state (str): ``running``, ``updating``, ``restarting``, ``updated``,
+                ``failed`` or ``rolled_back``.
+            detail (str): Short explanation for the dashboard.
+        """
+        self.net.publish("firmware", {
+            "device_id": self.config["device_id"],
+            "version": ota.current_version(),
+            "state": state,
+            "detail": detail,
+            "ts_utc": self.clock.utc_str(),
+        }, retain=True)
+
+    def report_firmware(self):
+        """
+        Called when the MQTT link comes up: confirm a version on trial and
+        say which version runs and how the last update went.
+        """
+        if self.update_on_trial:
+            ota.confirm()
+            self.update_on_trial = False
+        result = ota.take_result()
+        if result:
+            self.publish_firmware(*result)
+        else:
+            self.publish_firmware("running")
+
+    def handle_firmware(self, manifest):
+        """
+        Accept an update message; it is applied on the next tick.
+
+        Args:
+            manifest (dict): See ``ota.valid_manifest``.
+
+        Returns:
+            bool: True if it was accepted.
+        """
+        if not ota.valid_manifest(manifest):
+            print("Ignoring invalid update:", manifest)
+            self.publish_firmware("failed", "The update message was not valid")
+            return False
+        self.firmware_request = manifest
+        return True
+
+    def apply_update(self, manifest):
+        """
+        Download, check and install an update, then restart.
+
+        Relays keep their state while files download; the restart switches
+        them off and the server's automation switches them back as needed.
+
+        Args:
+            manifest (dict): A valid update message.
+
+        Returns:
+            str: ``"current"``, ``"failed"`` or ``"installed"`` (in tests,
+            where the reset returns).
+        """
+        if manifest["version"] == ota.current_version():
+            self.publish_firmware("running", "Already up to date")
+            return "current"
+        self.display.set_backlight(True)
+        self.display.show_message("Updating the controller's software. Please wait...")
+        self.publish_firmware("updating", "Downloading version " + manifest["version"])
+        try:
+            changed = ota.stage(manifest, feed=self.net.feed)
+            if not changed:
+                ota.mark_current(manifest["version"])
+                self.publish_firmware("running", "Files were already up to date")
+                return "current"
+            ota.install(manifest, changed)
+        except Exception as err:
+            print("Update failed:", err)
+            self.publish_firmware("failed", str(err)[:120])
+            self.display.clear()
+            return "failed"
+        self.publish_firmware("restarting", "Installed {} files; restarting".format(len(changed)))
+        self.display.show_message("Update installed. Restarting...")
+        time.sleep_ms(1000)  # let the last messages go out
+        self.reset()
+        return "installed"
 
     # --- relays ----------------------------------------------------------
 

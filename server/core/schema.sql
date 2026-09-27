@@ -108,7 +108,12 @@ CREATE TABLE device_status (
     last_seen_utc TEXT,
     uptime_s      INTEGER,
     mem_free      INTEGER,
-    rssi_dbm      INTEGER
+    rssi_dbm      INTEGER,
+    firmware_version TEXT,
+    firmware_state   TEXT,
+    firmware_detail  TEXT,
+    firmware_utc     TEXT
+        CHECK (firmware_utc IS NULL OR firmware_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
 ) STRICT;
 
 -- Dashboard display preferences (units, formats, zone), shared by all sessions.
@@ -137,4 +142,4 @@ CREATE TABLE alerts (
         CHECK (last_sent_utc IS NULL OR last_sent_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
 ) STRICT;
 
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;

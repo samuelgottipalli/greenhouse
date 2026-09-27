@@ -12,6 +12,8 @@ subscribes to the device topics in docs/MQTT.md and writes:
   state differs from the last logged one (so echoes of web/automation
   commands and retained repeats are not duplicated).
 * ``<prefix>/<device>/status`` -> ``device_status`` (online/offline).
+* ``<prefix>/<device>/firmware`` -> ``device_status`` (installed version and
+  over-the-air update progress).
   Telemetry also updates the device's health there (last seen, uptime, free
   memory, Wi-Fi signal).
 
@@ -47,9 +49,9 @@ def subscriptions(prefix: str = settings.MQTT_TOPIC_PREFIX) -> list[str]:
         prefix (str): Topic prefix.
 
     Returns:
-        list[str]: Filters for telemetry, relay state and status of all devices.
+        list[str]: Filters for telemetry, relay state, status and firmware of all devices.
     """
-    return [f"{prefix}/+/telemetry", f"{prefix}/+/relay/+/state", f"{prefix}/+/status"]
+    return [f"{prefix}/+/telemetry", f"{prefix}/+/relay/+/state", f"{prefix}/+/status", f"{prefix}/+/firmware"]
 
 
 def valid_timestamp(value) -> str | None:
@@ -126,6 +128,14 @@ def handle_message(topic: str, payload: bytes, received_utc: str,
             rssi_dbm=_int_or_none(data.get("rssi_dbm")),
         )
         return f"telemetry from {device_id}: {stored} new readings"
+
+    if rest == ["firmware"]:
+        version, state = data.get("version"), data.get("state")
+        if not isinstance(version, str) or not version or state not in db.FIRMWARE_STATES:
+            return f"ignored bad firmware report from {device_id}"
+        detail = data.get("detail") if isinstance(data.get("detail"), str) else ""
+        db.update_firmware_status(device_id, version[:40], state, detail[:200], received_utc)
+        return f"firmware of {device_id}: {version} {state}"
 
     if len(rest) == 3 and rest[0] == "relay" and rest[2] == "state" and rest[1].isdigit():
         state = data.get("state")

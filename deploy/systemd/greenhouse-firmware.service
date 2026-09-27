@@ -1,0 +1,19 @@
+[Unit]
+Description=Greenhouse controller code for over-the-air updates (HTTP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@SERVER_DIR@
+ExecStart=@PYTHON@ -m services.firmware_server
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+# core/health.py pings the watchdog each pass; no ping for 2 min = hung, restart it.
+WatchdogSec=120
+NotifyAccess=main
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -23,7 +23,8 @@ from pathlib import Path
 DEPLOY_DIR = Path(__file__).resolve().parent
 REPO_DIR = DEPLOY_DIR.parent
 TEMPLATE_DIR = DEPLOY_DIR / "systemd"
-UNITS = ["greenhouse-ingest", "greenhouse-automation", "greenhouse-weather", "greenhouse-web"]
+UNITS = ["greenhouse-ingest", "greenhouse-automation", "greenhouse-weather", "greenhouse-firmware",
+         "greenhouse-web"]
 # Scheduled jobs: the .timer is enabled; it starts the matching one-shot .service.
 TIMERS = ["greenhouse-retention", "greenhouse-alerts"]
 
