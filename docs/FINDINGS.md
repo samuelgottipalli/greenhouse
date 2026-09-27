@@ -22,7 +22,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 
 | ID | Severity | Area | Finding | Evidence | Status |
 |----|----------|------|---------|----------|--------|
-| SEC-01 | Critical | Repo | Wi-Fi password and app secrets are committed to git | Code | Partial: `server/.env` and `picoside/device/config.json` are untracked and git-ignored, with `.env.example` / `config.example.json` templates. **Still to do:** change the Wi-Fi password (and MQTT password, if real), since old commits keep the values; optionally rewrite history |
+| SEC-01 | Critical | Repo | Wi-Fi password and app secrets are committed to git | Code | **Fixed in git**: secret files untracked (templates only), and on 2026-09-26 the whole history was rewritten to remove them, all databases and caches, and every Wi-Fi/secret value (verified: 0 occurrences). **Still to do:** change the Wi-Fi password, since GitHub caches or older clones may still hold the old commits |
 | SEC-02 | High | MQTT | Broker traffic is unauthenticated and unencrypted; anyone on the LAN can switch relays | Code | **Fixed in repo**: `deploy/mosquitto/` turns off anonymous access and limits each account to its own topics (tested against the topics the code uses); both sides send credentials. Applying it on the broker is RUNBOOK step 2 |
 | SEC-03 | High | Web | Web app has no login; anyone who can reach the port can switch the heater or water | Code | **Fixed**: password login on every page (salted PBKDF2 hash in `.env`, set with `python -m scripts.set_password`); an unset password shows a warning |
 | P-01 | Critical | Pico | Boot crashes as soon as a real MQTT broker is configured | Test | **Fixed**: callback set before subscribe; test passes |
