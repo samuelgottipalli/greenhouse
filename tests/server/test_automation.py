@@ -1,94 +1,102 @@
 """
-Tests for server/services/automation.py.
-
-One pass of the loop is run by making ``sleep`` raise, with MQTT publishing
-captured. These pin down the current behaviour of the port; the loop is
-rewritten in PLAN step 1.1.
+Tests for server/services/automation.py: loading inputs from the database,
+acting on decisions, and the loop. The rules themselves are covered in
+test_automation_rules.py.
 """
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from core import db
 from services import automation
 
-
-class StopLoop(Exception):
-    pass
+# Fixture readings are from 2025-10-22 22:38:12; "now" is 5 minutes later.
+FRESH_NOW = datetime(2025, 10, 22, 22, 43, 12, tzinfo=timezone.utc)
 
 
 @pytest.fixture
-def run_once(seeded_db, monkeypatch):
-    """Run one loop pass and return the relay commands it published."""
-    sent = []
+def sent(seeded_db, monkeypatch):
+    commands = []
     monkeypatch.setattr(
-        automation, "publish_relay_command", lambda **kw: sent.append((kw["relay_id"], kw["state"]))
+        automation, "publish_relay_command",
+        lambda **kw: commands.append((kw["relay_id"], kw["state"], kw["source"])) or True,
     )
-
-    def stop(_seconds):
-        raise StopLoop
-
-    monkeypatch.setattr(automation, "sleep", stop)
-    # No watering during the test, whatever the time of day.
+    # No watering, whatever the time of day.
     db.save_settings({}, {slot: ("00:00", 0) for slot in (1, 2, 3, 4)})
-
-    def _run():
-        with pytest.raises(StopLoop):
-            automation.main()
-        return sent
-
-    return _run
+    return commands
 
 
-def set_reading(db_conn, measure_id, value):
-    db_conn.execute(
-        "INSERT INTO sensor_readings VALUES (1, ?, '2030-01-01 00:00:00', ?)", (measure_id, value)
-    )
+def add_reading(db_conn, measure_id, value, at="2025-10-22 22:40:00"):
+    db_conn.execute("INSERT INTO sensor_readings VALUES (1, ?, ?, ?)", (measure_id, at, value))
     db_conn.commit()
 
 
-def test_watering_windows():
-    schedule = {"start_local": ["06:00", "23:50"], "duration_min": [30, 20]}
-    now = datetime(2026, 9, 26, 6, 10)
-    assert automation.watering_windows(schedule, now) == [
-        (datetime(2026, 9, 26, 6, 0), datetime(2026, 9, 26, 6, 30)),
-        (datetime(2026, 9, 26, 23, 50), datetime(2026, 9, 27, 0, 10)),
-    ]
+def test_load_inputs(seeded_db):
+    limits, slots, readings, states, relay_ids = automation.load_inputs()
+    assert limits["fan_on_temp_c"] == (32.0, 2.0)
+    assert slots[0] == ("06:00", 30)
+    assert readings["temperature"].value == 21.5
+    assert readings["temperature"].at == datetime(2025, 10, 22, 22, 38, 12, tzinfo=timezone.utc)
+    assert states["fan"].state == 1 and states["fan"].source == "web"
+    assert relay_ids["heater"] == 3
 
 
-def test_fan_turns_off_when_cool_and_dry(run_once):
-    # Fixture: fan on, 21.5 C / 45 % against triggers 32 C / 50 %.
-    # S-06 (2): the humidity and temperature blocks each send "off".
-    assert run_once() == [(2, 0), (2, 0)]
-    assert db.latest_relay_states().set_index("relay_id").loc[2, "source"] == "auto"
+def test_old_readings_hold_fan_and_keep_heater_off(sent):
+    # Fixture: fan on (web, 2025-10-27 01:00), heater off; readings are days
+    # older than "now", so the fan is held and the heater stays off.
+    now = datetime(2025, 10, 27, 3, 0, tzinfo=timezone.utc)
+    assert automation.run_once(now=now) == []
+    assert sent == []
 
 
-def test_fan_turns_on_when_humid(run_once, db_conn):
-    db.log_relay_event(relay_id=2, state=0, source="web", event_utc="2030-01-01 00:00:00")
-    set_reading(db_conn, 8, 70.0)
-    assert (2, 1) in run_once()
-
-
-def test_nothing_happens_without_readings(run_once, db_conn, monkeypatch):
-    db_conn.execute("DELETE FROM sensor_readings")
+def test_fan_off_when_cool_and_dry(sent, db_conn):
+    add_reading(db_conn, 1, 20.0)
+    add_reading(db_conn, 8, 40.0)
+    now = datetime(2025, 10, 27, 1, 5, tzinfo=timezone.utc)
+    db_conn.execute("UPDATE sensor_readings SET reading_utc = '2025-10-27 01:04:00' WHERE reading_utc = '2025-10-22 22:40:00'")
     db_conn.commit()
-    calls = []
-    # With data missing the loop never sleeps (S-06 4); stop it on the next read.
-    real = automation.db.latest_sensor_readings
+    # The fan was switched on from the web 5 minutes ago: manual override holds it.
+    assert sent == [] and automation.run_once(now=now) == []
+    later = now + timedelta(minutes=61)
+    db_conn.execute("UPDATE sensor_readings SET reading_utc = '2025-10-27 02:05:00' WHERE reading_utc = '2025-10-27 01:04:00'")
+    db_conn.commit()
+    automation.run_once(now=later)
+    assert sent == [(2, 0, "auto")]
 
-    def count_reads():
+
+def test_heater_command_goes_to_heater_relay(sent, db_conn):
+    add_reading(db_conn, 1, 5.0)
+    actions = automation.run_once(now=FRESH_NOW)
+    assert (3, 1, "auto") in sent
+    assert [a.relay for a in actions if a.state == 1] == ["heater"]
+    latest = db.latest_relay_states().set_index("relay").loc["heater"]
+    assert (latest["state"], latest["source"]) == (1, "auto")
+
+
+def test_missing_settings_does_nothing(sent, db_conn):
+    db_conn.execute("DELETE FROM thresholds")
+    db_conn.commit()
+    assert automation.run_once(now=FRESH_NOW) == []
+    assert sent == []
+
+
+def test_loop_sleeps_between_passes_and_survives_errors(seeded_db, monkeypatch):
+    calls, pauses = [], []
+
+    def flaky(now=None, device_id=1):
         calls.append(1)
-        if len(calls) > 2:
-            raise StopLoop
-        return real()
+        if len(calls) == 1:
+            raise RuntimeError("database locked")
+        return []
 
-    monkeypatch.setattr(automation.db, "latest_sensor_readings", count_reads)
-    assert run_once() == []
+    monkeypatch.setattr(automation, "run_once", flaky)
+    automation.main(pause=pauses.append, max_passes=3)
     assert len(calls) == 3
+    assert pauses == [automation.POLL_SECONDS] * 3  # formerly S-06 (4): no busy loop
 
 
-@pytest.mark.known_bug
-@pytest.mark.xfail(strict=True, reason="S-06 (1): heater commands are published to the fan relay")
-def test_cold_turns_heater_on(run_once, db_conn):
-    set_reading(db_conn, 1, 10.0)
-    assert (3, 1) in run_once()
+def test_run_once_defaults_to_now(sent):
+    # With the real clock the fixture readings are stale: only safe actions result.
+    actions = automation.run_once()
+    assert all(a.state == 0 or a.relay == "water" for a in actions)
+    assert all(source == "auto" for _, _, source in sent)

@@ -28,8 +28,8 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | P-01 | Critical | Pico | Boot crashes as soon as a real MQTT broker is configured | Test | **Fixed**: callback set before subscribe; test passes |
 | P-02 | Critical | Pico | Clock "sync" re-applies the time-zone offset; after the first midnight the clock loops | Code | **Fixed**: GPS removed; RTC kept in UTC via NTP (re-synced daily); local time from offset plus DST rule |
 | P-03 | Critical | Pico/Server | Relay commands from the server never reach the relays (topic/payload mismatch, no polling) | Code | Partial: device polls and both sides use [MQTT.md](MQTT.md); not yet tried on hardware |
-| S-01 | Critical | Server | No service stores Pico sensor data; automation runs on stale readings | Code + DB | Open (PLAN 2.3) |
-| S-06 | Critical | Server | Automation loop bugs: heater commands go to the fan, conflicting fan logic, busy loop | Test + Code | Open: ported unchanged, defects marked in the code |
+| S-01 | Critical | Server | No service stores Pico sensor data; automation runs on stale readings | Code + DB | Partial: automation ignores readings older than 15 min (heater off); no service stores telemetry yet (PLAN 2.3) |
+| S-06 | Critical | Server | Automation loop bugs: heater commands go to the fan, conflicting fan logic, busy loop | Test + Code | **Fixed**: rules moved to pure `core/automation.py` (100% branch-tested): heater drives relay 3, one fan decision with hysteresis, heater buffer, no busy loop, 60-min manual override |
 | S-02 | High | Server | Saving settings stores `HH:MM:SS`; the automation service then crashes parsing `HH:MM` | Test | **Fixed**: schema stores `HH:MM` and whole minutes |
 | S-03 | High | Web | First toggle after page load sends the opposite command | Test | **Fixed**: the callback reads the new toggle value and time when clicked; toggles always show the logged state |
 | S-04 | High | Web | Weather page crashes if there are fewer than two readings for today | Test | **Fixed**: shows "no readings yet today" with the last reading time; deltas and charts only with two or more readings |
@@ -48,7 +48,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-08 | Medium | Web | Hysteresis buffers are shown as °F but stored and used as °C | Code | **Fixed**: buffers converted as temperature differences (2 °C = 3.6 °F) on display and save |
 | S-09 | Medium | Web | Control and Settings pages crash on an empty database | Code | **Fixed**: Settings and Control show an error when the tables are missing; Control shows relays with no history as off |
 | S-10 | Medium | Server | New DB engine per query, never disposed; no indexes on the growing log tables | Test + Code | Partial: one cached engine, foreign keys on, index on `relay_events`; no read cache yet |
-| S-11 | Medium | Server | Device `001`, relay IDs and names hard-coded; four near-identical copy-pasted blocks | Code | Partial: device from `DEVICE_ID`, names from the DB, toggles built in a loop; automation still hard-codes relay IDs |
+| S-11 | Medium | Server | Device `001`, relay IDs and names hard-coded; four near-identical copy-pasted blocks | Code | **Fixed**: relays found by name everywhere (Control page, automation); IDs only in seed data; device from `DEVICE_ID` |
 | S-12 | Medium | Web | Windows-only paths (`imagesavicon.png`, `help.md` vs `HELP.md`) break on Linux / Raspberry Pi | Code | **Fixed**: paths built from `__file__`; runs from any directory |
 | S-13 | Medium | Server | Weather collector: no HTTP timeout, can double-fire or miss a slot | Code | **Fixed**: 10 s HTTP timeout, HTTP errors detected, one collection per 15-minute slot, one retry after 30 s |
 | S-14 | Medium | Server | Background services are bare `while True` scripts with `print` logging and no supervision | Code | Partial: `logging` module; no supervision yet |

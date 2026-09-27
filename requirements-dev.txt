@@ -1,3 +1,4 @@
 -r server/requirements.txt
 mpy-cross==1.29.0.post2
 pytest==9.1.1
+pytest-cov==7.1.0

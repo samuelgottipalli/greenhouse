@@ -26,7 +26,7 @@ Indoor sensor readings from the greenhouse controller. This page is not built ye
 *   One switch per device: **Fan**, **Heater**, **Light** and **Water**.
 *   Flip a switch to turn that device on or off. The badge next to it shows the last recorded
     state.
-*   The automation service may change a device again based on your Greenhouse Settings.
+*   A device you switch here stays as you set it for 60 minutes; after that the automation service follows your Greenhouse Settings again. If greenhouse readings are more than 15 minutes old, automation switches the heater off for safety.
 
 ### Settings › App Settings
 
