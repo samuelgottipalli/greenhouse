@@ -49,3 +49,11 @@ def test_deploy_and_docs_files_are_tracked():
         and path.relative_to(REPO_ROOT).as_posix() not in tracked
     ]
     assert missing == []
+
+
+def test_dashboard_sends_no_usage_statistics():
+    import tomllib
+
+    config = tomllib.loads((REPO_ROOT / "server" / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert config["browser"]["gatherUsageStats"] is False
+    assert "server/.streamlit/config.toml" in tracked_files()

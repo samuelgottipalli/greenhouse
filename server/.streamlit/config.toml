@@ -1,0 +1,5 @@
+# Streamlit settings for the dashboard (read when streamlit runs from server/).
+
+[browser]
+# Do not send usage statistics to Streamlit.
+gatherUsageStats = false

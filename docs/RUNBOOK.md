@@ -267,7 +267,11 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 | Update rollback on the board (5.3) | ✅ a broken `controller.py` crash-looped and `boot.py` restored the old files on the 4th start |
 | Wi-Fi to the home network | ✅ connected within 40 s of a restart (-44 dBm). (Hand-driven connection attempts made while the program was interrupted mid-connect stayed stuck on "connecting"; the controller itself connects fine) |
 | NTP clock and daylight saving (P-02) | ✅ an RTC set to 2020 was corrected by NTP; local time matched the PC (PDT) to the second |
-| MQTT, updates over Wi-Fi, buttons, 48 h clock | ⏳ need the server, a person at the board, or time |
+| Server on a Raspberry Pi (Debian 13, Python 3.13) | ✅ set up over SSH following steps 1–4: broker refuses anonymous and wrong logins; all five services running and healthy; dashboard and firmware service reachable from the LAN |
+| Controller → server (7) | ✅ online in the database, 8 relay states and readings stored within seconds of connecting (-42 dBm) |
+| Server → controller relay command (8c–d, P-03, PLAN 2.2) | ✅ fan on and off from the server, each confirmed back in 0.5 s, logged as `web` |
+| Update over Wi-Fi (PLAN 5.3) | ✅ `unknown` → `0da9f7b0fa0c`: updating, restarting, back online and **updated** in ~40 s; only the 4 changed files were downloaded |
+| Buttons, relay clicks and polarity, outage tests, 48 h clock, 24 h / 7 day telemetry | ⏳ need a person at the board, or time |
 
 Check 24 hours of telemetry on the server (exit code 0 means at least 99 % arrived):
 
