@@ -1,0 +1,16 @@
+[Unit]
+Description=Greenhouse outdoor weather collector
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@SERVER_DIR@
+ExecStart=@PYTHON@ -m services.weather_collector
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

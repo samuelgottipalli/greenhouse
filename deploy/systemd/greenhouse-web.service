@@ -1,0 +1,16 @@
+[Unit]
+Description=Greenhouse web dashboard (Streamlit)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@SERVER_DIR@
+ExecStart=@PYTHON@ -m streamlit run app.py --server.headless true --server.address 0.0.0.0 --server.port 8501
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

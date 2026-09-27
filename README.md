@@ -78,7 +78,8 @@ flowchart LR
 | `server/app.py` | The web dashboard. Its pages are in `server/views/` and the About/Help text is in `server/content/`. |
 | `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py` and `weather_collector.py`. |
 | `server/core/` | Shared code: database access, settings, MQTT, the weather API client, unit conversions. |
-| `server/scripts/` | Maintenance: `upgrade_db.py` creates or upgrades the database. |
+| `server/scripts/` | Maintenance: `upgrade_db.py` creates or upgrades the database; `bench.py` times the queries. |
+| `deploy/` | systemd service files and their installer; MQTT broker config. |
 | `server/data/` | The SQLite database. |
 | `tests/` | Automated tests for both sides (see [Running the tests](#running-the-tests)). |
 | `docs/` | [FINDINGS.md](docs/FINDINGS.md) (known problems), [PLAN.md](docs/PLAN.md) (what's next) and [MQTT.md](docs/MQTT.md) (the messages the two sides exchange). |
@@ -133,6 +134,10 @@ python -m services.weather_collector     # weather collector (leave running)
 python -m services.automation            # automation service (leave running)
 python -m services.ingest                # stores what the Pico sends (leave running)
 ```
+
+On the always-on server (Linux), install all four as services that start at boot and restart
+after a crash: `sudo venv/bin/python deploy/install_services.py --user <you> --enable`. Logs:
+`journalctl -u greenhouse-ingest -f`. Step-by-step setup is in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 `python -m scripts.bench` times the dashboard's queries on a year of synthetic data (the real
 database is not touched).
