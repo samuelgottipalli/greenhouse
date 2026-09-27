@@ -15,7 +15,8 @@ robustness, then new features. Each step says:
   Anything that needs real hardware gets a short manual check listed under "Done when".
 - One step per branch or PR, so each can be reviewed and reverted on its own.
 
-**Status (2026-09-26, after the findings pass):** 408 tests pass and no `known_bug` tests remain. Both
+**Status (2026-09-26, after the offline-safety pass):** 454 tests pass and no `known_bug` tests remain.
+The controller runs the automation rules itself when the network is down (P-15). Both
 directions of the device/server contract are tested end to end; what's left is confirming it on the
 hardware ([RUNBOOK.md](RUNBOOK.md)).
 
@@ -108,7 +109,7 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | Housekeeping | Done | GPS removed; `server/` and `picoside/device/` layouts; schema v2/v3 plus migrations; Pico main loop rewritten |
 | 0 | 0.2–0.5 ✅ · 0.1 🟡 | 0.1 needs you: change the Wi-Fi password (optionally rewrite history) |
 | 1 | 1.1–1.9 ✅ | Hardware confirmations for 1.6/1.7 are in the RUNBOOK sign-off |
-| 2 | 2.1–2.4 ✅ | 2.2 on-hardware check in the RUNBOOK sign-off |
+| 2 | 2.1–2.4 ✅ | 2.2 on-hardware check in the RUNBOOK sign-off. Added: controller local mode and sensor-fault heater cut-off (P-15), relay-state resync (P-14), send-before-log (S-19/S-20) |
 | 3 | 3.1 ✅ · 3.2 🟡 · 3.3 🟡 · 3.4 open | 3.2: 7-day soak not run; 3.3: services supervised, no heartbeat rows; 3.4: retention |
 | 4 | 4.1 ✅ · 4.2 🟡 · 4.3 ✅ · 4.5 ✅ · 4.4, 4.6–4.8 open | 4.2 lacks service heartbeats |
 
