@@ -1,8 +1,9 @@
 """
 Helpers shared by every Streamlit page: page setup and display preferences.
 
-Display preferences live in ``st.session_state`` (per browser session) under
-these keys, set on the App Settings page:
+Display preferences are chosen on the App Settings page, saved in the
+``app_preferences`` table, and loaded into ``st.session_state`` when a browser
+session starts, under these keys:
 
 * ``units``: "SI" or "US"
 * ``date_format``: e.g. "MM/DD/YYYY"
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from core import settings
+from core import db, settings
 
 APP_DIR: Path = Path(__file__).resolve().parent
 FAVICON: str = str(APP_DIR / "images" / "favicon.png")
@@ -30,9 +31,25 @@ PREFERENCE_DEFAULTS: dict[str, str] = {
 
 
 def init_preferences() -> None:
-    """Fill in any display preference the session does not have yet."""
+    """
+    Fill in display preferences the session does not have yet: stored values
+    first, then the defaults. The database is read once per session.
+    """
+    if all(key in st.session_state for key in PREFERENCE_DEFAULTS):
+        return
+    stored = db.read_preferences()
     for key, value in PREFERENCE_DEFAULTS.items():
-        st.session_state.setdefault(key, value)
+        st.session_state.setdefault(key, stored.get(key, value))
+
+
+def save_preferences() -> bool:
+    """
+    Store the session's display preferences for future sessions.
+
+    Returns:
+        bool: True if saved.
+    """
+    return db.save_preferences({key: st.session_state[key] for key in PREFERENCE_DEFAULTS})
 
 
 def page_setup(title: str, layout: str = "centered") -> None:

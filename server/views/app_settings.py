@@ -1,16 +1,17 @@
 """
-App Settings page: per-session display preferences.
+App Settings page: display preferences (units, formats, time zone).
 
-Stores the user's choices in ``st.session_state`` (not the database), so they
-reset when the browser session ends. The keys are listed in ``ui.py``.
+Choices apply to the current session immediately and are saved to the
+database, so new sessions start with them. The keys are listed in ``ui.py``.
 """
 import zoneinfo
 
 import streamlit as st
 
-from ui import page_setup
+from ui import PREFERENCE_DEFAULTS, page_setup, save_preferences
 
 page_setup("App Settings")
+before = {key: st.session_state[key] for key in PREFERENCE_DEFAULTS}
 
 st.title("App Settings")
 timezone_list = sorted(zoneinfo.available_timezones())
@@ -68,3 +69,9 @@ with st.container(border=True):
             timezone_list,
             index=load_value(timezone_list, st.session_state["timezone_name"]),
         )
+
+if {key: st.session_state[key] for key in PREFERENCE_DEFAULTS} != before:
+    if save_preferences():
+        st.toast("Preferences saved", icon=":material/check_circle:")
+    else:
+        st.toast("Preferences could not be saved", icon=":material/error:")

@@ -240,3 +240,20 @@ def test_weather_page_empty_table_says_so(seeded_db):
     build_db(TEST_DB_PATH, weather_rows=0)
     at = run_page("views/weather.py")
     assert "No weather readings yet" in at.info[0].value
+
+
+def test_preferences_persist_across_sessions(seeded_db):
+    # Formerly S-18: preferences reset with every browser session.
+    at = run_page("views/app_settings.py")
+    at.radio[0].set_value("SI").run()
+    at.radio[2].set_value("24-hour").run()
+    fresh = run_page("views/app_settings.py")
+    assert fresh.session_state["units"] == "SI"
+    assert fresh.session_state["time_format"] == "24-hour"
+    weather = run_page("views/weather.py")
+    assert next(m for m in weather.metric if m.label == "Temperature").value.endswith("°C")
+
+
+def test_unchanged_preferences_are_not_rewritten(seeded_db, db_conn):
+    run_page("views/app_settings.py")
+    assert db_conn.execute("SELECT count(*) FROM app_preferences").fetchone() == (0,)

@@ -36,7 +36,7 @@ Choose how the app displays information:
 *   **Date Format** and **Time Format** (12- or 24-hour).
 *   **Timezone:** UTC, or a local time zone.
 
-These choices apply to your current browser session.
+These choices are saved and apply to every browser that opens the dashboard.
 
 ### Settings › Greenhouse Settings
 
