@@ -14,7 +14,8 @@ DEVICE_CODE = "\n".join(p.read_text(encoding="utf-8") for p in PICO_DIR.glob("*.
 
 
 def test_repo_paths_exist():
-    paths = set(re.findall(r"(?:deploy|picoside|server|docs)/[\w./-]+\.(?:py|conf|acl|md|json|sql)", RUNBOOK))
+    # Whole paths only (not the tail of a longer path such as tests/picoside/...).
+    paths = set(re.findall(r"(?<![\w/])(?:deploy|picoside|server|docs|tests)/[\w./-]+\.(?:py|conf|acl|md|json|sql)", RUNBOOK))
     assert paths
     missing = [p for p in paths if not (REPO_ROOT / p).exists() and not p.endswith("config.json")]
     assert missing == []

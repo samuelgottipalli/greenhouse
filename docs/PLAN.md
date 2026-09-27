@@ -15,7 +15,7 @@ robustness, then new features. Each step says:
   Anything that needs real hardware gets a short manual check listed under "Done when".
 - One step per branch or PR, so each can be reviewed and reverted on its own.
 
-**Status (2026-09-26, after the offline-safety pass):** 454 tests pass and no `known_bug` tests remain.
+**Status (2026-09-26, after Phase 3):** 495 tests pass (plus one Linux-only test that CI runs) and no `known_bug` tests remain.
 The controller runs the automation rules itself when the network is down (P-15). Both
 directions of the device/server contract are tested end to end; what's left is confirming it on the
 hardware ([RUNBOOK.md](RUNBOOK.md)).
@@ -80,9 +80,9 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | Step | Work | Fixes | Done when | Effort |
 |---|---|---|---|---|
 | 3.1 ✅ | DB layer: one engine per process (`st.cache_resource` in the app, a module-level engine in services), `st.cache_data(ttl=60)` for reads, a primary key and index on `relay_status(deviceid, relayid, actiontime)` plus an index on `greenhouse_data`, and replace the bare-column `GROUP BY`. | S-10 | `scripts/bench.py` with one year of synthetic data (about 105k telemetry rows and 50k relay rows) shows each page query at 50 ms or less and a warm full page render at 500 ms or less. | 1 d |
-| 3.2 🟡 | Pico robustness: `machine.WDT`, non-blocking Wi-Fi and MQTT reconnect with backoff, a ring buffer of the last 48 readings replayed on reconnect, button IRQs that only set flags, one shared `Display`, and `ticks_diff` everywhere. | P-04, P-05, P-07, P-08, P-09 | Firmware tests for the buffer and reconnect state machine; a 7-day soak with a 30-minute Wi-Fi outage each day shows no hang or reboot loop, and buffered readings arrive after reconnect. | 2 d |
+| 3.2 ✅ | Pico robustness: `machine.WDT`, non-blocking Wi-Fi and MQTT reconnect with backoff, a ring buffer of the last 48 readings replayed on reconnect, button IRQs that only set flags, one shared `Display`, and `ticks_diff` everywhere. | P-04, P-05, P-07, P-08, P-09 | Firmware tests for the buffer and reconnect state machine; a 7-day soak with a 30-minute Wi-Fi outage each day shows no hang or reboot loop, and buffered readings arrive after reconnect. | 2 d |
 | 3.3 ✅ | Services: switch to `logging` with rotating files, add systemd units (or one supervisor script) for `ingest`, `automation` and `weather`, and have each write a heartbeat row. | S-14 | `systemctl kill` restarts the service within 10 s; the Home page shows each service's last heartbeat. | 4 h |
-| 3.4 | Retention: nightly job that rolls telemetry older than 90 days into hourly averages. | (scale) | The database grows by 5 MB/year or less per device (measured on synthetic data). | 3 h |
+| 3.4 ✅ | Retention: nightly job that rolls telemetry older than 90 days into hourly averages. | (scale) | The database grows by 5 MB/year or less per device (measured on synthetic data). | 3 h |
 
 ---
 
@@ -110,7 +110,7 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | 0 | 0.2–0.5 ✅ · 0.1 🟡 | 0.1 needs you: change the Wi-Fi password (optionally rewrite history) |
 | 1 | 1.1–1.9 ✅ | Hardware confirmations for 1.6/1.7 are in the RUNBOOK sign-off |
 | 2 | 2.1–2.4 ✅ | 2.2 on-hardware check in the RUNBOOK sign-off. Added: controller local mode and sensor-fault heater cut-off (P-15), relay-state resync (P-14), send-before-log (S-19/S-20) |
-| 3 | 3.1 ✅ · 3.2 🟡 · 3.3 🟡 · 3.4 open | 3.2: 7-day soak not run; 3.3: services supervised, no heartbeat rows; 3.4: retention |
-| 4 | 4.1 ✅ · 4.2 🟡 · 4.3 ✅ · 4.5 ✅ · 4.4, 4.6–4.8 open | 4.2 lacks service heartbeats |
+| 3 | 3.1–3.4 ✅ | 3.2: 7-day soak simulated in tests; the on-hardware run is in the RUNBOOK sign-off. 3.3: heartbeats + systemd watchdog. 3.4: 2.6 MB/device/year measured |
+| 4 | 4.1 ✅ · 4.2 ✅ · 4.3 ✅ · 4.5 ✅ · 4.4, 4.6–4.8 open | |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

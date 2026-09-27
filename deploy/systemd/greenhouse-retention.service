@@ -1,0 +1,10 @@
+[Unit]
+Description=Greenhouse data retention (roll old readings into hourly averages)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+WorkingDirectory=@SERVER_DIR@
+ExecStart=@PYTHON@ -m scripts.retention
+Environment=PYTHONUNBUFFERED=1

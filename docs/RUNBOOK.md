@@ -103,10 +103,12 @@ server$ systemctl status 'greenhouse-*'
 ```
 
 This installs and starts `greenhouse-ingest`, `greenhouse-automation`, `greenhouse-weather` and
-`greenhouse-web`. Each restarts 5 s after a crash and starts at boot. Logs:
-`journalctl -u greenhouse-ingest -f`.
+`greenhouse-web`. Each restarts 5 s after a crash and starts at boot. It also enables
+`greenhouse-retention.timer`, which rolls readings older than 90 days into hourly averages every
+night at 03:30. Logs: `journalctl -u greenhouse-ingest -f`.
 
-**Check:** all four are `active (running)`. The ingest log shows `Connected to localhost:1883`
+**Check:** all four are `active (running)`, and `systemctl list-timers greenhouse-retention.timer`
+shows the next 03:30 run. The ingest log shows `Connected to localhost:1883`
 and no `not authorised`. Within 15 minutes the Weather Data page shows today's weather.
 
 ---
@@ -230,6 +232,8 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 - [ ] 8k: relays off after a power cycle
 - [ ] ⏳ LCD clock still correct 48 h after boot, including across midnight (P-02, PLAN 1.7)
 - [ ] ⏳ 24 h: at least 285 of 288 expected telemetry rows stored (PLAN 2.3)
+- [ ] ⏳ 7 days: no hang or reboot loop, with at least one Wi-Fi outage; `telemetry_report --hours 168` at 99 % or more (PLAN 3.2; simulated in `tests/picoside/test_soak.py`)
+- [ ] ⏳ Next morning: `journalctl -u greenhouse-retention` shows a successful 03:30 run (PLAN 3.4)
 - [ ] Watchdog re-enabled; loads reconnected
 
 Check 24 hours of telemetry on the server (exit code 0 means at least 99 % arrived):

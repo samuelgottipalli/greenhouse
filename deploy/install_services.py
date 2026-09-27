@@ -5,11 +5,12 @@ Usage (as root, from anywhere in the repository)::
 
     sudo venv/bin/python deploy/install_services.py --user pi --enable
 
-Renders ``deploy/systemd/*.service`` with this checkout's ``server/`` folder,
+Renders ``deploy/systemd/*.service`` and ``*.timer`` with this checkout's ``server/`` folder,
 the Python interpreter running this script (use the project venv) and the
 given user, writes them to ``/etc/systemd/system`` (or ``--dest``), and with
-``--enable`` reloads systemd and starts them. Every unit restarts 5 s after a
-crash (``Restart=always``); logs go to the journal::
+``--enable`` reloads systemd and starts them. Every long-running unit restarts
+5 s after a crash (``Restart=always``); ``greenhouse-retention.timer`` runs the
+retention job nightly at 03:30. Logs go to the journal::
 
     journalctl -u greenhouse-ingest -f
 """
@@ -23,6 +24,8 @@ DEPLOY_DIR = Path(__file__).resolve().parent
 REPO_DIR = DEPLOY_DIR.parent
 TEMPLATE_DIR = DEPLOY_DIR / "systemd"
 UNITS = ["greenhouse-ingest", "greenhouse-automation", "greenhouse-weather", "greenhouse-web"]
+# Scheduled jobs: the .timer is enabled; it starts the matching one-shot .service.
+TIMERS = ["greenhouse-retention"]
 
 
 def render(template: str, user: str, python: str, server_dir: Path) -> str:
@@ -59,10 +62,10 @@ def install(dest: Path, user: str, python: str, server_dir: Path = REPO_DIR / "s
     """
     dest.mkdir(parents=True, exist_ok=True)
     written = []
-    for unit in UNITS:
-        text = (TEMPLATE_DIR / f"{unit}.service").read_text(encoding="utf-8")
-        target = dest / f"{unit}.service"
-        target.write_text(render(text, user, python, server_dir), encoding="utf-8", newline="\n")
+    for template in sorted(TEMPLATE_DIR.glob("greenhouse-*.*")):
+        target = dest / template.name
+        target.write_text(render(template.read_text(encoding="utf-8"), user, python, server_dir),
+                          encoding="utf-8", newline="\n")
         written.append(target)
     return written
 
@@ -85,10 +88,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
     if args.enable:
         subprocess.run(["systemctl", "daemon-reload"], check=True)
-        subprocess.run(["systemctl", "enable", "--now", *UNITS], check=True)
+        subprocess.run(["systemctl", "enable", "--now", *UNITS, *(f"{t}.timer" for t in TIMERS)], check=True)
         print("Services enabled and started. Check them with: systemctl status 'greenhouse-*'")
     else:
-        print("Now run: sudo systemctl daemon-reload && sudo systemctl enable --now " + " ".join(UNITS))
+        print("Now run: sudo systemctl daemon-reload && sudo systemctl enable --now "
+              + " ".join(UNITS + [f"{t}.timer" for t in TIMERS]))
     return 0
 
 

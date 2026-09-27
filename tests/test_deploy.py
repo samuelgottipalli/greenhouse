@@ -22,32 +22,34 @@ def parse_unit(text: str) -> configparser.ConfigParser:
 @pytest.fixture
 def installed(tmp_path):
     install_services.install(tmp_path, user="pi", python="/opt/gh/venv/bin/python", server_dir=SERVER_DIR)
-    return {p.stem: parse_unit(p.read_text()) for p in tmp_path.glob("*.service")}
+    return {p.name: parse_unit(p.read_text()) for p in tmp_path.glob("greenhouse-*.*")}
 
 
 def test_all_units_rendered(installed):
-    assert set(installed) == set(install_services.UNITS)
+    expected = {f"{u}.service" for u in install_services.UNITS + install_services.TIMERS}
+    expected |= {f"{t}.timer" for t in install_services.TIMERS}
+    assert set(installed) == expected
 
 
 @pytest.mark.parametrize("unit", install_services.UNITS)
 def test_units_restart_and_run_from_server(installed, unit):
-    service = installed[unit]["Service"]
+    service = installed[f"{unit}.service"]["Service"]
     assert service["Restart"] == "always"
     assert service["User"] == "pi"
     assert service["WorkingDirectory"] == SERVER_DIR.as_posix()
     assert service["ExecStart"].startswith("/opt/gh/venv/bin/python -m ")
     assert "@" not in "".join(service.values())
-    assert installed[unit]["Install"]["WantedBy"] == "multi-user.target"
+    assert installed[f"{unit}.service"]["Install"]["WantedBy"] == "multi-user.target"
 
 
 @pytest.mark.parametrize("unit", ["greenhouse-ingest", "greenhouse-automation", "greenhouse-weather"])
 def test_service_modules_exist(installed, unit):
-    module = shlex.split(installed[unit]["Service"]["ExecStart"])[2]
+    module = shlex.split(installed[f"{unit}.service"]["Service"]["ExecStart"])[2]
     assert (SERVER_DIR / (module.replace(".", "/") + ".py")).exists()
 
 
 def test_web_unit_runs_the_app(installed):
-    args = shlex.split(installed["greenhouse-web"]["Service"]["ExecStart"])
+    args = shlex.split(installed["greenhouse-web.service"]["Service"]["ExecStart"])
     assert args[1:5] == ["-m", "streamlit", "run", "app.py"]
     assert (SERVER_DIR / "app.py").exists()
 
@@ -66,11 +68,27 @@ def test_main_without_enable_prints_next_step(tmp_path, capsys):
 def test_background_services_have_watchdog(installed, unit):
     from core.health import STALE_AFTER_S
 
-    service = installed[unit]["Service"]
+    service = installed[f"{unit}.service"]["Service"]
     assert int(service["WatchdogSec"]) <= STALE_AFTER_S
     assert service["NotifyAccess"] == "main"
 
 
 def test_web_has_no_watchdog(installed):
     # Streamlit does not ping the watchdog, so it must not be killed for silence.
-    assert "WatchdogSec" not in installed["greenhouse-web"]["Service"]
+    assert "WatchdogSec" not in installed["greenhouse-web.service"]["Service"]
+
+
+def test_retention_timer(installed):
+    timer = installed["greenhouse-retention.timer"]
+    assert timer["Timer"]["OnCalendar"] == "*-*-* 03:30:00"
+    assert timer["Timer"]["Persistent"] == "true"
+    assert timer["Install"]["WantedBy"] == "timers.target"
+    service = installed["greenhouse-retention.service"]["Service"]
+    assert service["Type"] == "oneshot"
+    assert shlex.split(service["ExecStart"])[1:] == ["-m", "scripts.retention"]
+    assert (SERVER_DIR / "scripts" / "retention.py").exists()
+
+
+def test_enable_hint_includes_timer(tmp_path, capsys):
+    install_services.main(["--dest", str(tmp_path), "--user", "pi"])
+    assert "greenhouse-retention.timer" in capsys.readouterr().out

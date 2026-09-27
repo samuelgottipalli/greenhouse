@@ -140,6 +140,9 @@ On the always-on server (Linux), install all four as services that start at boot
 after a crash: `sudo venv/bin/python deploy/install_services.py --user <you> --enable`. Logs:
 `journalctl -u greenhouse-ingest -f`. Step-by-step setup is in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
+`python -m scripts.retention --measure` shows how much the database grows per year with the
+nightly retention job (about 2.6 MB per device).
+
 `python -m scripts.bench` times the dashboard's queries on a year of synthetic data (the real
 database is not touched).
 
