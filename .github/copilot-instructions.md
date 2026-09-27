@@ -5,7 +5,7 @@ and `server` (Streamlit web app plus background services). The old Dash app (`se
 GPS module have been removed; do not reintroduce them.
 
 Start with `README.md` for the overview, `docs/FINDINGS.md` for known defects, `docs/PLAN.md` for
-planned work and `docs/MQTT.md` for the message contract.
+planned work, `docs/MQTT.md` for the message contract and `docs/RUNBOOK.md` for hardware bring-up.
 
 ### 1. Layout
 
@@ -23,8 +23,10 @@ planned work and `docs/MQTT.md` for the message contract.
     *   `core/`: `settings.py` (the only place `.env` is read), `db.py` (all SQL), `schema.sql`
         (current schema, version in `PRAGMA user_version`), `migrations.py`, `mqtt.py`, `weather_api.py`, `timeutil.py`,
         `conversions.py`, `weather_codes.py`.
+    *   `core/automation.py`: pure automation rules (`decide`); the service only feeds and acts on it.
     *   `services/`: `ingest.py`, `automation.py` and `weather_collector.py` (`python -m services.<name>`).
-    *   `scripts/upgrade_db.py`: creates or migrates the database (`python -m scripts.upgrade_db`).
+    *   `scripts/`: `upgrade_db` (create/migrate DB), `set_password` (dashboard login), `bench` (query timings), `telemetry_report`.
+*   **`deploy/`**: systemd units + `install_services.py`; `mosquitto/` broker config and ACL.
 
 ### 2. Conventions
 

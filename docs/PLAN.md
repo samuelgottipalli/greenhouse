@@ -15,9 +15,9 @@ robustness, then new features. Each step says:
   Anything that needs real hardware gets a short manual check listed under "Done when".
 - One step per branch or PR, so each can be reviewed and reverted on its own.
 
-**Baseline (2026-09-26, after housekeeping):** 223 tests pass, 5 `known_bug` tests xfail. The
-device and server now use the same command format ([MQTT.md](MQTT.md)), but nothing stores device
-telemetry yet (step 2.3).
+**Status (2026-09-26, after the findings pass):** 1 tests pass and no `known_bug` tests remain. Both
+directions of the device/server contract are tested end to end; what's left is confirming it on the
+hardware ([RUNBOOK.md](RUNBOOK.md)).
 
 ✅ = done, 🟡 = partly done. See the tracking table at the end for notes.
 
@@ -102,15 +102,14 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 
 ## Tracking
 
-| Phase | Steps | Status |
+| Phase | Status | Notes |
 |---|---|---|
-| Review | Overview, findings, docstrings, test harness, `serverside` retired | Done |
-| Housekeeping | GPS removed; `server/` and `picoside/device/` layouts; schema v2 plus migration; Pico main loop rewritten | Done |
-| 0 | 0.1 🟡 (files untracked with templates; credentials not yet rotated) · 0.3 ✅ · 0.4 🟡 (`scripts.upgrade_db` creates or migrates the database; the file is still tracked) · 0.2, 0.5 open | In progress |
-| 1 | 1.2 ✅ (schema) · 1.6 ✅ · 1.7 ✅ (NTP + DST rule instead of GPS) · 1.9 ✅ · 1.1, 1.3–1.5, 1.8 open | In progress |
-| 2 | 2.1 ✅ · 2.2 ✅ (needs a hardware check) · 2.4 🟡 (credentials supported on both sides; broker not locked down) · 2.3 open | In progress |
-| 3 | 3.1 🟡 (one engine, index on `relay_events`; no read cache or benchmark) · 3.2 🟡 (all code done; 7-day soak not run) · 3.3, 3.4 open | In progress |
-| 4 | 4.1–4.8 | Not started |
+| Review | Done | Overview, findings, docstrings, test harness, `serverside` retired |
+| Housekeeping | Done | GPS removed; `server/` and `picoside/device/` layouts; schema v2/v3 plus migrations; Pico main loop rewritten |
+| 0 | 0.2–0.5 ✅ · 0.1 🟡 | 0.1 needs you: change the Wi-Fi password (optionally rewrite history) |
+| 1 | 1.1–1.9 ✅ | Hardware confirmations for 1.6/1.7 are in the RUNBOOK sign-off |
+| 2 | 2.1–2.4 ✅ | 2.2 on-hardware check in the RUNBOOK sign-off |
+| 3 | 3.1 ✅ · 3.2 🟡 · 3.3 🟡 · 3.4 open | 3.2: 7-day soak not run; 3.3: services supervised, no heartbeat rows; 3.4: retention |
+| 4 | 4.1 ✅ · 4.2 🟡 · 4.3 ✅ · 4.5 ✅ · 4.4, 4.6–4.8 open | 4.2 lacks service heartbeats |
 
-Progress at a glance: `pytest -rx` lists the remaining `known_bug` tests. Phase 1 is complete when
-that list is empty.
+Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).
