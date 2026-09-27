@@ -26,7 +26,8 @@ def insert_relay_status(relay_id: int, relay: str) -> None:
 
     Used as the ``on_change`` callback of each toggle. The state is read from
     the widget and the time taken when the callback runs, so the command
-    always matches what the user just did (fixes S-03).
+    always matches what the user just did (fixes S-03). The change is only
+    logged if the broker accepted the command (S-19).
 
     Args:
         relay_id (int): Relay number; also the widget key.
@@ -36,10 +37,11 @@ def insert_relay_status(relay_id: int, relay: str) -> None:
     name = relay.capitalize()
     action = "On" if state else "Off"
 
-    if publish_relay_command(relay_id=relay_id, state=state, source="web"):
-        st.toast(body=f"{name} status '{action}' published via MQTT", icon=":material/published_with_changes:")
-    else:
-        st.toast(body="Unable to publish relay status to MQTT.", icon=":material/error:")
+    if not publish_relay_command(relay_id=relay_id, state=state, source="web"):
+        # Not sent, so nothing changed: don't log it (the toggle snaps back on rerun).
+        st.toast(body=f"Could not reach the MQTT broker; {name} was not switched.", icon=":material/error:")
+        return
+    st.toast(body=f"{name} status '{action}' published via MQTT", icon=":material/published_with_changes:")
 
     if db.log_relay_event(relay_id=relay_id, state=state, source="web", event_utc=utc_timestamp()):
         st.toast(body=f"{name} turned {action} via app", icon=":material/thumb_up:")
@@ -76,16 +78,24 @@ def relay_rows() -> list[dict] | None:
     return rows
 
 
-def load_page(rows: list[dict] | None) -> None:
+def load_page(rows: list[dict] | None, offline: bool = False) -> None:
     """
     Render one toggle and status badge per controlled relay.
 
     Args:
         rows (list[dict] | None): Output of :func:`relay_rows`.
+        offline (bool): The controller last reported offline; commands would
+            be lost, so the toggles are disabled (S-20).
     """
     if rows is None:
         st.error("Relays not found! Run `python -m scripts.upgrade_db` to create them.")
         return
+    if offline:
+        st.warning(
+            "The greenhouse controller is offline, so switches are disabled. It is running its "
+            "own safety rules until it reconnects.",
+            icon=":material/cloud_off:",
+        )
     with st.container(border=True):
         st.subheader(body="Device Status")
         left, right = st.columns([0.3, 0.7])
@@ -103,6 +113,7 @@ def load_page(rows: list[dict] | None) -> None:
                 label_visibility="collapsed",
                 on_change=insert_relay_status,
                 args=(row["relay_id"], row["relay"]),
+                disabled=offline,
             )
             source = f" ({row['source']})" if row["source"] else ""
             badges.badge(
@@ -118,4 +129,5 @@ with st.expander("ℹ️ About this app", expanded=False):
     st.write("The automation service may switch devices based on the Greenhouse Settings.")
     st.write("Use the toggles below to turn the devices on or off manually.")
 
-load_page(relay_rows())
+status = db.device_status()
+load_page(relay_rows(), offline=status is not None and status["status"] == "offline")

@@ -100,3 +100,15 @@ def test_run_once_defaults_to_now(sent):
     actions = automation.run_once()
     assert all(a.state == 0 or a.relay == "water" for a in actions)
     assert all(source == "auto" for _, _, source in sent)
+
+
+def test_failed_publish_is_not_logged_and_retried(seeded_db, db_conn, monkeypatch):
+    # S-19: automation logged commands the broker never accepted.
+    db.save_settings({}, {slot: ("00:00", 0) for slot in (1, 2, 3, 4)})
+    add_reading(db_conn, 1, 5.0)
+    calls = []
+    monkeypatch.setattr(automation, "publish_relay_command", lambda **kw: calls.append(kw) or False)
+    assert automation.run_once(now=FRESH_NOW) == []
+    assert db.latest_relay_states().set_index("relay").loc["heater", "state"] == 0
+    automation.run_once(now=FRESH_NOW)
+    assert len([c for c in calls if c["relay_id"] == 3]) == 2  # tried again next pass

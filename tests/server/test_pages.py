@@ -257,3 +257,32 @@ def test_preferences_persist_across_sessions(seeded_db):
 def test_unchanged_preferences_are_not_rewritten(seeded_db, db_conn):
     run_page("views/app_settings.py")
     assert db_conn.execute("SELECT count(*) FROM app_preferences").fetchone() == (0,)
+
+
+def test_control_failed_publish_is_not_logged(seeded_db, db_conn, monkeypatch):
+    # S-19: a command the broker never accepted was still logged as done.
+    import core.mqtt
+
+    monkeypatch.setattr(core.mqtt, "publish_relay_command", lambda **kw: False)
+    before = db_conn.execute("SELECT count(*) FROM relay_events").fetchone()
+    at = run_page("views/control.py")
+    at.toggle(key="3").set_value(True).run()
+    assert db_conn.execute("SELECT count(*) FROM relay_events").fetchone() == before
+    assert at.toggle(key="3").value is False  # snaps back to the real state
+
+
+def test_control_disabled_while_controller_offline(seeded_db, db_conn):
+    # S-20: commands to an offline controller are lost.
+    db_conn.execute("INSERT INTO device_status VALUES (1, 'offline', '2026-09-26 19:00:00')")
+    db_conn.commit()
+    at = run_page("views/control.py")
+    assert "controller is offline" in at.warning[0].value
+    assert all(t.disabled for t in at.toggle)
+
+
+def test_control_enabled_when_online(seeded_db, db_conn):
+    db_conn.execute("INSERT INTO device_status VALUES (1, 'online', '2026-09-26 19:00:00')")
+    db_conn.commit()
+    at = run_page("views/control.py")
+    assert not at.warning
+    assert not any(t.disabled for t in at.toggle)

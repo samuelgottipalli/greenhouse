@@ -56,6 +56,8 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-16 | Low | Repo | `requirements.txt` is UTF-16, pins 104 packages (Snowflake, boto3, Jupyter...), and `*.txt` is git-ignored | Code | **Fixed**: 6 runtime packages, plus `requirements-dev.txt` |
 | S-17 | Low | Server | Mixed time zones: UTC for relay log and weather, local for Pico timestamps and watering schedule | Code | **Fixed**: UTC in storage and on the wire; only watering start times are local, by design |
 | S-18 | Low | Web | App preferences live only in the browser session and defaults are duplicated on four pages | Code | **Fixed**: preferences saved in `app_preferences` and loaded by every new session; defaults in one place (`ui.py`) |
+| S-19 | High | Server | Relay changes were logged even when the MQTT publish failed, so the log (and the dashboard) showed switches that never happened | Test | **Fixed**: events are logged only after the broker accepts the command; automation retries next pass |
+| S-20 | Medium | Web | Remote Control accepted toggles while the controller was offline; the command was lost but the change was logged | Test | **Fixed**: toggles are disabled with a warning while the controller reports offline |
 | R-01 | Low | Repo | `picoside/` committed with CRLF; any edit rewrites every line in the diff | Code | **Fixed**: `.gitattributes` stores text as LF (device files LF everywhere); repository renormalized |
 | R-02 | Low | Repo | SQLite database files are committed alongside the code | Code | **Fixed**: database untracked and git-ignored; `python -m scripts.upgrade_db` creates and seeds a new one |
 | R-03 | Low | Repo | No CI; tests did not exist before this review | n/a | **Fixed**: `.github/workflows/tests.yml` runs the full suite (Python 3.11, Ubuntu) on every push and pull request |
@@ -302,6 +304,16 @@ UTC for logging. Standardise on UTC in storage and on the wire.
 ### S-18: Preferences (Low)
 Units, date and time formats live in `st.session_state` and reset when the browser session ends.
 Defaults are re-declared on four pages. Centralise them in one helper, and persist them if needed.
+
+### S-19: Unsent commands logged as done (High, fixed)
+The Control page and the automation service logged a relay event whether or not
+`publish_relay_command` succeeded. With the broker down, the dashboard showed a relay as switched,
+and automation believed it and never retried. Found while reviewing the offline behaviour.
+
+### S-20: Commands to an offline controller (Medium, fixed)
+The device connects with a clean MQTT session, so commands sent while it is offline are dropped by
+the broker. The page now reads `device_status` and disables the switches while the controller is
+offline, saying that the controller's own safety rules are in charge.
 
 ---
 

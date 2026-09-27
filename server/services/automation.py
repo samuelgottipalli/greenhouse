@@ -66,7 +66,8 @@ def run_once(now: datetime | None = None, device_id: int = settings.DEVICE_ID) -
         device_id (int): Device to automate.
 
     Returns:
-        list[Action]: The changes made (empty if nothing to do or inputs missing).
+        list[Action]: The changes sent to the broker (empty if nothing to do,
+        inputs are missing or the broker is unreachable). Only these are logged.
     """
     inputs = load_inputs(device_id)
     if inputs is None:
@@ -75,12 +76,17 @@ def run_once(now: datetime | None = None, device_id: int = settings.DEVICE_ID) -
     limits, slots, readings, states, relay_ids = inputs
     now = now or datetime.now(timezone.utc)
     actions = decide(limits, slots, readings, states, now, ZoneInfo(settings.TIMEZONE))
+    sent = []
     for action in actions:
         relay_id = relay_ids[action.relay]
-        log.info("Switching %s %s: %s", action.relay, "on" if action.state else "off", action.reason)
-        publish_relay_command(relay_id=relay_id, state=action.state, source="auto", device_id=device_id)
+        if not publish_relay_command(relay_id=relay_id, state=action.state, source="auto", device_id=device_id):
+            # Not sent: log nothing, so the next pass tries again (S-19).
+            log.error("Could not publish %s %s; will retry", action.relay, action.state)
+            continue
+        log.info("Switched %s %s: %s", action.relay, "on" if action.state else "off", action.reason)
         db.log_relay_event(relay_id=relay_id, state=action.state, source="auto", device_id=device_id)
-    return actions
+        sent.append(action)
+    return sent
 
 
 def main(pause=sleep, max_passes: int | None = None) -> None:
