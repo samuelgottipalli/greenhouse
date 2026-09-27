@@ -308,7 +308,7 @@ systemd, or as one supervised process.
 ### S-15: Placeholder pages (Medium)
 `home.py` and `greenhouse.py` render only a title, so the core "what is happening in my greenhouse"
 view does not exist yet. The retired Dash app had gauges and high/low history charts that could be
-ported. They are in git history at `ce78ab0:serverside/app_device_stats.py`.
+ported. They are in git history at `917594f:serverside/app_device_stats.py`.
 
 ### S-16: Dependencies (Low)
 - `requirements.txt` is UTF-16 and pins 104 packages. Most are unrelated: Snowflake, boto3,
@@ -369,4 +369,4 @@ What was kept:
 - Ideas, now listed in the plan: gauge and history charts for the indoor dashboard (S-15), and an
   MQTT subscriber that writes telemetry to the database (S-01).
 
-The full code remains available in git history (`git show ce78ab0:serverside/<file>`).
+The full code remains available in git history (`git show 917594f:serverside/<file>`).
