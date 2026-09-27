@@ -2,6 +2,11 @@
 
 This guide explains how to use the Greenhouse Control System web app.
 
+## Logging in
+
+If a dashboard password has been set, enter it to continue. Use **Log out** at the bottom of
+the sidebar when you are done on a shared computer.
+
 ## Navigation
 
 Pick a page from the sidebar on the left.

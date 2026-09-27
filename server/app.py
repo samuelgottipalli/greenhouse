@@ -1,13 +1,16 @@
 """
 Entry point for the Greenhouse Control System web app.
 
+Every page request runs this file first, so the login check here
+(``ui.require_login``) protects all pages.
+
 Run from the ``server/`` folder with ``streamlit run app.py``. Defines the
 sidebar navigation and runs whichever page the user selects. Pages live in
 ``views/``; About and Help render markdown from ``content/``.
 """
 import streamlit as st
 
-from ui import render_markdown
+from ui import render_markdown, require_login
 
 
 def about_page() -> None:
@@ -38,5 +41,8 @@ pages = {
         st.Page(help_page, title="Help", url_path="help"),
     ],
 }
+
+if not require_login():
+    st.stop()
 
 st.navigation(pages).run()

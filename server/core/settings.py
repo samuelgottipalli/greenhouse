@@ -71,6 +71,9 @@ MQTT_USERNAME: str | None = (getenv("MQTT_USERNAME") or "").strip() or None
 MQTT_PASSWORD: str | None = (getenv("MQTT_PASSWORD") or "").strip() or None
 MQTT_TOPIC_PREFIX: str = getenv("MQTT_TOPIC_PREFIX", "greenhouse")
 
+# Dashboard login: hash from `python -m scripts.set_password`; empty = no login.
+APP_PASSWORD_HASH: str | None = (getenv("APP_PASSWORD_HASH") or "").strip() or None
+
 WEATHER_API: str | None = getenv("WEATHER_API")
 LATITUDE: str | None = getenv("LATITUDE")
 LONGITUDE: str | None = getenv("LONGITUDE")

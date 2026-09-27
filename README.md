@@ -119,7 +119,7 @@ been removed. It is still in the git history.
 | Server → device: commands move the relays | 🟡 Both sides now agree on the message format; not yet tried on the hardware |
 | Device → server: readings, relay changes and online status stored | 🟡 `services/ingest.py` built and tested end to end; not yet tried on the hardware |
 | Automation service | ⚠️ Runs, but has logic bugs (S-06) and acts on old data |
-| Security | ⚠️ Secrets in the repo, no login, open MQTT (SEC-01 to SEC-03) |
+| Security | 🟡 Dashboard login and a locked-down broker config are ready to switch on (RUNBOOK); the old Wi-Fi password in git history still needs changing (SEC-01) |
 
 Details and fixes are in [docs/FINDINGS.md](docs/FINDINGS.md) and [docs/PLAN.md](docs/PLAN.md).
 
@@ -129,6 +129,7 @@ Details and fixes are in [docs/FINDINGS.md](docs/FINDINGS.md) and [docs/PLAN.md]
 
 ```bash
 python -m scripts.upgrade_db             # first time, or after pulling changes (safe to repeat)
+python -m scripts.set_password           # set the dashboard login password
 streamlit run app.py                     # web dashboard (http://localhost:8501)
 python -m services.weather_collector     # weather collector (leave running)
 python -m services.automation            # automation service (leave running)
