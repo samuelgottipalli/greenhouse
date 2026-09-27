@@ -231,6 +231,7 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 - [ ] 8i2–i3: local mode and the sensor-fault heater cut-off work on the hardware (P-15)
 - [ ] 8j: automation switches the heater (source auto)
 - [ ] 8k: relays off after a power cycle
+- [ ] Light sensor calibrated (direction, on-level, buffer) and the grow light switches on on a dull day (PLAN 4.7)
 - [ ] ⏳ LCD clock still correct 48 h after boot, including across midnight (P-02, PLAN 1.7)
 - [ ] ⏳ 24 h: at least 285 of 288 expected telemetry rows stored (PLAN 2.3)
 - [ ] ⏳ 7 days: no hang or reboot loop, with at least one Wi-Fi outage; `telemetry_report --hours 168` at 99 % or more (PLAN 3.2; simulated in `tests/picoside/test_soak.py`)
@@ -264,6 +265,27 @@ What watches what, and how often:
 | Server | systemd watchdog | `WatchdogSec=120` on ingest, automation, weather | A service that stops beating is killed and restarted |
 | Server | systemd restart | on exit | A crashed service restarts after 5 s |
 | Server | Automation data checks | every 5 s | Readings older than 15 min: heater off; controller offline: automation stands back |
+
+## Calibrating the light sensor
+
+The grow light (relay 4) is automated in daytime only (between sunrise and sunset from the weather
+collector). It switches on when the raw light level is below **Grow light on below**, and off
+again above that level plus **Buffer** (Greenhouse Settings). The level is the LDR's raw reading,
+0-65535, not lux, so it has to be calibrated once:
+
+1. **Check the direction.** On **Reports › Greenhouse Weather**, note the *Light (raw)* value,
+   then cover the sensor for a minute (readings come every 60 s). It must go **down**. If it goes
+   up, set `"ldr_inverted": true` in `config.json`, copy it to the Pico and reset.
+2. **Pick the on-level.** On a day that is dull enough that you'd want the lamp on, note the
+   reading and enter it as **Grow light on below**. The default is 15000.
+3. **Measure the lamp.** At dusk, switch the light on from Remote Control and note how much the
+   reading rises. Set **Buffer** to more than that rise, with some margin. Otherwise the lamp's own
+   light would switch it off again. The default buffer is 10000.
+4. **Check.** Automation changes the light at most once every 30 minutes in daytime, and always
+   switches it off at sunset. A light you switch by hand is left alone for 60 minutes.
+
+Without weather data (collector not running), the light is left as it is. The controller's local
+mode does not drive the light, because it has no sunrise data.
 
 ## Adding another controller
 

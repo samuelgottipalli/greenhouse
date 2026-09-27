@@ -15,15 +15,15 @@ If settings or relays cannot be read, it logs a warning and waits for the
 next pass instead of spinning.
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import sleep
 from zoneinfo import ZoneInfo
 
 from core import db, settings
-from core.automation import Reading, RelayState, decide, device_settings
+from core.automation import Reading, RelayState, decide, device_settings, is_daylight
 from core.health import Heartbeat
 from core.mqtt import publish_device_settings, publish_relay_command
-from core.timeutil import parse_utc_timestamp
+from core.timeutil import parse_utc_timestamp, utc_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +53,23 @@ def sync_device_settings(limits, slots, device_id: int) -> bool:
         log.info("Published settings for device %s", device_id)
         return True
     return False
+
+
+def daylight_at(now: datetime) -> bool | None:
+    """
+    Tell whether it is daytime, from the last two days of weather readings.
+
+    Args:
+        now (datetime): Current time (aware).
+
+    Returns:
+        bool | None: None if no recent weather data (the light is then left alone).
+    """
+    windows = [
+        (parse_utc_timestamp(sunrise), parse_utc_timestamp(sunset))
+        for sunrise, sunset in db.sun_windows(utc_timestamp(now - timedelta(days=2)))
+    ]
+    return is_daylight(windows, now)
 
 
 def device_is_online(device_id: int) -> bool:
@@ -118,7 +135,7 @@ def run_once(now: datetime | None = None, device_id: int = settings.DEVICE_ID) -
     online = device_is_online(device_id)
     if not online:
         log.info("Controller %s offline: its local mode is in charge", device_id)
-    actions = decide(limits, slots, readings, states, now, ZoneInfo(settings.TIMEZONE), online)
+    actions = decide(limits, slots, readings, states, now, ZoneInfo(settings.TIMEZONE), online, daylight_at(now))
     sent = []
     for action in actions:
         relay_id = relay_ids[action.relay]

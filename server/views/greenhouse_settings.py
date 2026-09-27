@@ -2,8 +2,9 @@
 Greenhouse Settings page: edit the automation thresholds and watering
 schedule used by ``services/automation.py``.
 
-Shows fan/heater temperature triggers and the fan humidity trigger (each with
-a hysteresis buffer), and four watering slots (start time + minutes).
+Shows fan/heater temperature triggers, the fan humidity trigger and the grow
+light level (each with a hysteresis buffer), and four watering slots (start
+time + minutes).
 Temperatures and their buffers are stored in °C; when the session's units
 are "US" they are shown in °F (buffers as temperature differences, without the
 32° offset) and converted back on save.
@@ -38,6 +39,8 @@ THRESHOLD_FIELDS = {
     "heater_on_temp_buffer": ("heater_on_temp_c", "buffer"),
     "fan_on_humidity": ("fan_on_humidity_pct", "value"),
     "fan_on_humidity_buffer": ("fan_on_humidity_pct", "buffer"),
+    "light_on_level": ("light_on_level", "value"),
+    "light_on_level_buffer": ("light_on_level", "buffer"),
 }
 SLOTS = [1, 2, 3, 4]
 WIDGET_KEYS = list(THRESHOLD_FIELDS) + [f"water_on_time_{s}" for s in SLOTS] + [f"water_run_time_{s}" for s in SLOTS]
@@ -129,6 +132,26 @@ with st.container(border=True):
         key="fan_on_humidity_buffer",
         value=initial["fan_on_humidity_buffer"],
     )
+    light_on_level = left.number_input(
+        label="Grow light on below (raw light level)",
+        help="""In daytime the grow light turns on when the light sensor reads below this
+        (0-65535, brighter is higher). The Greenhouse Weather page shows the current reading.""",
+        key="light_on_level",
+        min_value=0.0,
+        max_value=65535.0,
+        step=500.0,
+        value=initial["light_on_level"],
+    )
+    light_on_level_buffer = right.number_input(
+        label="Buffer (raw light level)",
+        help="""The light turns off again above level + buffer. Make it larger than the lamp's own
+        light at the sensor, or the lamp would switch itself off (see RUNBOOK calibration).""",
+        key="light_on_level_buffer",
+        min_value=0.0,
+        max_value=65535.0,
+        step=500.0,
+        value=initial["light_on_level_buffer"],
+    )
     water_slots: dict[int, tuple[str, int]] = {}
     for slot in SLOTS:
         start = left.time_input(
@@ -160,6 +183,7 @@ with st.container(horizontal=True, horizontal_alignment="right"):
                 "fan_on_temp_c": (fan_on_temp, fan_on_temp_buffer),
                 "fan_on_humidity_pct": (fan_on_humidity, fan_on_humidity_buffer),
                 "heater_on_temp_c": (heater_on_temp, heater_on_temp_buffer),
+                "light_on_level": (light_on_level, light_on_level_buffer),
             },
             schedule=water_slots,
             device_id=current_device(),

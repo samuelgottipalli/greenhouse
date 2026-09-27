@@ -68,6 +68,10 @@ Set the rules the automation service follows:
     the value must fall before the fan turns off again. This stops the fan switching on and off
     rapidly.
 *   **Heater:** the temperature below which the heater turns on, with its own buffer.
+*   **Grow light:** in daytime the light turns on when the greenhouse is darker than
+    **Grow light on below** and off again above that level plus its **Buffer**. It is always off
+    at night. Levels are raw sensor readings (brighter is higher); the Greenhouse Weather page
+    shows the current value. See the RUNBOOK section "Calibrating the light sensor".
 *   **Water:** up to four daily start times, each with a run time in minutes. Set the run time to 0 to turn a slot off.
 
 Buttons:

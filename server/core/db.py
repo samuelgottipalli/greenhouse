@@ -387,6 +387,28 @@ def log_relay_event(
 # --- Weather ----------------------------------------------------------------
 
 
+def sun_windows(since_utc: str) -> list[tuple[str, str]]:
+    """
+    Return the distinct sunrise/sunset pairs of recent weather readings.
+
+    Open-Meteo reports "today" in UTC, so a local afternoon can belong to the
+    previous UTC day's window; returning every recent pair covers that.
+
+    Args:
+        since_utc (str): Only readings measured since this time.
+
+    Returns:
+        list[tuple[str, str]]: ``(sunrise_utc, sunset_utc)`` pairs; empty on
+        error or if there are none.
+    """
+    data = _read(
+        "SELECT DISTINCT sunrise_utc, sunset_utc FROM weather_readings "
+        "WHERE measured_utc >= :since AND sunrise_utc IS NOT NULL AND sunset_utc IS NOT NULL",
+        {"since": since_utc},
+    )
+    return [] if data is None else list(zip(data["sunrise_utc"], data["sunset_utc"]))
+
+
 def recent_weather(limit: int = 216) -> DataFrame | None:
     """
     Read the most recent outdoor weather readings, newest first.

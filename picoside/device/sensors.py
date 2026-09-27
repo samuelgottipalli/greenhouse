@@ -22,10 +22,11 @@ class Sensors:
         Set up the sensor pins.
 
         Args:
-            config (dict): Uses ``dht_pin`` and ``ldr_pin``.
+            config (dict): Uses ``dht_pin``, ``ldr_pin`` and ``ldr_inverted``.
         """
         self.dht_sensor = dht.DHT22(machine.Pin(config["dht_pin"]))
         self.ldr_pin = machine.ADC(machine.Pin(config["ldr_pin"]))
+        self._ldr_inverted = config["ldr_inverted"]
 
     def read_dht(self):
         """
@@ -46,7 +47,11 @@ class Sensors:
         """
         Read the raw light level from the LDR.
 
+        Readings are reported so that brighter is higher. If the LDR is wired
+        so the voltage falls with light, set ``ldr_inverted`` in config.
+
         Returns:
-            int: Raw 16-bit ADC reading (0-65535). Not calibrated to lux.
+            int: Raw 16-bit level (0-65535). Not calibrated to lux.
         """
-        return self.ldr_pin.read_u16()
+        raw = self.ldr_pin.read_u16()
+        return 65535 - raw if self._ldr_inverted else raw

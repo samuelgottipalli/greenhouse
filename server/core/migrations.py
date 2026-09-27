@@ -13,6 +13,8 @@ Create or upgrade the greenhouse SQLite database.
     renamed to ``light_raw`` (the LDR reports raw ADC counts, not lumens).
   * 3 -> 4: ``service_heartbeats`` table; device health columns
     (``last_seen_utc``, ``uptime_s``, ``mem_free``, ``rssi_dbm``).
+  * 4 -> 5: ``alerts`` table; the light trigger default becomes a raw light
+    level (the old 3.0 dates from when it was thought to be lumens).
 * A current database is left alone.
 
 Run it with ``python -m scripts.upgrade_db`` from the ``server/`` folder.
@@ -28,7 +30,7 @@ from core.timeutil import duration_to_minutes, format_time_of_day
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION: int = 4
+SCHEMA_VERSION: int = 5
 SCHEMA_FILE: Path = Path(__file__).with_name("schema.sql")
 MIN_SQLITE: tuple[int, int, int] = (3, 37, 0)  # STRICT tables
 
@@ -47,12 +49,16 @@ MEASURES: list[tuple[int, str, str, str]] = [
     (8, "humidity", "% (RH)", "% (RH)"),
     (9, "direction", "°", "°"),
 ]
+# Grow light: on below this raw LDR level (0-65535, brighter = higher) in daytime,
+# off again above level + buffer. See RUNBOOK "Calibrating the light sensor".
+LIGHT_ON_LEVEL: float = 15000.0
+LIGHT_BUFFER: float = 10000.0
 # (name, relay_id, value, buffer)
 DEFAULT_THRESHOLDS: list[tuple[str, int, float, float]] = [
     ("fan_on_temp_c", 2, 32.0, 2.0),
     ("fan_on_humidity_pct", 2, 50.0, 2.0),
     ("heater_on_temp_c", 3, 18.0, 2.0),
-    ("light_on_level", 4, 3.0, 0.0),
+    ("light_on_level", 4, LIGHT_ON_LEVEL, LIGHT_BUFFER),
 ]
 # (slot, relay_id, start_local, duration_min)
 DEFAULT_SCHEDULE: list[tuple[int, int, str, int]] = [
@@ -291,6 +297,7 @@ def migrate_v1(conn: sqlite3.Connection) -> dict[str, int]:
             thresholds, schedule = _v1_settings_rows(conn, table, profile)
             conn.executemany("INSERT INTO thresholds VALUES (?, ?, ?, ?, ?, ?)", thresholds)
             conn.executemany("INSERT INTO watering_schedule VALUES (?, ?, ?, ?, ?, ?)", schedule)
+        fix_light_default(conn)
         conn.execute(
             "INSERT INTO weather_readings SELECT MEASURE_DATE, CAST(LATITUDE AS REAL), "
             "CAST(LONGITUDE AS REAL), ELEVATION, TEMPERATURE, APPARENT_TEMPERATURE, "
@@ -394,7 +401,32 @@ def migrate_v3(conn: sqlite3.Connection) -> None:
     _step(conn, V4_DDL, 4)
 
 
-STEPS = {2: migrate_v2, 3: migrate_v3}
+V5_DDL: tuple[str, ...] = (
+    "CREATE TABLE alerts (alert_key TEXT PRIMARY KEY, active INTEGER NOT NULL CHECK (active IN (0, 1)), "
+    f"message TEXT NOT NULL, since_utc TEXT NOT NULL CHECK (since_utc {TIMESTAMP_CHECK}), "
+    f"last_sent_utc TEXT CHECK (last_sent_utc IS NULL OR last_sent_utc {TIMESTAMP_CHECK})) STRICT",
+)
+
+
+def fix_light_default(conn: sqlite3.Connection) -> None:
+    """Replace the meaningless old light trigger (3.0) with the raw-level default."""
+    conn.execute(
+        "UPDATE thresholds SET value = ?, buffer = ? WHERE name = 'light_on_level' AND value = 3.0",
+        (LIGHT_ON_LEVEL, LIGHT_BUFFER),
+    )
+
+
+def migrate_v4(conn: sqlite3.Connection) -> None:
+    """
+    Upgrade version 4 to 5: alerts table and a real light trigger default.
+
+    Args:
+        conn (sqlite3.Connection): Connection to a version 4 database.
+    """
+    _step(conn, V5_DDL, 5, fix_light_default)
+
+
+STEPS = {2: migrate_v2, 3: migrate_v3, 4: migrate_v4}
 
 
 def upgrade(path: Path | None = None) -> str:

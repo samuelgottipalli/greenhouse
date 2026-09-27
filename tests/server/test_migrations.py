@@ -65,7 +65,7 @@ def test_migrate_v1_settings_types(db_file):
         ("fan_on_humidity_pct", 2, 50.0, 2.0),
         ("fan_on_temp_c", 2, 32.0, 2.0),
         ("heater_on_temp_c", 3, 18.0, 2.0),
-        ("light_on_level", 4, 3.0, 0.0),
+        ("light_on_level", 4, 15000.0, 10000.0),  # old 3.0 replaced by the raw-level default
     ]
     # Current slot 1 was saved as HH:MM:SS by the old settings page.
     assert query(db_file, "SELECT profile, slot, start_local, duration_min FROM watering_schedule "
@@ -126,6 +126,7 @@ def make_v2(path):
     conn.execute("DROP TABLE device_status")
     conn.execute("DROP TABLE app_preferences")
     conn.execute("DROP TABLE service_heartbeats")
+    conn.execute("DROP TABLE alerts")
     conn.execute("UPDATE measures SET name = 'light_intensity', si_unit = 'lm', us_unit = 'lm' WHERE measure_id = 6")
     conn.execute("INSERT INTO sensor_readings VALUES (1, 6, '2026-01-01 00:00:00', 30000)")
     conn.execute("PRAGMA user_version = 2")
@@ -135,8 +136,8 @@ def make_v2(path):
 
 def test_upgrade_v2_to_v3(db_file):
     make_v2(db_file)
-    assert "from version 2 to 4" in migrations.upgrade(db_file)
-    assert query(db_file, "PRAGMA user_version") == [(4,)]
+    assert "from version 2 to 5" in migrations.upgrade(db_file)
+    assert query(db_file, "PRAGMA user_version") == [(5,)]
     assert query(db_file, "SELECT name, si_unit FROM measures WHERE measure_id = 6") == [("light_raw", "raw")]
     assert query(db_file, "SELECT count(*) FROM device_status") == [(0,)]
     assert query(db_file, "SELECT count(*) FROM app_preferences") == [(0,)]
@@ -170,6 +171,7 @@ def make_v3(path):
     migrations.upgrade(path)
     conn = sqlite3.connect(path)
     conn.execute("DROP TABLE service_heartbeats")
+    conn.execute("DROP TABLE alerts")
     conn.execute("DROP TABLE device_status")
     conn.execute(migrations.V3_DDL[0])
     conn.execute("INSERT INTO device_status (device_id, status, updated_utc) VALUES (1, 'online', '2026-09-26 19:00:00')")
@@ -180,8 +182,8 @@ def make_v3(path):
 
 def test_upgrade_v3_to_v4_keeps_status(db_file):
     make_v3(db_file)
-    assert "from version 3 to 4" in migrations.upgrade(db_file)
-    assert query(db_file, "PRAGMA user_version") == [(4,)]
+    assert "from version 3 to 5" in migrations.upgrade(db_file)
+    assert query(db_file, "PRAGMA user_version") == [(5,)]
     assert query(db_file, "SELECT * FROM device_status") == [(1, "online", "2026-09-26 19:00:00", None, None, None, None)]
     assert query(db_file, "SELECT count(*) FROM service_heartbeats") == [(0,)]
 
@@ -198,3 +200,30 @@ def test_every_step_matches_fresh_schema(db_file, tmp_path):
         return {t: [(c[1], c[2], c[3]) for c in query(path, f"PRAGMA table_info({t})")] for t in tables}
 
     assert layout(db_file) == layout(fresh)
+
+
+def make_v4(path, light=(3.0, 0.0)):
+    """Turn a fresh current database back into the version 4 layout."""
+    migrations.upgrade(path)
+    conn = sqlite3.connect(path)
+    conn.execute("DROP TABLE alerts")
+    conn.execute("UPDATE thresholds SET value = ?, buffer = ? WHERE name = 'light_on_level' AND profile = 'current'", light)
+    conn.execute("UPDATE thresholds SET value = 3.0, buffer = 0 WHERE name = 'light_on_level' AND profile = 'default'")
+    conn.execute("PRAGMA user_version = 4")
+    conn.commit()
+    conn.close()
+
+
+def test_upgrade_v4_to_v5_fixes_old_light_default(db_file):
+    make_v4(db_file)
+    assert "from version 4 to 5" in migrations.upgrade(db_file)
+    assert query(db_file, "SELECT profile, value, buffer FROM thresholds WHERE name = 'light_on_level' ORDER BY profile") == [
+        ("current", 15000.0, 10000.0), ("default", 15000.0, 10000.0)]
+    assert query(db_file, "SELECT count(*) FROM alerts") == [(0,)]
+
+
+def test_upgrade_v4_to_v5_keeps_a_calibrated_light_level(db_file):
+    make_v4(db_file, light=(22000.0, 8000.0))
+    migrations.upgrade(db_file)
+    assert query(db_file, "SELECT value, buffer FROM thresholds WHERE name = 'light_on_level' AND profile = 'current'") == [
+        (22000.0, 8000.0)]

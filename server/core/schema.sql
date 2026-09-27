@@ -1,4 +1,4 @@
--- Greenhouse database schema, version 4.
+-- Greenhouse database schema, version 5.
 --
 -- Conventions
 --   * Tables are STRICT: SQLite rejects values of the wrong type (needs SQLite >= 3.37).
@@ -126,4 +126,15 @@ CREATE TABLE service_heartbeats (
     detail      TEXT NOT NULL DEFAULT ''
 ) STRICT;
 
-PRAGMA user_version = 4;
+-- Alerts raised by services/alerts.py: one row per condition (e.g. 'temp_high:1').
+CREATE TABLE alerts (
+    alert_key     TEXT PRIMARY KEY,
+    active        INTEGER NOT NULL CHECK (active IN (0, 1)),
+    message       TEXT    NOT NULL,
+    since_utc     TEXT    NOT NULL
+        CHECK (since_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'),
+    last_sent_utc TEXT
+        CHECK (last_sent_utc IS NULL OR last_sent_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
+) STRICT;
+
+PRAGMA user_version = 5;

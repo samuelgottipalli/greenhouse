@@ -23,6 +23,7 @@
   "watchdog": true,
   "dht_pin": 16,
   "ldr_pin": 28,
+  "ldr_inverted": false,
   "relay_pins": [17, 18, 19, 20, 21, 22, 26, 27],
   "relay_active_low": false,
   "relay_names": ["water", "fan", "heater", "light", "spare5", "spare6", "spare7", "spare8"],

@@ -52,7 +52,7 @@ def test_save_settings_updates_only_given_rows(seeded_db, db_conn):
         "SELECT name, value FROM thresholds WHERE profile = 'current'"
     ).fetchall())
     assert rows["fan_on_temp_c"] == 30.5
-    assert rows["light_on_level"] == 3.0  # untouched
+    assert rows["light_on_level"] == 15000.0  # untouched
     slot = db_conn.execute(
         "SELECT start_local, duration_min FROM watering_schedule WHERE profile = 'current' AND slot = 2"
     ).fetchone()

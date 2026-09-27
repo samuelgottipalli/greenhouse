@@ -18,7 +18,13 @@ Rules
   ``duration_min``; a slot may run past midnight), otherwise off.
 * **Manual override**: a relay last switched from the web app or a device
   button is left alone for ``MANUAL_OVERRIDE`` after that change.
-* **Light**: not automated yet (PLAN 4.7).
+* **Light** (grow lamp): off at night (outside sunrise-sunset from the
+  weather data). In daytime, on when the raw light level is below
+  ``light_on_level`` and off again above level + buffer; the buffer must be
+  larger than the lamp's own light reaching the sensor. At most one daytime
+  switch per ``LIGHT_MIN_SWITCH`` so it can never flicker. Without sunrise and
+  sunset data, or without a fresh light reading in daytime, it is left as
+  it is. Not part of the controller's local mode (it has no sunrise data).
 * **Controller offline**: nothing is decided. Commands to a disconnected
   controller are dropped by the broker, and the controller runs the same
   rules itself in local mode (``picoside/device/local_rules.py``) with the
@@ -32,6 +38,7 @@ from datetime import datetime, time, timedelta, tzinfo
 
 READING_MAX_AGE = timedelta(minutes=15)
 MANUAL_OVERRIDE = timedelta(minutes=60)
+LIGHT_MIN_SWITCH = timedelta(minutes=30)
 MANUAL_SOURCES = ("web", "device")
 
 
@@ -134,6 +141,60 @@ def heater_target(thresholds: dict[str, tuple[float, float]], temp: float | None
     return False, f"temperature {temp} at or above {trigger + (buffer if is_on else 0)}"
 
 
+def light_target(
+    thresholds: dict[str, tuple[float, float]],
+    light: float | None,
+    is_on: bool,
+    daylight: bool | None,
+    since_change: timedelta | None,
+) -> tuple[bool | None, str]:
+    """
+    Decide the grow light state.
+
+    Args:
+        thresholds (dict): Name to ``(value, buffer)``; uses ``light_on_level``.
+        light (float | None): Fresh raw light level (brighter = higher), or None.
+        is_on (bool): Whether the light is on now.
+        daylight (bool | None): True between sunrise and sunset, None if unknown.
+        since_change (timedelta | None): Time since the light was last switched.
+
+    Returns:
+        tuple[bool | None, str]: Target (None = leave as is) and a reason.
+    """
+    if daylight is None:
+        return None, "no sunrise/sunset data"
+    if not daylight:
+        return False, "night"
+    if light is None:
+        return None, "no fresh light reading"
+    if since_change is not None and since_change < LIGHT_MIN_SWITCH:
+        return None, "switched less than 30 min ago"
+    level, buffer = thresholds["light_on_level"]
+    if not is_on:
+        return light < level, f"light {light:.0f} vs on-level {level:.0f}"
+    if light > level + buffer:
+        return False, f"light {light:.0f} above {level + buffer:.0f}"
+    return True, "within buffer, staying on"
+
+
+def is_daylight(sun_windows: list[tuple[datetime, datetime]], now: datetime) -> bool | None:
+    """
+    Tell whether it is daytime, from sunrise/sunset pairs in the weather data.
+
+    Args:
+        sun_windows (list): ``(sunrise, sunset)`` pairs (aware UTC) from recent
+            weather readings; several days may be present.
+        now (datetime): Current time (aware).
+
+    Returns:
+        bool | None: True inside any sunrise-sunset window, False outside all
+        of them, None when there are no windows.
+    """
+    if not sun_windows:
+        return None
+    return any(sunrise <= now < sunset for sunrise, sunset in sun_windows)
+
+
 def watering_now(schedule: list[tuple[str, int]], now_local: datetime) -> bool:
     """
     Tell whether any watering slot covers a local time.
@@ -187,6 +248,7 @@ def decide(
     now: datetime,
     zone: tzinfo,
     device_online: bool = True,
+    daylight: bool | None = None,
 ) -> list[Action]:
     """
     Work out which relays to switch.
@@ -201,6 +263,8 @@ def decide(
         zone (tzinfo): Zone of the watering schedule.
         device_online (bool): False while the controller reports offline;
             then nothing is decided (its local mode is in charge).
+        daylight (bool | None): From :func:`is_daylight`; None leaves the
+            light alone.
 
     Returns:
         list[Action]: Changes to make, at most one per relay.
@@ -214,6 +278,15 @@ def decide(
         "heater": heater_target(thresholds, temp, _is_on(states, "heater")),
         "water": (watering_now(schedule, now.astimezone(zone)), "watering schedule"),
     }
+    if "light_on_level" in thresholds:
+        light_state = states.get("light")
+        targets["light"] = light_target(
+            thresholds,
+            fresh_value(readings, "light_raw", now),
+            _is_on(states, "light"),
+            daylight,
+            None if light_state is None else now - light_state.at,
+        )
     actions = []
     for relay, (target, reason) in targets.items():
         current = states.get(relay)

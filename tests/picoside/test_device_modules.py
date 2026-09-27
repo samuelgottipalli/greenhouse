@@ -170,3 +170,10 @@ def test_low_power_defaults(pico):
     d = pico.config.DEFAULTS
     assert (d["mqtt_keepalive_s"], d["mqtt_ping_s"]) == (300, 120)
     assert d["wifi_power_save"] is True and d["backlight_timeout_s"] == 60
+
+
+def test_ldr_inverted_reports_brighter_as_higher(pico, config):
+    config["ldr_inverted"] = True
+    sensors = pico.sensors.Sensors(config)
+    sensors.ldr_pin.reading = 5000
+    assert sensors.read_ldr() == 60535

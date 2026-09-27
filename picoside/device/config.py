@@ -39,6 +39,7 @@ DEFAULTS = {
     "watchdog": True,
     "dht_pin": 16,
     "ldr_pin": 28,
+    "ldr_inverted": False,
     "relay_pins": [17, 18, 19, 20, 21, 22, 26, 27],
     "relay_active_low": False,
     "relay_names": ["water", "fan", "heater", "light", "spare5", "spare6", "spare7", "spare8"],
