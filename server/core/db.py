@@ -668,3 +668,62 @@ def update_device_health(
         "THEN device_status.updated_utc ELSE excluded.updated_utc END",
         {"device_id": device_id, "seen": seen_utc, "uptime": uptime_s, "mem": mem_free, "rssi": rssi_dbm},
     )])
+
+
+# --- Alerts (core/alerts.py) ----------------------------------------------------------
+
+
+def read_alerts() -> dict[str, dict]:
+    """
+    Read every stored alert.
+
+    Returns:
+        dict[str, dict]: Alert key to ``active`` (bool), ``message``,
+        ``since_utc`` and ``last_sent_utc`` (None if never sent); empty on error.
+    """
+    data = _read("SELECT alert_key, active, message, since_utc, last_sent_utc FROM alerts")
+    if data is None:
+        return {}
+    return {
+        row.alert_key: {
+            "active": bool(row.active),
+            "message": row.message,
+            "since_utc": row.since_utc,
+            "last_sent_utc": None if row.last_sent_utc != row.last_sent_utc or row.last_sent_utc is None
+            else row.last_sent_utc,
+        }
+        for row in data.itertuples()
+    }
+
+
+def save_alert(key: str, active: bool, message: str, since_utc: str, last_sent_utc: str | None) -> bool:
+    """
+    Insert or update one alert.
+
+    Args:
+        key (str): e.g. ``"temp_high:1"``.
+        active (bool): Whether the problem still exists.
+        message (str): Human-readable description.
+        since_utc (str): When the problem started.
+        last_sent_utc (str | None): When a notification was last delivered.
+
+    Returns:
+        bool: True if stored.
+    """
+    return _write([(
+        "INSERT INTO alerts VALUES (:key, :active, :message, :since, :sent) "
+        "ON CONFLICT (alert_key) DO UPDATE SET active = excluded.active, message = excluded.message, "
+        "since_utc = excluded.since_utc, last_sent_utc = excluded.last_sent_utc",
+        {"key": key, "active": 1 if active else 0, "message": message, "since": since_utc, "sent": last_sent_utc},
+    )])
+
+
+def active_alerts() -> list[dict]:
+    """
+    Read the alerts that are currently active, oldest first (for the Home page).
+
+    Returns:
+        list[dict]: ``alert_key``, ``message`` and ``since_utc`` per alert.
+    """
+    data = _read("SELECT alert_key, message, since_utc FROM alerts WHERE active = 1 ORDER BY since_utc")
+    return [] if data is None else data.to_dict("records")

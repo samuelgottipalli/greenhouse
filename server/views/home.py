@@ -7,6 +7,7 @@ Home page: system health at a glance.
 * Relays: the logged state of each controlled relay and who set it.
 * Services: heartbeat of ingest, automation and weather (ok, degraded,
   down or unknown), from ``core/health.py``.
+* Active alerts (``core/alerts.py``) at the top, until they clear.
 
 Every status is shown with an icon and a word, not colour alone.
 """
@@ -30,6 +31,10 @@ SERVICE_BADGES = {
 }
 
 now = datetime.now(timezone.utc)
+
+for alert in db.active_alerts():
+    st.error(f"{alert['message']} (since {age_text(alert['since_utc'], now)})", icon=":material/notifications_active:")
+
 controller, readings, relays = st.columns(3)
 
 with controller.container(border=True):

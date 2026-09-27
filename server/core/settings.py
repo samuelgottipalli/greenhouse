@@ -74,6 +74,19 @@ MQTT_TOPIC_PREFIX: str = getenv("MQTT_TOPIC_PREFIX", "greenhouse")
 # Dashboard login: hash from `python -m scripts.set_password`; empty = no login.
 APP_PASSWORD_HASH: str | None = (getenv("APP_PASSWORD_HASH") or "").strip() or None
 
+# Alerts (core/alerts.py) and where to send them (core/notify.py).
+ALERT_TEMP_LOW_C: float = float(getenv("ALERT_TEMP_LOW_C", "5"))
+ALERT_TEMP_HIGH_C: float = float(getenv("ALERT_TEMP_HIGH_C", "40"))
+ALERT_COOLDOWN_MIN: int = int(getenv("ALERT_COOLDOWN_MIN", "60"))
+NTFY_URL: str | None = (getenv("NTFY_URL") or "").strip() or None
+NTFY_TOKEN: str | None = (getenv("NTFY_TOKEN") or "").strip() or None
+SMTP_HOST: str | None = (getenv("SMTP_HOST") or "").strip() or None
+SMTP_PORT: int = int(getenv("SMTP_PORT") or "587")
+SMTP_USER: str | None = (getenv("SMTP_USER") or "").strip() or None
+SMTP_PASSWORD: str | None = getenv("SMTP_PASSWORD") or None
+ALERT_EMAIL_FROM: str | None = (getenv("ALERT_EMAIL_FROM") or "").strip() or None
+ALERT_EMAIL_TO: str | None = (getenv("ALERT_EMAIL_TO") or "").strip() or None
+
 WEATHER_API: str | None = getenv("WEATHER_API")
 LATITUDE: str | None = getenv("LATITUDE")
 LONGITUDE: str | None = getenv("LONGITUDE")

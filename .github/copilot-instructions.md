@@ -24,6 +24,7 @@ planned work, `docs/MQTT.md` for the message contract and `docs/RUNBOOK.md` for 
         (current schema, version in `PRAGMA user_version`), `migrations.py`, `mqtt.py`, `weather_api.py`, `timeutil.py`,
         `conversions.py`, `weather_codes.py`.
     *   `core/automation.py`: pure automation rules (`decide`); the service only feeds and acts on it.
+    *   `core/alerts.py` + `core/notify.py`: alert conditions, cooldown, ntfy/email delivery (`services/alerts.py`, timer).
     *   `core/health.py`: `Heartbeat` (DB heartbeat + systemd watchdog); every service beats once per good pass.
     *   `services/`: `ingest.py`, `automation.py` and `weather_collector.py` (`python -m services.<name>`).
     *   `core/retention.py`: nightly roll-up of readings older than 90 days (run by `scripts/retention.py` via a systemd timer).

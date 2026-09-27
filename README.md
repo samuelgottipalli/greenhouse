@@ -76,7 +76,7 @@ flowchart LR
 | `picoside/device/` | Everything that is copied onto the Pico. `main.py` starts at power-on, `controller.py` is the main loop, and `lib/` holds third-party drivers. |
 | `picoside/setup_config.py` | Run on your computer to create the controller's `config.json` (Wi-Fi, broker, time zone). |
 | `server/app.py` | The web dashboard. Its pages are in `server/views/` and the About/Help text is in `server/content/`. |
-| `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py` and `weather_collector.py`. |
+| `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py`, `weather_collector.py`, and `alerts.py` (push/email alerts, every 2 min). |
 | `server/core/` | Shared code: database access, settings, MQTT, the weather API client, unit conversions. |
 | `server/scripts/` | Maintenance: `upgrade_db.py` creates or upgrades the database; `add_device.py` registers another controller; `set_password.py`, `bench.py`, `retention.py`, `telemetry_report.py`. |
 | `deploy/` | systemd service files and their installer; MQTT broker config. |

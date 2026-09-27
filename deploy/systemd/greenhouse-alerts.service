@@ -1,0 +1,10 @@
+[Unit]
+Description=Greenhouse alert check (notify on problems)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+WorkingDirectory=@SERVER_DIR@
+ExecStart=@PYTHON@ -m services.alerts
+Environment=PYTHONUNBUFFERED=1

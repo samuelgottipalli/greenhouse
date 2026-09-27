@@ -33,7 +33,8 @@ os.environ["TIMEZONE"] = APP_DEFAULT_ZONE
 os.environ["DEVICE_ID"] = "1"
 os.environ["MQTT_HOST"] = "localhost"
 os.environ["MQTT_PORT"] = "1883"
-for _name in ("MQTT_USERNAME", "MQTT_PASSWORD", "WEATHER_API", "LATITUDE", "LONGITUDE"):
+for _name in ("MQTT_USERNAME", "MQTT_PASSWORD", "WEATHER_API", "LATITUDE", "LONGITUDE", "APP_PASSWORD_HASH",
+              "NTFY_URL", "NTFY_TOKEN", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "ALERT_EMAIL_FROM", "ALERT_EMAIL_TO"):
     os.environ[_name] = ""
 
 if str(SERVER_DIR) not in sys.path:

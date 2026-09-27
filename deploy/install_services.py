@@ -25,7 +25,7 @@ REPO_DIR = DEPLOY_DIR.parent
 TEMPLATE_DIR = DEPLOY_DIR / "systemd"
 UNITS = ["greenhouse-ingest", "greenhouse-automation", "greenhouse-weather", "greenhouse-web"]
 # Scheduled jobs: the .timer is enabled; it starts the matching one-shot .service.
-TIMERS = ["greenhouse-retention"]
+TIMERS = ["greenhouse-retention", "greenhouse-alerts"]
 
 
 def render(template: str, user: str, python: str, server_dir: Path) -> str:

@@ -103,7 +103,8 @@ server$ systemctl status 'greenhouse-*'
 ```
 
 This installs and starts `greenhouse-ingest`, `greenhouse-automation`, `greenhouse-weather` and
-`greenhouse-web`. Each restarts 5 s after a crash and starts at boot. It also enables
+`greenhouse-web`. Each restarts 5 s after a crash and starts at boot. It also enables two timers:
+`greenhouse-alerts.timer` (alert check every 2 minutes, see [Alerts](#alerts)) and
 `greenhouse-retention.timer`, which rolls readings older than 90 days into hourly averages every
 night at 03:30. Logs: `journalctl -u greenhouse-ingest -f`.
 
@@ -236,6 +237,7 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 - [ ] ⏳ 24 h: at least 285 of 288 expected telemetry rows stored (PLAN 2.3)
 - [ ] ⏳ 7 days: no hang or reboot loop, with at least one Wi-Fi outage; `telemetry_report --hours 168` at 99 % or more (PLAN 3.2; simulated in `tests/picoside/test_soak.py`)
 - [ ] ⏳ Next morning: `journalctl -u greenhouse-retention` shows a successful 03:30 run (PLAN 3.4)
+- [ ] Alerts: test alert received on phone/email and resolved (PLAN 4.6)
 - [ ] Watchdog re-enabled; loads reconnected
 
 Check 24 hours of telemetry on the server (exit code 0 means at least 99 % arrived):
@@ -264,7 +266,33 @@ What watches what, and how often:
 | Server | Service heartbeats | each pass (automation 5 s, ingest 10 s, weather 10 s); stored every 30 s | Home shows OK / Degraded / Down (no beat for 2 min) |
 | Server | systemd watchdog | `WatchdogSec=120` on ingest, automation, weather | A service that stops beating is killed and restarted |
 | Server | systemd restart | on exit | A crashed service restarts after 5 s |
+| Server | Alert check | every 2 min (timer) | Notifies by push/email; repeats at most hourly; sends "Resolved" when cleared |
 | Server | Automation data checks | every 5 s | Readings older than 15 min: heater off; controller offline: automation stands back |
+
+## Alerts
+
+Every 2 minutes `greenhouse-alerts.timer` checks for:
+- greenhouse temperature below `ALERT_TEMP_LOW_C` (default 5 °C) or above `ALERT_TEMP_HIGH_C`
+  (default 40 °C);
+- no readings for 15 minutes;
+- a controller offline;
+- a service down or degraded.
+
+Each problem is sent once, repeated at most every `ALERT_COOLDOWN_MIN` (default 60) while it
+lasts, followed by one "Resolved" message. Active alerts also appear at the top of Home.
+
+To receive them, set in `server/.env` (either or both):
+
+- **Phone push (ntfy):** install the ntfy app, subscribe to a topic name nobody will guess, and
+  set `NTFY_URL=https://ntfy.sh/<that-topic>`.
+- **Email:** `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `ALERT_EMAIL_FROM` and
+  `ALERT_EMAIL_TO`. For Gmail, use an app password.
+
+With neither set, alerts are only logged (`journalctl -u greenhouse-alerts`) and shown on Home.
+
+**Test:** set `ALERT_TEMP_HIGH_C` just below the current greenhouse temperature and wait up to
+2 minutes. You should get an alert, and Home shows it. Put the value back, and a "Resolved"
+follows within 2 minutes.
 
 ## Calibrating the light sensor
 

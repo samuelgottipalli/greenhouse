@@ -92,3 +92,11 @@ def test_retention_timer(installed):
 def test_enable_hint_includes_timer(tmp_path, capsys):
     install_services.main(["--dest", str(tmp_path), "--user", "pi"])
     assert "greenhouse-retention.timer" in capsys.readouterr().out
+
+
+def test_alerts_timer_every_two_minutes(installed):
+    timer = installed["greenhouse-alerts.timer"]["Timer"]
+    assert (timer["OnBootSec"], timer["OnUnitActiveSec"]) == ("2min", "2min")
+    service = installed["greenhouse-alerts.service"]["Service"]
+    assert service["Type"] == "oneshot"
+    assert shlex.split(service["ExecStart"])[1:] == ["-m", "services.alerts"]

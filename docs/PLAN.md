@@ -95,7 +95,7 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | 4.3 ✅ | Manual override: per-relay `auto` / `manual until <time>` mode that the automation respects, reusing the Pico's `relay_modes`. | S-06 (5) | Automation tests: a manual toggle holds until expiry, then automation resumes. | 1 d |
 | 4.4 ✅ | Multiple devices: drive devices and relays from `devices`/`relays`, add a device selector, and remove the fixed relay IDs in `services/automation.py` and `views/control.py`. | S-11 | No device or relay IDs are hard-coded outside seed data; tests run with two devices. | 1.5 d |
 | 4.5 ✅ | Web login (Streamlit OIDC, or a reverse proxy with auth) and persistent per-user preferences in the database. | SEC-03, S-18 | Unauthenticated requests are redirected to login; preferences survive a browser restart. | 1 d |
-| 4.6 | Alerts: temperature out of range, device offline, or service down, sent by email or push with a cooldown. | (feature) | A test triggers each alert once per cooldown window. | 1 d |
+| 4.6 ✅ | Alerts: temperature out of range, device offline, or service down, sent by email or push with a cooldown. | (feature) | A test triggers each alert once per cooldown window. | 1 d |
 | 4.7 ✅ | Light automation from a calibrated LDR plus sunrise/sunset in `weather_data`. | P-10 | Calibration procedure documented; automation tests for day, night and cloudy cases. | 1 d |
 | 4.8 | If more than about 5 devices or several years of data: move from SQLite to PostgreSQL/TimescaleDB. Only `DB_CONNECTION_STRING` and the SQL dialect should change. | (scale) | The test suite passes against Postgres in CI. | 1–2 d |
 
