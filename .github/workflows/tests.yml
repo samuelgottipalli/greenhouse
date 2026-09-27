@@ -16,7 +16,12 @@ jobs:
           cache-dependency-path: |
             requirements-dev.txt
             server/requirements.txt
+            installer/requirements.txt
+      - name: Install system libraries for Qt (installer window tests, offscreen)
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libglib2.0-0 libdbus-1-3
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run tests
         run: python -m pytest -ra
+        env:
+          QT_QPA_PLATFORM: offscreen

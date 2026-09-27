@@ -1,0 +1,5 @@
+# The installer window and the Pico USB tools (setup.bat / setup.sh install these).
+-r ../server/requirements.txt
+mpremote==1.29.0
+PySide6-Essentials==6.11.2
+pyserial==3.5

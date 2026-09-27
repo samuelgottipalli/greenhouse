@@ -8,6 +8,9 @@
 *.timer text eol=lf
 picoside/device/** text=auto eol=lf
 
+# Windows batch files need CRLF to run reliably.
+*.bat text eol=crlf
+
 # Binary files: never convert or diff as text.
 *.db binary
 *.png binary
