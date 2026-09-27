@@ -3,15 +3,17 @@ Setup mode: the controller's own Wi-Fi hotspot and setup page.
 
 Like most smart-home gadgets, the controller sets itself up from a phone:
 
-1. With no Wi-Fi or server settings, or when the screen button is held at
-   power-on, the controller starts a hotspot called ``GreenhouseSetup-XXXX``.
+1. With no Wi-Fi or server settings (and not set to run on its own), or
+   when the screen button is held at power-on, the controller starts a hotspot called ``GreenhouseSetup-XXXX``.
    The LCD shows its name and a fresh password.
 2. A phone that joins it is sent to the setup page (every web address and DNS
    name leads to ``192.168.4.1``, so phones show their "sign in to network"
    prompt). The page lists nearby Wi-Fi networks and asks for the Wi-Fi
    password, the *setup code* from the dashboard (server address and login;
    or those details typed in by hand) and the time zone, which the phone
-   suggests.
+   suggests. Or choose **On its own, without a server**: then Wi-Fi is
+   optional (it only sets the clock) and the page takes the fan, heater and
+   watering rules, which are saved to ``settings.json``.
 3. Saving writes ``config.json`` and restarts. If the new network can't be
    joined on that boot, setup starts again with the error shown
    (``wifi_unverified`` marks settings that have never worked yet). A router
@@ -29,6 +31,7 @@ import json
 import os
 import time
 
+import local_rules
 import zones
 
 AP_IP = "192.168.4.1"
@@ -59,10 +62,10 @@ def setup_reason(config, button_held):
         button_held (bool): The screen button was held at power-on.
 
     Returns:
-        str | None: ``REASON_NEW`` (no Wi-Fi or server settings),
-        ``REASON_BUTTON``, or None for a normal start.
+        str | None: ``REASON_NEW`` (no Wi-Fi or server settings, and not set
+        to run on its own), ``REASON_BUTTON``, or None for a normal start.
     """
-    if not config["wifi_ssid"] or config["mqtt_broker"] in PLACEHOLDER_BROKERS:
+    if not config["standalone"] and (not config["wifi_ssid"] or config["mqtt_broker"] in PLACEHOLDER_BROKERS):
         return REASON_NEW
     if button_held:
         return REASON_BUTTON
@@ -368,9 +371,12 @@ def form_to_settings(form, config):
     login name is unchanged, so changing one setting doesn't mean retyping
     the others.
 
+    With ``mode`` = ``standalone`` (no server) the server fields are ignored
+    and Wi-Fi is optional: it only keeps the clock right.
+
     Args:
-        form (dict[str, str]): Posted fields: ``ssid``, ``password``, ``code``,
-            ``broker``, ``port``, ``user``, ``mqttpw``, ``device``, ``tz``.
+        form (dict[str, str]): Posted fields: ``ssid``, ``password``, ``mode``,
+            ``code``, ``broker``, ``port``, ``user``, ``mqttpw``, ``device``, ``tz``.
         config (dict): Current configuration.
 
     Returns:
@@ -378,10 +384,11 @@ def form_to_settings(form, config):
         are only complete when there are no errors).
     """
     errors = []
-    new = {}
+    standalone = form.get("mode") == "standalone"
+    new = {"standalone": standalone}
     ssid = form.get("ssid", "").strip()
     password = form.get("password", "")
-    if not ssid:
+    if not ssid and not standalone:
         errors.append("Choose your Wi-Fi network.")
     elif len(ssid.encode("utf-8")) > 32:
         errors.append("That Wi-Fi name is too long (32 characters at most).")
@@ -389,10 +396,12 @@ def form_to_settings(form, config):
         errors.append("Wi-Fi passwords are 8 to 63 characters long.")
     if not password and ssid == config["wifi_ssid"]:
         password = config["wifi_password"]
-    new["wifi_ssid"], new["wifi_password"] = ssid, password
+    new["wifi_ssid"], new["wifi_password"] = ssid, password if ssid else ""
 
     code = form.get("code", "").strip()
-    if code:
+    if standalone:
+        new["mqtt_broker"] = ""
+    elif code:
         try:
             new.update(decode_setup_code(code))
         except ValueError:
@@ -423,6 +432,68 @@ def form_to_settings(form, config):
     if _valid_device(new.get("device_id")):
         new["mqtt_client_id"] = "greenhouse-device-{}".format(new["device_id"])
     return new, errors
+
+
+RULE_FIELDS = (
+    # form field, settings key, lowest, highest
+    ("fan_t", "fan_on_temp_c", -20, 60),
+    ("fan_h", "fan_on_humidity_pct", 0, 100),
+    ("heat_t", "heater_on_temp_c", -20, 60),
+)
+
+
+def _to_float(text):
+    """Convert form text to a float, or None."""
+    try:
+        return float(text.strip())
+    except (ValueError, AttributeError):
+        return None
+
+
+def _valid_time(text):
+    """Tell whether text is a 24-hour ``HH:MM`` time."""
+    if not isinstance(text, str) or len(text) != 5 or text[2] != ":":
+        return False
+    hours, minutes = _to_int(text[:2]), _to_int(text[3:])
+    return hours is not None and minutes is not None and 0 <= hours < 24 and 0 <= minutes < 60
+
+
+def form_to_rules(form, current):
+    """
+    Check the rules section of the setup form (used without a server).
+
+    Args:
+        form (dict[str, str]): Posted fields ``fan_t``, ``fan_h``, ``heat_t``
+            (trigger levels, °C and %) and ``w1``/``w1m``, ``w2``/``w2m``
+            (watering start ``HH:MM`` and minutes; 0 minutes = off).
+        current (dict): Current settings (buffers and slots 3-4 are kept).
+
+    Returns:
+        tuple[dict, list[str]]: New settings (valid for
+        ``local_rules.valid_settings``) and error messages.
+    """
+    errors = []
+    rules = {key: list(current[key]) for key in local_rules.THRESHOLD_KEYS}
+    for field, key, low, high in RULE_FIELDS:
+        value = _to_float(form.get(field, str(current[key][0])))
+        if value is None or not low <= value <= high:
+            errors.append("Rule levels must be numbers ({} to {} for this one).".format(low, high))
+        else:
+            rules[key][0] = value
+    watering = [list(slot) for slot in current["watering"]]
+    while len(watering) < local_rules.WATERING_SLOTS:
+        watering.append(["00:00", 0])
+    for index in (0, 1):
+        start = form.get("w{}".format(index + 1), watering[index][0]).strip()
+        minutes = _to_int(form.get("w{}m".format(index + 1), str(watering[index][1])))
+        if not _valid_time(start):
+            errors.append("Watering times look like 06:30 (24-hour clock).")
+        elif minutes is None or not 0 <= minutes <= 240:
+            errors.append("Watering lasts 0 to 240 minutes (0 = off).")
+        else:
+            watering[index] = [start, minutes]
+    rules["watering"] = watering
+    return rules, errors
 
 
 # --- pages -----------------------------------------------------------------
@@ -470,17 +541,43 @@ def _zone_options(selected):
     return parts
 
 
-def render_setup_page(config, networks, reason, values=None, errors=()):
+def render_setup_page(config, networks, reason, values=None, errors=(), rules=None):
     """
     Build the setup form as one string (see :func:`setup_page_parts`).
 
     Returns:
         str: HTML.
     """
-    return "".join(setup_page_parts(config, networks, reason, values, errors))
+    return "".join(setup_page_parts(config, networks, reason, values, errors, rules))
 
 
-def setup_page_parts(config, networks, reason, values=None, errors=()):
+def _number(value):
+    """Show a number without a pointless ``.0``."""
+    return "{:g}".format(value)
+
+
+def _rules_parts(values, rules, open_):
+    """The rules section (for running without a server)."""
+    rules = rules or local_rules.default_settings()
+    watering = rules["watering"]
+    parts = ["<details" + (" open" if open_ else "") + "><summary>Rules for running on its own</summary>",
+             "<p class='hint'>Only used without a server; with one, set them on the dashboard.</p>"]
+    labels = {"fan_t": "Fan on above (°C)", "fan_h": "Fan on above humidity (%)",
+              "heat_t": "Heater on below (°C)"}
+    for field, key, _low, _high in RULE_FIELDS:
+        parts.append(_input(labels[field], field, values.get(field, _number(rules[key][0])), "number",
+                            extra="step='0.5'"))
+    for index in (0, 1):
+        name = "w{}".format(index + 1)
+        parts.append(_input("Watering {} starts at".format(index + 1), name,
+                            values.get(name, watering[index][0]), "time"))
+        parts.append(_input("Watering {} minutes (0 = off)".format(index + 1), name + "m",
+                            values.get(name + "m", watering[index][1]), "number"))
+    parts.append("</details>")
+    return parts
+
+
+def setup_page_parts(config, networks, reason, values=None, errors=(), rules=None):
     """
     Build the setup form as a list of small pieces.
 
@@ -494,11 +591,13 @@ def setup_page_parts(config, networks, reason, values=None, errors=()):
         values (dict | None): Form values to show again (after an error, or a
             ``code`` from the link on the dashboard).
         errors (list[str]): Problems to show at the top.
+        rules (dict | None): Current local rules (default: the factory ones).
 
     Returns:
         list[str]: HTML pieces.
     """
     values = values or {}
+    mode = values.get("mode") or ("standalone" if config["standalone"] else "server")
     ssid = values.get("ssid", config["wifi_ssid"])
     messages = list(errors)
     if reason == REASON_WIFI_FAILED and not errors:
@@ -513,11 +612,18 @@ def setup_page_parts(config, networks, reason, values=None, errors=()):
     keep = " (leave empty to keep the current one)" if config["wifi_password"] else ""
     parts += [
         "<form method='post' action='/save'>",
-        _input("Wi-Fi network", "ssid", ssid, extra="list='nets' required autocomplete='off'",
+        _input("Wi-Fi network", "ssid", ssid, extra="list='nets' autocomplete='off'",
                hint="Pick from the list or type the name. 2.4 GHz networks only. "
                     "<a href='/?rescan=1'>Look again</a>"),
         "<datalist id='nets'>" + options + "</datalist>",
         _input("Wi-Fi password", "password", "", "password", hint=("Case-sensitive" + keep + ".")),
+        "<p><b>How will it run?</b></p>",
+        "<label><input type='radio' name='mode' value='server'" + (" checked" if mode == "server" else "") +
+        " style='width:auto'> With my greenhouse server (dashboard on a computer)</label>",
+        "<label><input type='radio' name='mode' value='standalone'" + (" checked" if mode == "standalone" else "") +
+        " style='width:auto'> On its own, without a server</label>",
+        "<p class='hint'>On its own: it runs the rules below by itself. Wi-Fi is then optional; it only "
+        "sets the clock, which the watering times need.</p>",
         _input("Setup code", "code", values.get("code", ""), extra="autocomplete='off'",
                hint="From the dashboard: Settings, Controllers. It tells the controller how to "
                     "reach your greenhouse server."),
@@ -531,6 +637,9 @@ def setup_page_parts(config, networks, reason, values=None, errors=()):
                hint="Leave empty to keep the current one." if config["mqtt_password"] else ""),
         _input("Controller number", "device", values.get("device", config["device_id"]), "number"),
         "</details>",
+    ]
+    parts += _rules_parts(values, rules, mode == "standalone")
+    parts += [
         "<label>Time zone<select name='tz' id='tz'>",
     ]
     parts += _zone_options(values.get("tz", config["timezone"]))
@@ -551,24 +660,32 @@ def _shown_broker(config):
     return "" if config["mqtt_broker"] in PLACEHOLDER_BROKERS else config["mqtt_broker"]
 
 
-def render_saved_page(ssid):
+def render_saved_page(ssid, standalone=False):
     """
     Build the page shown after saving.
 
     Args:
-        ssid (str): Network the controller will join.
+        ssid (str): Network the controller will join ("" for none).
+        standalone (bool): It will run without a server.
 
     Returns:
         str: HTML.
     """
-    return "".join(saved_page_parts(ssid))
+    return "".join(saved_page_parts(ssid, standalone))
 
 
-def saved_page_parts(ssid):
+def saved_page_parts(ssid, standalone=False):
     """The page shown after saving, as a list of pieces."""
+    if not ssid:
+        return _page_parts("Saved", [
+            "<h1>Saved!</h1><p>The controller is restarting and will run on its own, without Wi-Fi. "
+            "Its clock can't be set without Wi-Fi, so the watering times won't run; the fan and "
+            "heater rules work.</p>",
+            "<p>You can close this page and reconnect your phone to your usual Wi-Fi.</p>"])
+    how = " and running on its own" if standalone else ""
     return _page_parts("Saved", [
-        "<h1>Saved!</h1><p>The controller is restarting and joining <b>" + html_escape(ssid) +
-        "</b>. Its screen shows the time and temperature when it's connected.</p>",
+        "<h1>Saved!</h1><p>The controller is restarting, joining <b>" + html_escape(ssid) + "</b>" + how +
+        ". Its screen shows the time and temperature when it's ready.</p>",
         "<p>You can close this page and reconnect your phone to your usual Wi-Fi.</p>"
         "<p class='hint'>If the controller can't join the network, this setup hotspot comes "
         "back so you can fix it.</p>"])
@@ -677,6 +794,8 @@ class Portal:
         self.rescan = rescan
         self.ip = ip
         self.saved = None
+        self.rules = local_rules.load_settings() or local_rules.default_settings()
+        self.saved_rules = None
         self.pending = []  # [connection, bytes so far, ticks when opened]
 
     def respond(self, raw):
@@ -709,14 +828,19 @@ class Portal:
             return response_parts([], "400 Bad Request")
         if path == "/save" and method == "POST":
             changes, errors = form_to_settings(form, self.config)
+            rules = None
+            if changes["standalone"]:
+                rules, rule_errors = form_to_rules(form, self.rules)
+                errors += rule_errors
             if errors:
-                return response_parts(setup_page_parts(self.config, self.networks, self.reason, form, errors))
-            self.saved = changes
-            return response_parts(saved_page_parts(changes["wifi_ssid"]))
+                return response_parts(setup_page_parts(self.config, self.networks, self.reason, form, errors,
+                                                       self.rules))
+            self.saved, self.saved_rules = changes, rules
+            return response_parts(saved_page_parts(changes["wifi_ssid"], changes["standalone"]))
         if path == "/":
             if query.get("rescan") and self.rescan:
                 self.networks = self.rescan() or self.networks
-            return response_parts(setup_page_parts(self.config, self.networks, self.reason, query))
+            return response_parts(setup_page_parts(self.config, self.networks, self.reason, query, (), self.rules))
         return response_parts([], "302 Found", ("Location: http://" + self.ip + "/",))
 
     def poll(self):
@@ -932,8 +1056,13 @@ def run_setup(config, display, reason, save=None):
         time.sleep_ms(1000)  # let the "Saved" page reach the phone
         config.update(portal.saved)
         save(config)
-        mark_unverified()
-        display.show_message("Saved! Restarting and joining " + config["wifi_ssid"])
+        if portal.saved_rules is not None:
+            local_rules.save_settings(portal.saved_rules)
+        if config["wifi_ssid"]:
+            mark_unverified()
+            display.show_message("Saved! Restarting and joining " + config["wifi_ssid"])
+        else:
+            display.show_message("Saved! Restarting to run on its own.")
         time.sleep_ms(2000)
     for sock in (http, dns):
         sock.close()

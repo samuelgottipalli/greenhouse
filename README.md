@@ -45,6 +45,12 @@ on. It starts its own Wi-Fi network (`GreenhouseSetup-…`, password on its scre
 your phone, scan the QR code from the dashboard's **Settings › Controllers** page, pick your
 Wi-Fi and save. A brand-new controller does this by itself.
 
+**No server at all?** The controller also works on its own. On its setup page choose **On its
+own, without a server**, set the fan, heater and watering rules there, and optionally your Wi-Fi
+(only used to set the clock, which the watering times need). It then runs the rules by itself and
+shows `LOCAL` on its screen. Hold the screen button at power-on to change the rules, or to
+connect it to a server later.
+
 **Updates.** Run the installer again and choose **Update** (for a `git clone`). When the
 controller's code has changed, **Settings › Controllers** shows *Update available*; one button
 updates the controller over Wi-Fi, and it goes back to the old version by itself if the new one

@@ -8,6 +8,10 @@ and then copied to the Pico. Any key missing from the
 file falls back to ``DEFAULTS``. Files in the original format (``relay1_pin``
 ... keys and ``timezone_offset`` in hours) are converted on load.
 
+``standalone`` (set from the setup page) means there is no server: the
+controller runs its own rules all the time, and Wi-Fi, if set, only keeps
+the clock right.
+
 The defaults favour low power (for running on a battery): MQTT keep-alive
 5 min with a ping every 2 min, Wi-Fi power-save mode, sensors read every
 minute, a 100 ms main loop and the LCD backlight off after 60 s without a
@@ -21,6 +25,7 @@ DEFAULTS = {
     "wifi_password": "",
     "wifi_timeout_s": 20,
     "wifi_power_save": True,
+    "standalone": False,
     "mqtt_broker": "",
     "mqtt_port": 1883,
     "mqtt_user": None,
@@ -137,9 +142,9 @@ def config_problems(config):
         list[str]: Short messages (fit on the LCD); empty if all is well.
     """
     problems = []
-    if not config["wifi_ssid"]:
+    if not config["wifi_ssid"] and not config["standalone"]:
         problems.append("No Wi-Fi SSID set")
-    if config["mqtt_broker"] in PLACEHOLDER_BROKERS:
+    if config["mqtt_broker"] in PLACEHOLDER_BROKERS and not config["standalone"]:
         problems.append("No MQTT broker set")
     if config["dst_rule"] not in ("none", "us", "eu"):
         problems.append("Bad dst_rule")

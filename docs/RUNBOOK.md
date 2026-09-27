@@ -388,6 +388,14 @@ A router outage never starts setup mode: the controller keeps running its rules 
 4. Pick your Wi-Fi network (2.4 GHz), type its password, check the time zone and tap **Save and
    connect**. The controller restarts and joins.
 
+**Without a server.** Choose **On its own, without a server** on the setup page instead of
+entering a setup code. The server fields are then ignored, Wi-Fi is optional (it only sets the
+clock; without it the watering times can't run, but the fan and heater rules do), and the
+*Rules for running on its own* section sets the fan, heater and two watering times (saved to
+`settings.json`). The controller starts in local mode and shows `LOCAL` on its screen. To change
+the rules, or to connect it to a server later, hold the screen button at power-on and run setup
+again.
+
 The setup page never shows saved passwords; leaving a password field empty keeps the saved one.
 Setup mode started with the button gives up after 15 minutes and restarts with the old settings.
 The setup code contains the controller's broker password, so don't share it.

@@ -4,6 +4,7 @@
   "wifi_password": "",
   "wifi_timeout_s": 20,
   "wifi_power_save": true,
+  "standalone": false,
   "mqtt_broker": "",
   "mqtt_port": 1883,
   "mqtt_user": null,

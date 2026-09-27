@@ -66,6 +66,8 @@ class Network:
         self.on_settings = None
         self.on_firmware = None
         self.feed = None
+        # Without a server (standalone, or no broker set) MQTT is never tried.
+        self.server = not config.get("standalone") and config["mqtt_broker"] not in ("", "YOUR_MQTT_BROKER")
         self._base = "{}/{}".format(config["mqtt_topic_prefix"], config["device_id"])
         self._keepalive_ms = config["mqtt_keepalive_s"] * 1000
         self._ping_ms = config["mqtt_ping_s"] * 1000
@@ -184,6 +186,8 @@ class Network:
             bool: True if connected. Errors are printed, not raised.
         """
         self._drop_client()
+        if not self.server:
+            return False
         self._feed()
         try:
             client = self._client_factory(
@@ -280,6 +284,8 @@ class Network:
                 self.wlan.connect(self.config["wifi_ssid"], self.config["wifi_password"])
                 self._schedule_retry(now, False)
             return
+        if not self.server:
+            return
         if not self.mqtt_ok:
             if not self._attempt_due(now):
                 return
@@ -309,6 +315,8 @@ class Network:
             payload (dict): JSON-serialisable body.
             retain (bool): Ask the broker to keep it for new subscribers.
         """
+        if not self.server:
+            return
         self.outbox.append((self.topic(suffix), json.dumps(payload), retain))
         if len(self.outbox) > OUTBOX_MAX:
             self.outbox.pop(0)

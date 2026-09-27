@@ -30,6 +30,9 @@ Safety and local mode (see ``local_rules.py``):
   automation rules itself with the last settings the server sent (kept in
   ``settings.json``) and shows ``LOCAL`` on the LCD. Changes are reported as
   ``auto`` once the link is back.
+* A controller set up to run on its own (``standalone``, no server) is in
+  local mode from the start, with the rules from the setup page (or the
+  defaults), and never tries MQTT.
 
 Every relay change, whatever its source, is published as a retained state
 message, and all eight states are re-published whenever the MQTT link comes
@@ -96,7 +99,10 @@ class Controller:
         net.on_command = self.handle_command
         net.on_settings = self.handle_settings
         net.on_firmware = self.handle_firmware
+        self.standalone = bool(config.get("standalone"))
         self.settings = local_rules.load_settings()
+        if self.settings is None and self.standalone:
+            self.settings = local_rules.default_settings()
         self._reset = reset
         self.firmware_request = None
         self.update_on_trial = ota.is_pending()
@@ -131,16 +137,22 @@ class Controller:
         Each step reports progress on the LCD; failures are left for
         :meth:`tick` to retry.
         """
-        self.display.show_message("Connecting to WiFi...")
+        if self.config["wifi_ssid"]:
+            self.display.show_message("Connecting to WiFi...")
         if self.net.connect_wifi():
             self.display.show_message("WiFi connected. Syncing clock...")
             if self.clock.sync():
                 self._last_ntp = time.ticks_ms()
-            self.display.show_message("Connecting to MQTT...")
-            if not self.net.connect_mqtt():
-                self.display.show_message("MQTT unavailable, will retry.")
-        else:
+            if self.standalone:
+                self.display.show_message("Running on its own (no server).")
+            else:
+                self.display.show_message("Connecting to MQTT...")
+                if not self.net.connect_mqtt():
+                    self.display.show_message("MQTT unavailable, will retry.")
+        elif self.config["wifi_ssid"]:
             self.display.show_message("WiFi unavailable, will retry.")
+        else:
+            self.display.show_message("Running on its own (no server).")
         self._last_tick = time.ticks_ms()
         self.display.clear()
 
@@ -221,6 +233,9 @@ class Controller:
 
     def _track_link(self, now):
         """Enter local mode after the MQTT link has been down for 2 minutes; leave it when back."""
+        if self.standalone:
+            self.local_mode = True
+            return
         if self.net.mqtt_ok:
             self._link_down_since = None
             self.local_mode = False
@@ -526,8 +541,11 @@ class Controller:
 
         Returns:
             str: ``"OK"``, ``"NoMQTT"`` or ``"NoWiFi"``, followed by
-            ``" LOCAL"`` while local mode is running.
+            ``" LOCAL"`` while local mode is running; just ``"LOCAL"`` for
+            a standalone controller whose Wi-Fi is fine (or not used).
         """
+        if self.standalone:
+            return "LOCAL" if self.net.wifi_ok or not self.config["wifi_ssid"] else "NoWiFi LOCAL"
         if self.net.mqtt_ok:
             return "OK"
         status = "NoMQTT" if self.net.wifi_ok else "NoWiFi"

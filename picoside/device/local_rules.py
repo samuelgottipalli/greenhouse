@@ -16,11 +16,32 @@ Settings arrive from the server on the retained ``<prefix>/<id>/settings``
 topic and are saved to ``settings.json`` on the Pico's flash, so local mode
 works after a reboot even with no network. Without settings, local mode only
 enforces safety: heater and water off, fan left as it is.
+
+A controller set up to run on its own (``standalone``, no server) gets its
+settings from the setup page instead, starting from :func:`default_settings`
+(the same defaults the server uses).
 """
 import json
 
 SETTINGS_FILE = "settings.json"
 THRESHOLD_KEYS = ("fan_on_temp_c", "fan_on_humidity_pct", "heater_on_temp_c")
+WATERING_SLOTS = 4
+
+
+def default_settings():
+    """
+    The factory settings, the same as the server's defaults
+    (``server/core/migrations.py``).
+
+    Returns:
+        dict: Settings in the format of :func:`valid_settings` (a new copy).
+    """
+    return {
+        "fan_on_temp_c": [32.0, 2.0],
+        "fan_on_humidity_pct": [50.0, 2.0],
+        "heater_on_temp_c": [18.0, 2.0],
+        "watering": [["06:00", 30], ["00:00", 0], ["00:00", 0], ["00:00", 0]],
+    }
 
 
 def valid_settings(payload):
