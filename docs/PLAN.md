@@ -15,7 +15,7 @@ robustness, then new features. Each step says:
   Anything that needs real hardware gets a short manual check listed under "Done when".
 - One step per branch or PR, so each can be reviewed and reverted on its own.
 
-**Status (2026-09-26, after Phase 3):** 495 tests pass (plus one Linux-only test that CI runs) and no `known_bug` tests remain.
+**Status (2026-09-26, after Phase 4):** 563 tests pass (plus one Linux-only test that CI runs) and no `known_bug` tests remain.
 The controller runs the automation rules itself when the network is down (P-15). Both
 directions of the device/server contract are tested end to end; what's left is confirming it on the
 hardware ([RUNBOOK.md](RUNBOOK.md)).
