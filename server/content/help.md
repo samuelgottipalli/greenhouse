@@ -8,7 +8,11 @@ Pick a page from the sidebar on the left.
 
 ### Home
 
-The landing page. A system status summary is planned for this page.
+System status at a glance:
+
+*   **Controller:** Online or Offline, as last reported by the greenhouse controller.
+*   **Greenhouse readings:** Fresh, or Stale if the latest reading is more than 15 minutes old.
+*   **Relays:** each device's last recorded state and who set it (web, auto or device).
 
 ### Reports › Weather Data
 
@@ -19,7 +23,11 @@ The landing page. A system status summary is planned for this page.
 
 ### Reports › Greenhouse Weather
 
-Indoor sensor readings from the greenhouse controller. This page is not built yet.
+*   Latest temperature, humidity and light level measured inside the greenhouse. Hover over
+    the (?) on a card to see when it was measured.
+*   A warning appears if the readings are more than 15 minutes old.
+*   Choose 24 hours, 7 days or 30 days to see the history charts; "Show readings as a table"
+    lists the raw values.
 
 ### Control › Remote Control
 

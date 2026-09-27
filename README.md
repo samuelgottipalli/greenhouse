@@ -90,9 +90,9 @@ been removed. It is still in the git history.
 
 | Page | What you can do |
 |---|---|
-| **Home** | Landing page (not built yet). |
+| **Home** | At a glance: controller online/offline, how fresh the greenhouse readings are, and each relay's state. |
 | **Reports › Weather Data** | Today's outdoor weather, with small trend charts. |
-| **Reports › Greenhouse Weather** | Inside-the-greenhouse readings (not built yet). |
+| **Reports › Greenhouse Weather** | Latest temperature, humidity and light inside the greenhouse, plus 24-hour, 7-day and 30-day history charts. |
 | **Control › Remote Control** | Switch the fan, heater, light and water on or off. |
 | **Settings › App Settings** | Choose °C or °F, date and time formats, and time zone. |
 | **Settings › Greenhouse Settings** | Set the fan, heater and watering rules; revert or restore defaults. |

@@ -52,7 +52,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-12 | Medium | Web | Windows-only paths (`imagesavicon.png`, `help.md` vs `HELP.md`) break on Linux / Raspberry Pi | Code | **Fixed**: paths built from `__file__`; runs from any directory |
 | S-13 | Medium | Server | Weather collector: no HTTP timeout, can double-fire or miss a slot | Code | **Fixed**: 10 s HTTP timeout, HTTP errors detected, one collection per 15-minute slot, one retry after 30 s |
 | S-14 | Medium | Server | Background services are bare `while True` scripts with `print` logging and no supervision | Code | Partial: `logging` module; no supervision yet |
-| S-15 | Medium | Web | Home and "Greenhouse Weather" (indoor data) pages are empty placeholders | Code | Open |
+| S-15 | Medium | Web | Home and "Greenhouse Weather" (indoor data) pages are empty placeholders | Code | **Fixed**: Home shows controller status, reading freshness and relay states; Greenhouse Weather shows latest values and 24 h / 7 d / 30 d history |
 | S-16 | Low | Repo | `requirements.txt` is UTF-16, pins 104 packages (Snowflake, boto3, Jupyter...), and `*.txt` is git-ignored | Code | **Fixed**: 6 runtime packages, plus `requirements-dev.txt` |
 | S-17 | Low | Server | Mixed time zones: UTC for relay log and weather, local for Pico timestamps and watering schedule | Code | **Fixed**: UTC in storage and on the wire; only watering start times are local, by design |
 | S-18 | Low | Web | App preferences live only in the browser session and defaults are duplicated on four pages | Code | **Fixed**: preferences saved in `app_preferences` and loaded by every new session; defaults in one place (`ui.py`) |

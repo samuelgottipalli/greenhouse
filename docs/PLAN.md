@@ -89,8 +89,8 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 
 | Step | Work | Fixes | Done when | Effort |
 |---|---|---|---|---|
-| 4.1 | Indoor dashboard (`greenhouse.py`): current temperature, humidity and light, plus 24 h / 7 d / 30 d history with high and low. Port the gauge and history ideas from the retired Dash app. | S-15 | Page test with fixture data; charts match the database values. | 1.5 d |
-| 4.2 | Home page: system status (device online, reading age, relay states, service heartbeats, active alerts). | S-15 | Page test covers the online, stale and offline states. | 1 d |
+| 4.1 ✅ | Indoor dashboard (`greenhouse.py`): current temperature, humidity and light, plus 24 h / 7 d / 30 d history with high and low. Port the gauge and history ideas from the retired Dash app. | S-15 | Page test with fixture data; charts match the database values. | 1.5 d |
+| 4.2 🟡 | Home page: system status (device online, reading age, relay states, service heartbeats, active alerts). | S-15 | Page test covers the online, stale and offline states. | 1 d |
 | 4.3 ✅ | Manual override: per-relay `auto` / `manual until <time>` mode that the automation respects, reusing the Pico's `relay_modes`. | S-06 (5) | Automation tests: a manual toggle holds until expiry, then automation resumes. | 1 d |
 | 4.4 | Multiple devices: drive devices and relays from `devices`/`relays`, add a device selector, and remove the fixed relay IDs in `services/automation.py` and `views/control.py`. | S-11 | No device or relay IDs are hard-coded outside seed data; tests run with two devices. | 1.5 d |
 | 4.5 | Web login (Streamlit OIDC, or a reverse proxy with auth) and persistent per-user preferences in the database. | SEC-03, S-18 | Unauthenticated requests are redirected to login; preferences survive a browser restart. | 1 d |

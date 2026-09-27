@@ -276,6 +276,27 @@ def latest_sensor_readings(device_id: int = settings.DEVICE_ID) -> DataFrame | N
     )
 
 
+def sensor_history(since_utc: str, device_id: int = settings.DEVICE_ID) -> DataFrame | None:
+    """
+    Read every sensor reading of a device since a moment, oldest first.
+
+    Args:
+        since_utc (str): ``YYYY-MM-DD HH:MM:SS`` UTC (inclusive).
+        device_id (int): Device to read.
+
+    Returns:
+        DataFrame | None: Columns ``measure``, ``reading_utc`` and ``value``;
+        None on error or if there are no readings in the period.
+    """
+    return _read(
+        "SELECT m.name AS measure, r.reading_utc, r.value "
+        "FROM sensor_readings r JOIN measures m USING (measure_id) "
+        "WHERE r.device_id = :device_id AND r.reading_utc >= :since "
+        "ORDER BY r.reading_utc",
+        {"device_id": device_id, "since": since_utc},
+    )
+
+
 def latest_relay_states(device_id: int = settings.DEVICE_ID) -> DataFrame | None:
     """
     Read the last logged event of every relay that has one.
