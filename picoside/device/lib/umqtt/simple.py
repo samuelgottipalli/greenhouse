@@ -1,12 +1,16 @@
 """
 Minimal MQTT 3.1.1 client for MicroPython.
 
-Vendored copy of ``umqtt.simple`` from micropython-lib, with one local change:
+Vendored copy of ``umqtt.simple`` from micropython-lib, with two local changes:
 sockets use a timeout (``SOCKET_TIMEOUT_S``) so an unreachable or silent broker
-cannot block the main loop past the watchdog. Supports QoS 0 and 1
+cannot block the main loop past the watchdog, and ``last_rx`` records when the
+broker last sent anything (including ping replies) so a silently dead link can
+be detected. Supports QoS 0 and 1
 (QoS 2 is not implemented). Only the methods used by ``net.py`` are
 documented here in detail; see the upstream project for protocol notes.
 """
+import time
+
 import usocket as socket
 import ustruct as struct
 from ubinascii import hexlify
@@ -58,6 +62,7 @@ class MQTTClient:
         self.lw_msg = None
         self.lw_qos = 0
         self.lw_retain = False
+        self.last_rx = None
 
     def _send_str(self, s):
         """Write a length-prefixed MQTT string."""
@@ -153,6 +158,7 @@ class MQTTClient:
             self._send_str(self.user)
             self._send_str(self.pswd)
         resp = self.sock.read(4)
+        self.last_rx = time.ticks_ms()
         assert resp[0] == 0x20 and resp[1] == 0x02
         if resp[3] != 0:
             print(MQTTException(resp[3]))
@@ -263,6 +269,7 @@ class MQTTClient:
             return None
         if res == b"":
             raise OSError(-1)
+        self.last_rx = time.ticks_ms()
         if res == b"\xd0":  # PINGRESP
             sz = self.sock.read(1)[0]
             assert sz == 0

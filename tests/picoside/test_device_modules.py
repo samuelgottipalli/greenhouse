@@ -159,3 +159,14 @@ def test_is_pressed_reads_active_low(pico, config):
     assert not buttons.is_pressed(1)
     buttons.pins[1].value(0)
     assert buttons.is_pressed(1)
+
+
+def test_ping_must_be_shorter_than_keepalive(pico, config):
+    config["mqtt_ping_s"] = config["mqtt_keepalive_s"]
+    assert "Ping must be < keepalive" in pico.config.config_problems(config)
+
+
+def test_low_power_defaults(pico):
+    d = pico.config.DEFAULTS
+    assert (d["mqtt_keepalive_s"], d["mqtt_ping_s"]) == (300, 120)
+    assert d["wifi_power_save"] is True and d["backlight_timeout_s"] == 60

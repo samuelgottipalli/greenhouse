@@ -177,10 +177,10 @@ def test_local_mode_runs_heater_rule(ctl, ticks):
     go_offline(ctl, ticks)
     assert ctl.relays.state(3) == 1  # heater on locally
     ctl.sensors.dht = (11.0, 50.0)
-    run_for(ctl, ticks, 35_000)
+    run_for(ctl, ticks, 65_000)  # one sensor interval
     assert ctl.relays.state(3) == 1  # within buffer
     ctl.sensors.dht = (12.5, 50.0)
-    run_for(ctl, ticks, 35_000)
+    run_for(ctl, ticks, 65_000)  # one sensor interval
     assert ctl.relays.state(3) == 0
     sources = {p["source"] for s, p, _ in ctl.net.published if s == "relay/3/state"}
     assert sources == {"auto"}  # queued as automatic changes
@@ -229,3 +229,24 @@ def test_healthy_sensor_never_trips_safety(ctl, ticks):
     ctl.handle_command({"relay": 3, "state": 1})
     run_for(ctl, ticks, 20 * 60 * 1000, step=5000)
     assert ctl.relays.state(3) == 1
+
+
+# --- timing with the low-power defaults ----------------------------------------------
+
+def test_heater_cutoff_is_at_five_minutes_not_next_read(ctl, ticks):
+    ctl.handle_command({"relay": 3, "state": 1})
+    ctl.sensors.dht = (None, None)
+    run_for(ctl, ticks, 5 * 60 * 1000 - 5_000, step=1000)
+    assert ctl.relays.state(3) == 1
+    run_for(ctl, ticks, 10_000, step=1000)  # checked every pass, not only on the 60 s reads
+    assert ctl.relays.state(3) == 0
+
+
+def test_local_mode_acts_as_soon_as_it_starts(ctl, ticks):
+    ctl.handle_settings(SETTINGS)
+    ctl.sensors.dht = (5.0, 50.0)
+    ctl.net.mqtt_ok = ctl.net.wifi_ok = False
+    run_for(ctl, ticks, 119_000, step=1000)
+    assert ctl.relays.state(3) == 0 and not ctl.local_mode
+    run_for(ctl, ticks, 2_000, step=1000)
+    assert ctl.local_mode and ctl.relays.state(3) == 1

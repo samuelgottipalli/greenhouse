@@ -197,7 +197,8 @@ Do these with the dashboard open. Each maps to a sign-off line in step 9.
 | f | Double-press button **1** quickly | Relay **5** toggles, relay 1 does not |
 | g | Press the screen button | LCD cycles Relay 1 … Relay 8, then back to main |
 | h | Hold button 1 and press the screen button | LCD shows `IP address:` and the Pico's IP; relay 1 unchanged |
-| i | Stop the broker for 4 min: `sudo systemctl stop mosquitto`, then `start` | LCD shows `NoMQTT`, then `NoMQTT LOCAL` after 2 min; Remote Control switches are disabled; after `start`, `OK` again, Home goes Online, and the readings from the outage appear in the 24 h chart |
+| i | Stop the broker for 4 min: `sudo systemctl stop mosquitto`, then `start` | LCD shows `NoMQTT`, then `NoMQTT LOCAL` after 2 min; after `start`, `OK` again (reconnect can take up to ~5 min of backoff), and the readings from the outage appear in the 24 h chart |
+| i1 | Unplug the Pico's power for 10 min | Home shows the controller **Offline** after up to ~7.5 min and Remote Control switches are disabled; after power returns, Online again |
 | i2 | During an outage (as in i), warm or cool the sensor past the heater trigger | Relay 3 follows the heater rule on its own (local mode); after reconnecting Home shows the change as (auto) |
 | i3 | Unplug the DHT22 data wire with the heater on | Within ~5.5 min relay 3 switches off by itself, even with the network up |
 | j | **Greenhouse Settings**: set "Turn on heater at" just above the current temperature, then Save | Within ~5 s relay 3 clicks and Home shows Heater On (auto). Put the setting back afterwards. |
@@ -251,10 +252,11 @@ What watches what, and how often:
 
 | Where | Check | Interval | What happens |
 |---|---|---|---|
-| Pico | Hardware watchdog | fed every loop (~50 ms) | If the program hangs for 8 s the board resets |
+| Pico | Hardware watchdog | fed every loop (~100 ms) | If the program hangs for 8 s the board resets |
 | Pico | Wi-Fi / MQTT link | every loop | Reconnects with backoff from 2 s up to 5 min |
-| Pico | MQTT keep-alive | ping every 30 s | If the device goes silent, the broker publishes its `offline` status after ~90 s |
-| Pico | Sensors | every 30 s | No good DHT22 reading for 5 min: heater off |
+| Pico | MQTT keep-alive | ping every 2 min; keep-alive 5 min | No reply from the broker for 5 min: the Pico reconnects. If the Pico goes silent, the broker publishes its `offline` status after ~7.5 min |
+| Pico | Sensors | read every 60 s; safety checked every loop | No good DHT22 reading for 5 min: heater off |
+| Pico | LCD backlight | 60 s after the last button press | Backlight off (the next press only wakes it) |
 | Pico | Link lost | continuous | After 2 min offline, runs the rules itself (`LOCAL` on the LCD) |
 | Pico | Clock | daily (every 5 min until the first success) | NTP re-sync |
 | Pico → server | Health report | every 5 min, in telemetry | Uptime, free memory and Wi-Fi signal shown on Home |
@@ -262,6 +264,25 @@ What watches what, and how often:
 | Server | systemd watchdog | `WatchdogSec=120` on ingest, automation, weather | A service that stops beating is killed and restarted |
 | Server | systemd restart | on exit | A crashed service restarts after 5 s |
 | Server | Automation data checks | every 5 s | Readings older than 15 min: heater off; controller offline: automation stands back |
+
+## Running on battery
+
+The defaults already favour low power: Wi-Fi power-save mode, an MQTT ping every 2 minutes
+(keep-alive 5 minutes), sensor reads every minute, a 100 ms main loop, and the LCD backlight off
+after 60 s without a button press. Things to know before moving off mains power:
+
+- **Relay coils are the biggest draw.** Each energised relay typically draws 60-80 mA at 5 V,
+  more than the Pico itself. Use a separate supply for the relay board and loads, or latching
+  relays.
+- **The backlight** is the next biggest. Keep `backlight_timeout_s` short, or set it to 0 only
+  while debugging.
+- **Wi-Fi** is always associated; power-save mode lets the radio sleep between access-point
+  beacons. `publish_interval_s` (default 300) sets how often the radio sends.
+- **Trade-off:** with a 5-minute keep-alive, the dashboard notices a vanished controller after
+  ~7.5 minutes instead of ~90 s, and a silently dropped connection is re-established within
+  ~5 minutes. Heater safety does not depend on this; the controller enforces it itself.
+- Measure the real current with a USB power meter, once on mains with the defaults, before
+  sizing a battery. These figures are typical values, not measurements of this board.
 
 ## Troubleshooting
 

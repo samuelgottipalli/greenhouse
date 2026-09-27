@@ -95,8 +95,13 @@ class FakeLcd:
         self.cursor = (0, 0)
         self.writes = 0
 
+    lit = True
+
     def backlight_on(self):
-        pass
+        self.lit = True
+
+    def backlight_off(self):
+        self.lit = False
 
     def clear(self):
         self.screen = [" " * self.cols for _ in range(self.rows)]
@@ -112,11 +117,17 @@ class FakeLcd:
 
 
 class FakeWLAN:
+    PM_POWERSAVE = 0xA11C82
+
     def __init__(self, mode=None):
+        self.pm = None
         self.connected = False
         self.connect_calls = []
         self.connect_succeeds = True
         self.is_active = False
+
+    def config(self, pm=None):
+        self.pm = pm
 
     def active(self, flag):
         self.is_active = flag

@@ -14,6 +14,9 @@ blocks for long:
    minutes until the first sync succeeds).
 7. Redraw the LCD (only lines that changed are written).
 
+Power: the LCD backlight turns off after ``backlight_timeout_s`` without a
+button press; the next press only wakes it.
+
 Buttons: the screen button cycles main screen -> relay 1..8 -> main; held
 together with relay button 1 it shows the IP address. A relay button toggles
 its relay (1-4); pressing it twice within ``DOUBLE_PRESS_MS`` toggles the paired
@@ -102,6 +105,8 @@ class Controller:
         self._was_online = False
         self._link_down_since = None
         self._last_dht_ok = None
+        self._backlight_ms = config["backlight_timeout_s"] * 1000
+        self._last_activity = time.ticks_ms()
         self.local_mode = False
 
     # --- lifecycle ------------------------------------------------------
@@ -139,19 +144,26 @@ class Controller:
         if self.net.mqtt_ok and not self._was_online:
             self.publish_all_states()
         self._was_online = self.net.mqtt_ok
+        was_local = self.local_mode
         self._track_link(now)
-        if self._due(self._last_sensor, self._sensor_ms, now):
+        read = self._due(self._last_sensor, self._sensor_ms, now)
+        if read:
             self.read_sensors(now)
             self._last_sensor = now
-            self.apply_safety(now)
-            if self.local_mode:
-                self.apply_local_rules(now)
+        # Cheap checks, every pass: the heater cut-off must not wait for the
+        # next sensor read, and local mode acts as soon as it starts.
+        self.apply_safety(now)
+        if self.local_mode and (read or not was_local):
+            self.apply_local_rules(now)
         if self._due(self._last_publish, self._publish_ms, now):
             self.publish_telemetry()
             self._last_publish = now
         self._maybe_sync_clock(now)
         if self.screen != SCREEN_MAIN and time.ticks_diff(now, self.screen_since) > SCREEN_TIMEOUT_MS:
             self.screen = SCREEN_MAIN
+        if self._backlight_ms and self.display.backlight and \
+                time.ticks_diff(now, self._last_activity) > self._backlight_ms:
+            self.display.set_backlight(False)
         self.display.show_lines(self.screen_lines())
 
     @staticmethod
@@ -352,7 +364,15 @@ class Controller:
         Args:
             now (int): ``ticks_ms`` now.
         """
-        for index, at in self.buttons.take_events():
+        events = self.buttons.take_events()
+        if events:
+            self._last_activity = now
+            if not self.display.backlight:
+                # The first press only wakes the screen; it is not a command.
+                self.display.set_backlight(True)
+                self.pending = {}
+                return
+        for index, at in events:
             if index == TOGGLE_BUTTON:
                 if self.buttons.is_pressed(1):
                     self.pending.pop(1, None)

@@ -117,7 +117,7 @@ def test_connect_mqtt_sequence(make_net):
     assert net.connect_mqtt() is True and net.mqtt_ok
     client = FakeClient.instances[-1]
     assert client.args == dict(client_id="greenhouse_pico", server="broker.local", port=1883,
-                               user="u", password="p", keepalive=60)
+                               user="u", password="p", keepalive=300)
     assert client.calls[:4] == [
         "set_callback",
         ("will", "greenhouse/1/status", "offline", True),
@@ -227,15 +227,51 @@ def test_wifi_drop_ends_mqtt_session(make_net, ticks):
     assert not net.mqtt_ok and "close" in FakeClient.instances[-1].calls
 
 
-def test_keepalive_ping(make_net, ticks):
+def test_keepalive_ping_every_two_minutes(make_net, ticks):
     net = make_net()
     net.connect_mqtt()
-    ticks.advance(29_000)
+    ticks.advance(119_000)
     net.poll(ticks.now)
     assert "ping" not in FakeClient.instances[-1].calls
     ticks.advance(2_000)
     net.poll(ticks.now)
-    assert "ping" in FakeClient.instances[-1].calls
+    assert FakeClient.instances[-1].calls.count("ping") == 1
+
+
+def test_silent_broker_is_treated_as_dead(make_net, ticks):
+    net = make_net()
+    net.connect_mqtt()
+    client = FakeClient.instances[-1]
+    client.last_rx = ticks.now
+    ticks.advance(299_000)
+    net.poll(ticks.now)
+    assert net.mqtt_ok  # silent for less than the 5-minute keep-alive
+    ticks.advance(2_000)
+    net.poll(ticks.now)
+    assert not net.mqtt_ok  # a whole keep-alive without a reply: reconnect
+
+
+def test_ping_replies_keep_link_alive(make_net, ticks):
+    net = make_net()
+    net.connect_mqtt()
+    client = FakeClient.instances[-1]
+    for _ in range(10):  # 10 ping cycles; the broker answers each one
+        ticks.advance(120_000)
+        client.last_rx = ticks.now
+        net.poll(ticks.now)
+    assert net.mqtt_ok and client.calls.count("ping") == 10
+
+
+def test_wifi_power_save_requested(make_net):
+    net = make_net(connected=False)
+    net.connect_wifi()
+    assert net.wlan.pm == net.wlan.PM_POWERSAVE
+
+
+def test_wifi_power_save_can_be_disabled(make_net):
+    net = make_net(connected=False, wifi_power_save=False)
+    net.connect_wifi()
+    assert net.wlan.pm is None
 
 
 def test_ip_address(make_net):
@@ -315,8 +351,11 @@ def test_real_client_connects_subscribes_and_receives(pico, config, broker, tick
     assert sent.endswith(b"online")
     assert broker.timeouts[0] == 5
 
+    assert net.client.last_rx == ticks.now  # CONNACK counts as hearing from the broker
+    ticks.advance(1000)
     broker.replies += publish_packet(b"greenhouse/1/relay/set", b'{"relay": 4, "state": 0}')
     net.poll(ticks.now)
+    assert net.client.last_rx == ticks.now
     net.poll(ticks.now)  # idle socket: read() returns None, nothing happens
     assert received == [{"relay": 4, "state": 0}]
     assert net.mqtt_ok

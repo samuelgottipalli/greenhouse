@@ -102,6 +102,9 @@ they change. The device therefore gets the latest copy each time it connects, an
 Each threshold is `[value, buffer]`. Each watering slot is `[local start "HH:MM", minutes]`, and 0
 minutes means the slot is off.
 
+- **Keep-alive:** the device pings every 2 minutes with a 5-minute keep-alive, so the broker
+  publishes its `offline` status about 7.5 minutes after it vanishes. If the broker stays silent
+  for 5 minutes, the device treats the link as dead and reconnects.
 - **Local mode:** if the device's MQTT link has been down for 2 minutes, it applies the same fan,
   heater and watering rules itself (`picoside/device/local_rules.py`, checked against the server's
   rules in the tests). The LCD shows `LOCAL`. Its changes are queued as `auto` state messages

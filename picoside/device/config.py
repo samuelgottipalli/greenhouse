@@ -6,6 +6,11 @@ Create it on a computer with ``python picoside/setup_config.py`` and copy it
 to the Pico with the rest of ``picoside/device/``. Any key missing from the
 file falls back to ``DEFAULTS``. Files in the original format (``relay1_pin``
 ... keys and ``timezone_offset`` in hours) are converted on load.
+
+The defaults favour low power (for running on a battery): MQTT keep-alive
+5 min with a ping every 2 min, Wi-Fi power-save mode, sensors read every
+minute, a 100 ms main loop and the LCD backlight off after 60 s without a
+button press (``backlight_timeout_s``: 0 keeps it on).
 """
 import json
 
@@ -14,21 +19,23 @@ DEFAULTS = {
     "wifi_ssid": "",
     "wifi_password": "",
     "wifi_timeout_s": 20,
+    "wifi_power_save": True,
     "mqtt_broker": "",
     "mqtt_port": 1883,
     "mqtt_user": None,
     "mqtt_password": None,
     "mqtt_client_id": "greenhouse_pico",
     "mqtt_topic_prefix": "greenhouse",
-    "mqtt_keepalive_s": 60,
+    "mqtt_keepalive_s": 300,
+    "mqtt_ping_s": 120,
     "timezone": "UTC",
     "utc_offset_minutes": 0,
     "dst_rule": "none",
     "ntp_host": "pool.ntp.org",
     "ntp_resync_hours": 24,
-    "sensor_interval_s": 30,
+    "sensor_interval_s": 60,
     "publish_interval_s": 300,
-    "loop_ms": 50,
+    "loop_ms": 100,
     "watchdog": True,
     "dht_pin": 16,
     "ldr_pin": 28,
@@ -40,6 +47,7 @@ DEFAULTS = {
     "lcd_sda_pin": 0,
     "lcd_scl_pin": 1,
     "lcd_address": 63,
+    "backlight_timeout_s": 60,
 }
 
 PLACEHOLDER_BROKERS = ("", "YOUR_MQTT_BROKER")
@@ -114,4 +122,6 @@ def config_problems(config):
         problems.append("Need 8 relay_pins")
     if len(config["button_relay_pins"]) != 4:
         problems.append("Need 4 button pins")
+    if not 0 < config["mqtt_ping_s"] < config["mqtt_keepalive_s"]:
+        problems.append("Ping must be < keepalive")
     return problems

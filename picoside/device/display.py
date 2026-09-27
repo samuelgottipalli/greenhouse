@@ -62,7 +62,25 @@ class Display:
             lcd = I2cLcd(i2c, config["lcd_address"], ROWS, COLS)
         self.lcd = lcd
         self.lcd.backlight_on()
+        self.backlight = True
         self._shown = [None] * ROWS
+
+    def set_backlight(self, on):
+        """
+        Switch the backlight (most of the LCD's power draw) on or off.
+
+        The text stays on the screen and keeps updating either way.
+
+        Args:
+            on (bool): True to light the screen.
+        """
+        if on == self.backlight:
+            return
+        if on:
+            self.lcd.backlight_on()
+        else:
+            self.lcd.backlight_off()
+        self.backlight = on
 
     def clear(self):
         """Blank the screen."""

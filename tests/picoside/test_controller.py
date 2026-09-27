@@ -141,7 +141,7 @@ def test_first_tick_reads_and_publishes(ctl):
 
 def test_intervals(ctl, ticks):
     ctl.tick()
-    run_for(ctl, ticks, 29_950)
+    run_for(ctl, ticks, 59_950)
     assert ctl.sensors.reads == 1
     run_for(ctl, ticks, 100)
     assert ctl.sensors.reads == 2
@@ -350,3 +350,50 @@ def test_no_state_burst_while_offline(ctl):
     ctl.net.mqtt_ok = False
     ctl.tick()
     assert states_published(ctl) == []
+
+
+# --- backlight (power saving) --------------------------------------------------------
+
+def test_backlight_turns_off_after_timeout(ctl, ticks):
+    run_for(ctl, ticks, 59_000)
+    assert ctl.display.backlight and ctl.display.lcd.lit
+    run_for(ctl, ticks, 2_000)
+    assert not ctl.display.backlight and not ctl.display.lcd.lit
+
+
+def test_first_press_only_wakes_the_screen(ctl, ticks):
+    run_for(ctl, ticks, 61_000)
+    press(ctl, 2, ticks)
+    run_for(ctl, ticks, 600)
+    assert ctl.display.backlight
+    assert ctl.relays.state(2) == 0  # the waking press is not a command
+    press(ctl, 2, ticks)
+    run_for(ctl, ticks, 600)
+    assert ctl.relays.state(2) == 1
+
+
+def test_presses_keep_the_backlight_on(ctl, ticks):
+    for _ in range(3):
+        run_for(ctl, ticks, 50_000)
+        press(ctl, 0, ticks)
+        ctl.tick()
+    assert ctl.display.backlight
+
+
+def test_backlight_timeout_zero_keeps_it_on(pico, config, ticks):
+    config["backlight_timeout_s"] = 0
+    controller = pico.controller.Controller(
+        config, pico.display.Display(config, lcd=FakeLcd()), FakeSensors(),
+        pico.relays.Relays(config), FakeButtons(), FakeNet(), FakeClock(),
+    )
+    controller.start()
+    run_for(controller, ticks, 10 * 60 * 1000, step=1000)
+    assert controller.display.backlight
+
+
+def test_remote_command_does_not_wake_the_backlight(ctl, ticks):
+    run_for(ctl, ticks, 61_000)
+    ctl.handle_command({"relay": 2, "state": 1})
+    ctl.tick()
+    assert not ctl.display.backlight
+    assert ctl.display.lcd.screen[0].startswith("Relay 2: fan")  # text still updates

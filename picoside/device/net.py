@@ -3,7 +3,9 @@ Wi-Fi and MQTT connectivity for the greenhouse controller.
 
 ``Network`` owns the Wi-Fi interface and the MQTT client. The main loop calls
 :meth:`Network.poll` every pass; it reconnects with backoff when either link
-is down, delivers incoming commands, sends keep-alive pings and flushes queued
+is down, delivers incoming commands, sends keep-alive pings (every
+``mqtt_ping_s``) and treats the link as dead if the broker stays silent for a
+whole ``mqtt_keepalive_s``, and flushes queued
 messages. Messages published while offline are queued (the newest
 ``OUTBOX_MAX`` are kept) and sent after reconnecting.
 
@@ -62,6 +64,7 @@ class Network:
         self.feed = None
         self._base = "{}/{}".format(config["mqtt_topic_prefix"], config["device_id"])
         self._keepalive_ms = config["mqtt_keepalive_s"] * 1000
+        self._ping_ms = config["mqtt_ping_s"] * 1000
         self._backoff_ms = BACKOFF_START_MS
         self._next_attempt = None
         self._last_ping = None
@@ -82,6 +85,36 @@ class Network:
         """Feed the watchdog, if one is attached."""
         if self.feed:
             self.feed()
+
+    def _activate_wifi(self):
+        """Switch the radio on, in power-save mode if ``wifi_power_save`` is set."""
+        self.wlan.active(True)
+        if not self.config["wifi_power_save"]:
+            return
+        mode = getattr(self.wlan, "PM_POWERSAVE", None)
+        if mode is None:
+            return
+        try:
+            self.wlan.config(pm=mode)
+        except Exception as err:  # not supported by this firmware
+            print("Wi-Fi power save unavailable:", err)
+
+    def link_silent(self, now):
+        """
+        Tell whether the broker has been silent for longer than the keep-alive.
+
+        The client pings every ``mqtt_ping_s`` and the broker always answers,
+        so silence for a whole keep-alive period means the link is dead even if
+        the socket has not reported an error (e.g. a router dropped it).
+
+        Args:
+            now (int): ``ticks_ms`` now.
+
+        Returns:
+            bool: True if the link should be treated as dead.
+        """
+        last_rx = getattr(self.client, "last_rx", None)
+        return last_rx is not None and time.ticks_diff(now, last_rx) > self._keepalive_ms
 
     @property
     def wifi_ok(self):
@@ -125,7 +158,7 @@ class Network:
         """
         if timeout_ms is None:
             timeout_ms = self.config["wifi_timeout_s"] * 1000
-        self.wlan.active(True)
+        self._activate_wifi()
         if self.wlan.isconnected():
             return True
         if not self.config["wifi_ssid"]:
@@ -234,7 +267,7 @@ class Network:
             if self.mqtt_ok:
                 self._drop_client()
             if self._attempt_due(now) and self.config["wifi_ssid"]:
-                self.wlan.active(True)
+                self._activate_wifi()
                 self.wlan.connect(self.config["wifi_ssid"], self.config["wifi_password"])
                 self._schedule_retry(now, False)
             return
@@ -246,7 +279,9 @@ class Network:
                 return
         try:
             self.client.check_msg()
-            if time.ticks_diff(now, self._last_ping) >= self._keepalive_ms // 2:
+            if self.link_silent(now):
+                raise OSError("no reply from broker for a whole keep-alive")
+            if time.ticks_diff(now, self._last_ping) >= self._ping_ms:
                 self.client.ping()
                 self._last_ping = now
         except Exception as err:
