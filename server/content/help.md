@@ -82,6 +82,19 @@ Buttons:
 *   **Revert** puts back the last saved settings.
 *   **Restore Defaults** puts back the factory settings.
 
+### Settings › Controllers
+
+- **Software:** the version the controller runs and the version this server offers. When they
+  differ, press **Update controller** (the controller must be online). It downloads the changed
+  files, checks them, and restarts in about a minute. If the new version doesn't start properly,
+  it goes back to the old one by itself, and this page says so.
+- **Connect it to Wi-Fi:** for a new controller, or to change its Wi-Fi. Hold the controller's
+  screen button while switching it on, join the `GreenhouseSetup-…` network shown on its screen
+  with your phone, then scan the QR code here (or paste the setup code into the page at
+  `http://192.168.4.1`). Choose your Wi-Fi, type its password and save.
+- The setup code includes the controller's password for the messaging service, so share it only
+  with people you trust.
+
 ## Frequently Asked Questions (FAQ)
 
 **Q: The weather data is not updating. What should I do?**

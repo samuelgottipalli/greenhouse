@@ -4,10 +4,9 @@ A home-built smart greenhouse. A small microcontroller inside the greenhouse mea
 switches equipment. A web dashboard on the home network lets you see what's happening, change the
 rules, and switch things by hand.
 
-> **Status (Sept 2026):** the pieces exist, but the connection between them is not finished yet.
-> The dashboard shows outdoor weather and lets you edit settings. Live greenhouse readings do not
-> reach the dashboard yet, and dashboard commands do not reach the relays yet. See
-> [What works today](#what-works-today) and the [improvement plan](docs/PLAN.md).
+> **Status (Sept 2026):** everything is built and tested on a computer (800+ automated tests);
+> the first run on the real hardware is next. See [What works today](#what-works-today) and the
+> [plan](docs/PLAN.md).
 
 ## What it does
 
@@ -22,6 +21,37 @@ rules, and switch things by hand.
   sunrise and sunset) from the free Open-Meteo service.
 - **Works locally too**: a 4-line screen and five buttons on the device show readings and toggle
   relays without the dashboard.
+
+## Getting started (no coding needed)
+
+You need: a computer that stays on (a Raspberry Pi, or a Windows, Mac or Linux PC), the Pico W
+controller board, a USB data cable, and a **2.4 GHz** Wi-Fi network.
+
+1. **Get the files.** On GitHub choose **Code › Download ZIP** and unzip it, or
+   `git clone https://github.com/samuelgottipalli/greenhouse.git` (a clone can update itself later).
+2. **Run the installer.**
+   - Windows: double-click **`setup.bat`**.
+   - Mac or Linux: open a terminal in the folder and run **`sh setup.sh`**.
+
+   It installs what it needs and opens a window that walks you through the rest: your town and
+   time zone, a dashboard password, the messaging service, starting the server, and finally the
+   controller over USB (it installs MicroPython on a new Pico, puts your Wi-Fi details on it and
+   waits until it's online).
+3. **Open the dashboard** at the address the installer shows (e.g. `http://192.168.1.20:8501`)
+   from any phone or computer on your Wi-Fi.
+
+**No USB cable, or changing Wi-Fi later?** Hold the controller's screen button while switching it
+on. It starts its own Wi-Fi network (`GreenhouseSetup-…`, password on its screen). Join it with
+your phone, scan the QR code from the dashboard's **Settings › Controllers** page, pick your
+Wi-Fi and save. A brand-new controller does this by itself.
+
+**Updates.** Run the installer again and choose **Update** (for a `git clone`). When the
+controller's code has changed, **Settings › Controllers** shows *Update available*; one button
+updates the controller over Wi-Fi, and it goes back to the old version by itself if the new one
+doesn't start properly.
+
+The step-by-step manual setup, and the checks for the first run on real hardware, are in
+[docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## How the pieces fit together
 
@@ -73,10 +103,12 @@ flowchart LR
 
 | Folder | What it is |
 |---|---|
-| `picoside/device/` | Everything that is copied onto the Pico. `main.py` starts at power-on, `controller.py` is the main loop, and `lib/` holds third-party drivers. |
-| `picoside/setup_config.py` | Run on your computer to create the controller's `config.json` (Wi-Fi, broker, time zone). |
+| `setup.bat`, `setup.sh`, `installer/` | The installer: a step-by-step window for the server and the controller. |
+| `picoside/device/` | Everything that is copied onto the Pico. `main.py` starts at power-on, `controller.py` is the main loop, `provision.py` is the setup hotspot, `ota.py` and `boot.py` handle updates over Wi-Fi, and `lib/` holds third-party drivers. |
+| `picoside/setup_config.py` | Run on your computer to create the controller's `config.json` by hand (Wi-Fi, broker, time zone). |
 | `server/app.py` | The web dashboard. Its pages are in `server/views/` and the About/Help text is in `server/content/`. |
-| `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py`, `weather_collector.py`, and `alerts.py` (push/email alerts, every 2 min). |
+| `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py`, `weather_collector.py`, `firmware_server.py` (controller code for updates), and `alerts.py` (push/email alerts, every 2 min). |
+| `server/run_all.py` | Runs the whole server with one command on Windows and macOS (Linux uses systemd). |
 | `server/core/` | Shared code: database access, settings, MQTT, the weather API client, unit conversions. |
 | `server/scripts/` | Maintenance: `upgrade_db.py` creates or upgrades the database; `add_device.py` registers another controller; `backup_db.py` makes a safe live backup; `set_password.py`, `bench.py`, `retention.py`, `telemetry_report.py`. |
 | `deploy/` | systemd service files and their installer; MQTT broker config. |
@@ -97,6 +129,7 @@ been removed. It is still in the git history.
 | **Control › Remote Control** | Switch the fan, heater, light and water on or off. |
 | **Settings › App Settings** | Choose °C or °F, date and time formats, and time zone. |
 | **Settings › Greenhouse Settings** | Set the fan, heater and watering rules; revert or restore defaults. |
+| **Settings › Controllers** | Connect a controller to Wi-Fi (setup code and QR code) and update its software. |
 | **Settings › About / Help** | Background and usage notes. |
 
 ### On the device
@@ -106,7 +139,7 @@ been removed. It is still in the git history.
 - **Relay buttons 1–4:** toggle water, fan, heater or light. A quick double-press toggles spare
   relays 5–8.
 - **Screen button:** cycles through the relay status screens. Hold button 1 and press it to show
-  the device's IP address.
+  the device's IP address. Hold it while switching on to start the setup hotspot.
 
 ## What works today
 
@@ -119,11 +152,14 @@ been removed. It is still in the git history.
 | Server → device: commands move the relays | 🟡 Both sides now agree on the message format; not yet tried on the hardware |
 | Device → server: readings, relay changes and online status stored | 🟡 `services/ingest.py` built and tested end to end; not yet tried on the hardware |
 | Automation | ✅ Tested rules on the server; the controller runs the same rules itself when the network is down, and cuts the heater if its sensor fails |
-| Security | 🟡 Dashboard login and a locked-down broker config are ready to switch on (RUNBOOK); the old Wi-Fi password in git history still needs changing (SEC-01) |
+| Security | 🟡 Dashboard login and a locked-down broker (the installer sets both up); the old Wi-Fi password was scrubbed from git history but still needs changing (SEC-01) |
+| Installer, setup hotspot, updates over Wi-Fi | 🟡 Built and tested on a computer; not yet tried on the hardware |
 
 Details and fixes are in [docs/FINDINGS.md](docs/FINDINGS.md) and [docs/PLAN.md](docs/PLAN.md).
 
 ## Running it (quick reference)
+
+The installer does all of this. By hand:
 
 **Server.** From the `server/` folder, with the virtual environment active:
 
@@ -134,9 +170,13 @@ streamlit run app.py                     # web dashboard (http://localhost:8501)
 python -m services.weather_collector     # weather collector (leave running)
 python -m services.automation            # automation service (leave running)
 python -m services.ingest                # stores what the Pico sends (leave running)
+python -m services.firmware_server       # serves controller updates (leave running)
 ```
 
-On the always-on server (Linux), install all four as services that start at boot and restart
+On Windows or macOS, `python run_all.py` runs all of them (and the broker, if the installer set
+one up) and restarts any that stop.
+
+On the always-on server (Linux), install them all as services that start at boot and restart
 after a crash: `sudo venv/bin/python deploy/install_services.py --user <you> --enable`. Logs:
 `journalctl -u greenhouse-ingest -f`. Step-by-step setup is in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 

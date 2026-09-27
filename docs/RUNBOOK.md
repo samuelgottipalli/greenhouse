@@ -5,6 +5,11 @@ the Pico W controller. Work through the steps in order. Each ends with a **Check
 run; don't move on until it passes. The [sign-off checklist](#9-sign-off-checklist) at the end
 records the hardware checks the plan still needs (PLAN 1.6, 1.7, 2.2; FINDINGS P-03).
 
+**Easier:** the installer (`setup.bat` / `sh setup.sh`, see the README's *Getting started*) does
+steps 1–7 for you. Use this runbook to do them by hand, or to find out what the installer did,
+and use steps 8–9 for the hardware checks either way. The [setup hotspot](#setup-hotspot-wi-fi-from-a-phone)
+and [updates over Wi-Fi](#updating-the-controller-over-wi-fi) are described at the end.
+
 Commands marked **server$** run on the always-on Linux machine (e.g. a Raspberry Pi). Commands
 marked **pc$** run on the computer the Pico is plugged into by USB. They can be the same machine.
 
@@ -46,7 +51,7 @@ server$ ../venv/bin/python -m scripts.set_password
 If you are moving an existing `greenhouse.db`, copy it to `server/data/greenhouse.db` **before**
 running `upgrade_db`. It is backed up and upgraded in place.
 
-**Check:** `upgrade_db` prints `Created …` or `… already at schema version 3`. Run
+**Check:** `upgrade_db` prints `Created …` or `… already at schema version 6`. Run
 `../venv/bin/python -m streamlit run app.py`, open `http://<server-ip>:8501`, log in, and see the
 Home page (Controller: Unknown). Stop it with Ctrl+C; step 4 runs it as a service.
 
@@ -102,13 +107,13 @@ server$ sudo venv/bin/python deploy/install_services.py --user $USER --enable
 server$ systemctl status 'greenhouse-*'
 ```
 
-This installs and starts `greenhouse-ingest`, `greenhouse-automation`, `greenhouse-weather` and
-`greenhouse-web`. Each restarts 5 s after a crash and starts at boot. It also enables two timers:
+This installs and starts `greenhouse-ingest`, `greenhouse-automation`, `greenhouse-weather`,
+`greenhouse-firmware` (controller updates, port 8081) and `greenhouse-web`. Each restarts 5 s after a crash and starts at boot. It also enables two timers:
 `greenhouse-alerts.timer` (alert check every 2 minutes, see [Alerts](#alerts)) and
 `greenhouse-retention.timer`, which rolls readings older than 90 days into hourly averages every
 night at 03:30. Logs: `journalctl -u greenhouse-ingest -f`.
 
-**Check:** all four are `active (running)`, and `systemctl list-timers greenhouse-retention.timer`
+**Check:** all five are `active (running)`, and `systemctl list-timers greenhouse-retention.timer`
 shows the next 03:30 run. The ingest log shows `Connected to localhost:1883`
 and no `not authorised`. Within 15 minutes the Weather Data page shows today's weather.
 
@@ -147,9 +152,13 @@ pc$ python picoside/setup_config.py
 | Time zone | e.g. `America/Los_Angeles` |
 
 This writes `picoside/device/config.json`, which is git-ignored and never committed. For the
-first power-up only, open that file and set `"watchdog": false`. With the watchdog on, stopping
-the program from the REPL resets the board 8 seconds later, which makes debugging painful.
-Step 8 turns it back on.
+first power-up only, you may open that file and set `"watchdog": false`. The watchdog starts
+30 seconds after the main loop does; once it runs, stopping the program from the REPL resets the
+board 8 seconds later. `mpremote reset` followed by any `mpremote` command within 30 seconds is
+always safe. Step 8 turns it back on.
+
+Instead of this step you can let the controller set itself up from a phone: copy the code
+(step 7) without a `config.json`, and follow [Setup hotspot](#setup-hotspot-wi-fi-from-a-phone).
 
 ---
 
@@ -158,7 +167,7 @@ Step 8 turns it back on.
 ```bash
 pc$ cd picoside/device
 pc$ mpremote cp -r . :
-pc$ mpremote ls :            # main.py, controller.py, net.py, ..., config.json, lib/
+pc$ mpremote ls :            # boot.py, main.py, controller.py, ..., config.json, lib/
 pc$ mpremote reset
 pc$ mpremote repl            # watch the console; Ctrl+] to leave
 ```
@@ -222,7 +231,7 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 
 - [ ] 0: Wi-Fi password changed (SEC-01)
 - [ ] 2: anonymous MQTT refused
-- [ ] 4: four services running and surviving `sudo reboot`; Home shows all services **OK**
+- [ ] 4: five services running and surviving `sudo reboot`; Home shows all services **OK**
 - [ ] 4: `sudo systemctl kill -s STOP greenhouse-automation` (freeze it): within ~2 min the watchdog restarts it and Home shows it OK again
 - [ ] 7: device boots to `OK`; status and telemetry seen on the broker
 - [ ] 8a–b: Home Online/Fresh; indoor values match the LCD
@@ -238,6 +247,9 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 - [ ] ⏳ 7 days: no hang or reboot loop, with at least one Wi-Fi outage; `telemetry_report --hours 168` at 99 % or more (PLAN 3.2; simulated in `tests/picoside/test_soak.py`)
 - [ ] ⏳ Next morning: `journalctl -u greenhouse-retention` shows a successful 03:30 run (PLAN 3.4)
 - [ ] Alerts: test alert received on phone/email and resolved (PLAN 4.6)
+- [ ] Installer: a fresh computer set up with `setup.bat` / `setup.sh` only; controller online (PLAN 5.5)
+- [ ] Setup hotspot: Wi-Fi changed from a phone; a wrong password brings the hotspot back (PLAN 5.1)
+- [ ] Update over Wi-Fi: *Update controller* installs a changed file; a deliberately broken file rolls back after 3 restarts (PLAN 5.3)
 - [ ] Watchdog re-enabled; loads reconnected
 
 Check 24 hours of telemetry on the server (exit code 0 means at least 99 % arrived):
@@ -255,7 +267,7 @@ What watches what, and how often:
 
 | Where | Check | Interval | What happens |
 |---|---|---|---|
-| Pico | Hardware watchdog | fed every loop (~100 ms) | If the program hangs for 8 s the board resets |
+| Pico | Hardware watchdog | fed every loop (~100 ms), from 30 s after start | If the program hangs for 8 s the board resets |
 | Pico | Wi-Fi / MQTT link | every loop | Reconnects with backoff from 2 s up to 5 min |
 | Pico | MQTT keep-alive | ping every 2 min; keep-alive 5 min | No reply from the broker for 5 min: the Pico reconnects. If the Pico goes silent, the broker publishes its `offline` status after ~7.5 min |
 | Pico | Sensors | read every 60 s; safety checked every loop | No good DHT22 reading for 5 min: heater off |
@@ -354,6 +366,51 @@ after 60 s without a button press. Things to know before moving off mains power:
 - Measure the real current with a USB power meter, once on mains with the defaults, before
   sizing a battery. These figures are typical values, not measurements of this board.
 
+## Setup hotspot (Wi-Fi from a phone)
+
+The controller can take its Wi-Fi and server settings from a phone, like most smart-home gadgets
+(`picoside/device/provision.py`). It starts setup mode:
+
+- by itself when it has no Wi-Fi or server settings (a new controller);
+- when you **hold the screen button while switching it on** (until the screen says setup);
+- by itself when newly saved Wi-Fi settings don't work on the first try.
+
+A router outage never starts setup mode: the controller keeps running its rules and retrying.
+
+1. The LCD shows `SETUP: join WiFi`, the network name (`GreenhouseSetup-XXXX`), a password and
+   `then open 192.168.4.1`.
+2. Join that network with your phone. Most phones then open the setup page by themselves; if not,
+   browse to `http://192.168.4.1`.
+3. On the dashboard (another device, or before you switch networks) open **Settings ›
+   Controllers**. Scan its QR code with the phone (the setup page opens with the code filled in),
+   or copy the **setup code** into the page. The code holds the server's address and this
+   controller's broker login; without one, open *Enter the server details* and type them.
+4. Pick your Wi-Fi network (2.4 GHz), type its password, check the time zone and tap **Save and
+   connect**. The controller restarts and joins.
+
+The setup page never shows saved passwords; leaving a password field empty keeps the saved one.
+Setup mode started with the button gives up after 15 minutes and restarts with the old settings.
+The setup code contains the controller's broker password, so don't share it.
+
+## Updating the controller over Wi-Fi
+
+When the code in `picoside/device/` changes (after the installer's **Update**, or `git pull`), the
+dashboard's **Settings › Controllers** page shows **Update available** and the Home page says so.
+Press **Update controller** while the controller is online:
+
+1. The server sends a list of files with checksums (`firmware/update`, docs/MQTT.md).
+2. The controller shows `Updating the controller's software`, downloads only the files that
+   changed from the `greenhouse-firmware` service, and checks every checksum. Any problem: it
+   reports `failed` and nothing changes.
+3. It swaps the files in and restarts. When the new version reaches the broker it is kept, and the
+   page shows **Updated**.
+4. If the new version keeps crashing (3 restarts) or can't reach the broker for 10 minutes,
+   `boot.py` puts the old files back and the page shows the update was undone.
+
+`boot.py` and `main.py` are never changed over Wi-Fi; copy them by USB if they ever change.
+Controllers need to reach the server on port **8081** (and 1883 for the broker); allow both in the
+server's firewall.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -374,6 +431,13 @@ after 60 s without a button press. Things to know before moving off mains power:
 | Heater switches off by itself | The controller's sensor gave no reading for 5 min (safety cut-off), or server readings are over 15 min old | Check the DHT22 wiring; get telemetry flowing again |
 | LCD shows `LOCAL` | MQTT has been down for over 2 min, so the controller is running the rules itself | Normal during outages; fix the link (see `NoMQTT`). Check `settings.json` exists on the Pico (`mpremote ls :`) |
 | Remote Control switches are greyed out | The controller reported offline | Wait for it to reconnect; it is running its own rules meanwhile |
+| No `GreenhouseSetup-…` network appears | The controller isn't in setup mode | Hold the screen button from before power-on until the screen says setup; a controller with working settings starts normally otherwise |
+| Phone won't stay on the setup network ("no internet") | The phone prefers networks with internet | Choose *Stay connected* / *Use without internet*, then browse to `http://192.168.4.1` |
+| Setup page: "setup code wasn't recognised" | The code was cut short when copying | Copy it again from **Settings › Controllers**, or scan the QR code |
+| Controllers page: *Update controller* greyed out | The controller is offline, or the server's address is unknown | Wait until it's online; set `PUBLIC_HOST` in `server/.env` |
+| Update shows **failed** | The controller couldn't download from port 8081, or a file was damaged | Check `greenhouse-firmware` is running and port 8081 is open; press Update again |
+| Update was **undone** | The new version didn't start properly | Nothing to do on the controller (it runs the old version); report the problem |
+| Installer: *No controller found* | Charge-only cable, or a new Pico not in BOOTSEL mode | Use a data cable; hold BOOTSEL while plugging in a new Pico |
 | Dashboard asks for a password you don't know | `APP_PASSWORD_HASH` set in `.env` | Run `python -m scripts.set_password` again and restart `greenhouse-web` |
 
 ## Rolling back
@@ -385,6 +449,6 @@ after 60 s without a button press. Things to know before moving off mains power:
 - **Restore:** stop everything (`sudo systemctl stop 'greenhouse-*'`), delete `greenhouse.db-wal`
   and `greenhouse.db-shm` if present, copy the backup over `greenhouse.db`, then start the services
   again.
-- **Services:** `sudo systemctl disable --now greenhouse-ingest greenhouse-automation greenhouse-weather greenhouse-web`.
+- **Services:** `sudo systemctl disable --now greenhouse-ingest greenhouse-automation greenhouse-weather greenhouse-firmware greenhouse-web`.
 - **Controller:** relays default to off at boot. To stop the program entirely, `mpremote rm :main.py`
   (copy it back later with `mpremote cp main.py :`).

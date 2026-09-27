@@ -15,7 +15,7 @@ robustness, then new features. Each step says:
   Anything that needs real hardware gets a short manual check listed under "Done when".
 - One step per branch or PR, so each can be reviewed and reverted on its own.
 
-**Status (2026-09-26, after Phase 4):** 563 tests pass (plus one Linux-only test that CI runs) and no `known_bug` tests remain.
+**Status (2026-09-27, after Phase 5):** 810 tests pass (plus one Linux-only test that CI runs) and no `known_bug` tests remain.
 The controller runs the automation rules itself when the network is down (P-15). Both
 directions of the device/server contract are tested end to end; what's left is confirming it on the
 hardware ([RUNBOOK.md](RUNBOOK.md)).
@@ -113,7 +113,7 @@ update the controller's code without a USB cable.
 | 5.3 ✅ | **Over-the-air updates.** The server publishes a manifest (file list with SHA-256) of `picoside/device/`. The new `greenhouse-firmware` service serves the files over HTTP on the LAN. The dashboard shows *Update available* and an **Update controller** button. The controller downloads only the changed files, checks every hash, swaps them in, and restarts. The new code must reach the broker within 10 minutes and 3 restarts, or `boot.py` puts the old files back. Status goes on `greenhouse/<id>/firmware`; schema v6 stores it. | (feature) | Tests: good update, a corrupt download (nothing changes), a crash-looping update rolls back, a hung update rolls back, and the server's manifest matches what the device installs. | 3 d |
 | 5.4 ✅ | **One-command server** (`server/run_all.py`) for Windows and macOS: runs the web app, services, broker and scheduled jobs, and restarts any that stop. Linux keeps systemd. | (usability) | Tests with stand-in processes: crash → restart with backoff; jobs run on schedule; clean shutdown. | 1 d |
 | 5.5 ✅ | **Desktop installer** (`setup.bat` / `setup.sh` → PySide6 wizard): installs the packages, asks for location, time zone and dashboard password, installs and locks down Mosquitto (creating passwords), creates the database, starts the services (systemd on Linux, log-in start on Windows/macOS), then sets up the Pico over USB: installs MicroPython if needed, writes Wi-Fi settings (defaulting to this computer's network, warning about 5 GHz), copies the code and waits for the controller to come online. | (usability) | Logic tests for every step (env file, commands per OS, broker files, Pico file list, Wi-Fi detection); GUI smoke test runs offscreen in CI. | 4 d |
-| 5.6 | Docs: a short *Quick start* for the installer and hotspot, RUNBOOK kept as the manual/advanced path, in-app Help updated. | (docs) | Docs tests check every referenced file and command exists. | 0.5 d |
+| 5.6 ✅ | Docs: a short *Quick start* for the installer and hotspot, RUNBOOK kept as the manual/advanced path, in-app Help updated. | (docs) | Docs tests check every referenced file and command exists. | 0.5 d |
 
 ---
 
@@ -128,6 +128,6 @@ update the controller's code without a USB cable.
 | 2 | 2.1–2.4 ✅ | 2.2 on-hardware check in the RUNBOOK sign-off. Added: controller local mode and sensor-fault heater cut-off (P-15), relay-state resync (P-14), send-before-log (S-19/S-20) |
 | 3 | 3.1–3.4 ✅ | 3.2: 7-day soak simulated in tests; the on-hardware run is in the RUNBOOK sign-off. 3.3: heartbeats + systemd watchdog. 3.4: 2.6 MB/device/year measured |
 | 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
-| 5 | Planned 2026-09-27 | Easy setup (installer, hotspot) and over-the-air updates |
+| 5 | 5.1–5.6 ✅ | Installer (`setup.bat`/`setup.sh`), setup hotspot, setup codes, updates over Wi-Fi, `run_all.py`. On-hardware checks are in the RUNBOOK sign-off |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

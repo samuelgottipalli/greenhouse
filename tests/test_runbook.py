@@ -21,6 +21,17 @@ def test_repo_paths_exist():
     assert missing == []
 
 
+def test_readme_paths_exist():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    for path in ("setup.bat", "setup.sh", "installer/", "server/run_all.py", "docs/RUNBOOK.md"):
+        assert path in readme and (REPO_ROOT / path.rstrip("/")).exists(), path
+
+
+def test_every_service_unit_is_named_in_the_runbook():
+    for unit in (REPO_ROOT / "deploy" / "systemd").glob("*.service"):
+        assert unit.stem in RUNBOOK, unit.stem
+
+
 def test_python_modules_exist():
     for module in set(re.findall(r"-m ((?:scripts|services)\.\w+)", RUNBOOK)):
         assert (SERVER_DIR / (module.replace(".", "/") + ".py")).exists(), module
@@ -30,7 +41,8 @@ def test_python_modules_exist():
     "message",
     ["Connecting to WiFi...", "WiFi connected. Syncing clock...", "Connecting to MQTT...",
      "WiFi unavailable, will retry.", "Clock not set", "IP address:", "NoMQTT", "NoWiFi",
-     "No Wi-Fi SSID set", "No MQTT broker set", "MQTT connect failed", "LOCAL"],
+     "No Wi-Fi SSID set", "No MQTT broker set", "MQTT connect failed", "LOCAL",
+     "SETUP: join WiFi", "GreenhouseSetup-", "then open ", "Updating the controller's software"],
 )
 def test_lcd_and_console_messages_exist(message):
     assert message in RUNBOOK
