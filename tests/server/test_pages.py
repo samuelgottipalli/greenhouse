@@ -53,13 +53,6 @@ def test_weather_page_shows_latest_reading(seeded_db):
     assert {"Sunrise \U0001f305", "Temperature", "Humidity", "Wind Speed"} <= set(labels)
 
 
-def test_weather_page_empty_table_renders_nothing(seeded_db):
-    build_db(TEST_DB_PATH, weather_rows=0)
-    at = run_page("views/weather.py")
-    assert not at.exception
-    assert [m.label for m in at.metric] == ["Date", "Time"]
-
-
 @pytest.fixture
 def published(monkeypatch):
     """Capture relay commands instead of sending them to a broker."""
@@ -184,27 +177,41 @@ def test_control_page_without_relays_shows_error(seeded_db, db_conn):
     assert "not found" in at.error[0].value
 
 
-# --- Known bugs (see docs/FINDINGS.md). Remove the marker when fixed. -----
-
-
-@pytest.mark.known_bug
-@pytest.mark.xfail(strict=True, reason="S-04: weather page crashes when the latest reading is not from today")
 def test_weather_page_handles_no_data_today(seeded_db):
+    # Formerly known bug S-04: crashed when the latest reading was not from today.
     build_db(TEST_DB_PATH, weather_days_ago=1)
-    assert not run_page("views/weather.py").exception
+    at = run_page("views/weather.py")
+    assert not at.exception
+    assert "No weather readings yet today" in at.info[0].value
 
 
-@pytest.mark.known_bug
-@pytest.mark.xfail(strict=True, reason="S-04: weather page needs two readings today to compute deltas")
 def test_weather_page_handles_single_reading_today(seeded_db):
+    # Formerly known bug S-04: deltas needed two readings.
     build_db(TEST_DB_PATH, weather_rows=1)
-    assert not run_page("views/weather.py").exception
+    at = run_page("views/weather.py")
+    assert not at.exception
+    temperature = next(m for m in at.metric if m.label == "Temperature")
+    assert temperature.value == "50.0 °F"  # 10 C in the default US units
 
 
-@pytest.mark.known_bug
-@pytest.mark.xfail(strict=True, reason="S-05: wind from 348.75-360 deg maps to compass index 16 (KeyError)")
 def test_weather_page_handles_north_wind(seeded_db):
+    # Formerly known bug S-05: 348.75-360 degrees gave compass index 16.
     build_db(TEST_DB_PATH, wind_direction=350)
-    assert not run_page("views/weather.py").exception
+    at = run_page("views/weather.py")
+    assert not at.exception
+    assert next(m for m in at.metric if m.label == "Wind Direction").value.endswith("- N")
 
 
+def test_weather_page_us_values(seeded_db):
+    # Latest fixture row: 10 C, apparent 8 C, 0.2 mm precipitation, 5 km/h.
+    at = run_page("views/weather.py")
+    value = {m.label: m.value for m in at.metric}
+    assert value["Temperature"] == "50.0 °F"
+    assert value["Precipitation"] == "0.01 in"
+    assert value["Wind Speed"] == "3.11 mph"
+
+
+def test_weather_page_empty_table_says_so(seeded_db):
+    build_db(TEST_DB_PATH, weather_rows=0)
+    at = run_page("views/weather.py")
+    assert "No weather readings yet" in at.info[0].value

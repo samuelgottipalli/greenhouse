@@ -32,9 +32,9 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | S-06 | Critical | Server | Automation loop bugs: heater commands go to the fan, conflicting fan logic, busy loop | Test + Code | Open: ported unchanged, defects marked in the code |
 | S-02 | High | Server | Saving settings stores `HH:MM:SS`; the automation service then crashes parsing `HH:MM` | Test | **Fixed**: schema stores `HH:MM` and whole minutes |
 | S-03 | High | Web | First toggle after page load sends the opposite command | Test | **Fixed**: the callback reads the new toggle value and time when clicked; toggles always show the logged state |
-| S-04 | High | Web | Weather page crashes if there are fewer than two readings for today | Test | Open |
-| S-05 | High | Web | Weather page crashes when wind is from 348.75-360 degrees | Test | Open |
-| S-07 | High | Web | Weather unit conversions are wrong (apparent temp, precipitation, snowfall) | Code | Open |
+| S-04 | High | Web | Weather page crashes if there are fewer than two readings for today | Test | **Fixed**: shows "no readings yet today" with the last reading time; deltas and charts only with two or more readings |
+| S-05 | High | Web | Weather page crashes when wind is from 348.75-360 degrees | Test | **Fixed**: compass lookup via `degrees_to_compass_index` (wraps 360° to N) |
+| S-07 | High | Web | Weather unit conversions are wrong (apparent temp, precipitation, snowfall) | Code | **Fixed**: all conversions in `core/weather_report.py` using the tested `conversions.py` helpers |
 | P-04 | Medium | Pico | Blocking work inside button handlers (10 s sleep); LCD written from two contexts | Code | **Fixed**: handlers only queue events; the loop does the work |
 | P-05 | Medium | Pico | No Wi-Fi reconnect, no watchdog, readings dropped while offline | Code | **Fixed**: backoff reconnect, watchdog, 48-message outbox, keep-alive and last will |
 | P-06 | Medium | Pico | Button presses change relays without telling the server | Code | **Fixed**: every change publishes a retained state message |

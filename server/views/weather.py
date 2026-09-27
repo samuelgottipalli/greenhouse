@@ -16,7 +16,8 @@ from pandas import DataFrame, to_datetime
 from streamlit.delta_generator import DeltaGenerator
 
 from core import db
-from core.weather_codes import weather_code_descr, wind_direction_descr
+from core.weather_codes import weather_code_descr
+from core.weather_report import to_display_units, wind_label
 from ui import display_zone, page_setup
 
 page_setup("Weather Data", layout="wide")
@@ -27,23 +28,27 @@ TIME_COLUMNS = ["measured_utc", "sunrise_utc", "sunset_utc"]
 
 def metric_with_delta(column, label: str, data: DataFrame, field: str, unit: str) -> None:
     """
-    Show the latest value of a field with its change since the previous reading.
+    Show the latest value of a field, with the change since the previous
+    reading and a sparkline when there is more than one reading.
 
     Args:
         column (DeltaGenerator): Streamlit column to draw in.
         label (str): Card title.
-        data (DataFrame): Today's readings, oldest first.
+        data (DataFrame): Today's readings, oldest first (at least one row).
         field (str): Column to show.
         unit (str): Unit label appended to the value and delta.
     """
-    latest, previous = data.iloc[-1][field], data.iloc[-2][field]  # S-04: needs 2 rows
+    latest = data.iloc[-1][field]
+    delta = None
+    if len(data) > 1:
+        delta = f"{round(latest - data.iloc[-2][field], 2)} {unit}"
     column.metric(
         label=label,
         value=f"{latest} {unit}",
-        delta=f"{round(latest - previous, 2)} {unit}",
+        delta=delta,
         delta_color="off",
         border=True,
-        chart_data=data[[field]],
+        chart_data=data[[field]] if len(data) > 1 else None,
     )
 
 
@@ -54,67 +59,59 @@ def get_weather_data(weathertoast: DeltaGenerator) -> None:
 
     Runs as a fragment that re-executes every 15 minutes. Reads the most
     recent 216 rows (about 2 days at 15-minute intervals), converts times from
-    UTC to the chosen zone, keeps today's rows and converts units.
+    UTC to the chosen zone, keeps today's rows and converts units. With no
+    readings for today it says so and shows when the last reading was taken.
 
     Args:
         weathertoast (DeltaGenerator): Toast used to report progress.
 
     Raises:
-        ValueError: If loading or rendering fails, including when there are
-            fewer than two readings for today.
+        ValueError: If loading or rendering fails unexpectedly.
     """
     zone = display_zone()
     current_date = dtt.now(tz=zoneinfo.ZoneInfo(zone)).date()
     units = db.unit_labels(st.session_state["units"])
+    time_format = "%I:%M %p" if st.session_state["time_format"] == "12-hour" else "%H:%M"
 
     try:
         data = db.recent_weather(limit=216)
         weathertoast.toast("Weather data fetched from DB", icon=":material/thumb_up:")
         if data is None:
+            st.info("No weather readings yet. Is the weather collector running?")
             return
         for column in TIME_COLUMNS:
             data[column] = to_datetime(data[column]).dt.tz_localize("UTC").dt.tz_convert(zone)
+        last_reading = data["measured_utc"].max()
         data = data[data["measured_utc"].dt.date == current_date].sort_values(by="measured_utc")
+        if data.empty:
+            st.info(
+                "No weather readings yet today. The last one was taken "
+                f"{last_reading.strftime('%Y-%m-%d ' + time_format)}. Is the weather collector running?"
+            )
+            return
 
-        # S-07: apparent temperature and the US rain/snow factors are wrong.
-        if st.session_state["units"] == "SI":
-            data["rain_mm"] = round(data["rain_mm"] / 10, 2)
-            data["showers_mm"] = round(data["showers_mm"] / 10, 2)
-            data["precipitation_mm"] = round(data["precipitation_mm"] / 10, 2)
-        else:
-            data["temperature_c"] = round((data["temperature_c"] * 9 / 5) + 32, 2)
-            data["apparent_temperature_c"] = round((data["temperature_c"] * 9 / 5) + 32, 2)
-            data["rain_mm"] = round(data["rain_mm"] / 10 / 2.94, 2)
-            data["showers_mm"] = round(data["showers_mm"] / 10 / 2.94, 2)
-            data["precipitation_mm"] = round(data["precipitation_mm"] / 10 / 2.94, 2)
-            data["snowfall_cm"] = round(data["snowfall_cm"] / 2.94, 2)
-            data["wind_speed_kmh"] = round(data["wind_speed_kmh"] / 1.609, 2)
-
-        time_format = "%I:%M %p" if st.session_state["time_format"] == "12-hour" else "%H:%M"
+        data = to_display_units(data, st.session_state["units"])
         for column in TIME_COLUMNS:
             data[column] = data[column].dt.strftime(time_format)
 
         weathertoast.toast(body="Loading charts...", icon=":material/hourglass:")
         with st.container(border=True, horizontal=True):
             left, middle, right = st.columns(3)
-            latest = data.iloc[-1]  # S-04: fails when there are no readings today
-            left.metric(label="Sunrise \U0001f305", value=str(latest["sunrise_utc"]), border=True)
-            middle.metric(label="Sunset \U0001f307", value=str(latest["sunset_utc"]), border=True)
+            latest = data.iloc[-1]
+            left.metric(label="Sunrise 🌅", value=str(latest["sunrise_utc"]), border=True)
+            middle.metric(label="Sunset 🌇", value=str(latest["sunset_utc"]), border=True)
             metric_with_delta(left, "Temperature", data, "temperature_c", units["temperature"])
             metric_with_delta(middle, "Humidity", data, "relative_humidity_pct", units["humidity"])
-            weathercode = latest["weather_code"]
-            if weathercode in weather_code_descr:
-                right.metric(label="Weather", value=weather_code_descr[weathercode], border=True)
-            else:
-                st.metric(label="Weather", value="Unknown", border=True)
+            right.metric(
+                label="Weather",
+                value=weather_code_descr.get(int(latest["weather_code"]), "Unknown"),
+                border=True,
+            )
             metric_with_delta(right, "Precipitation", data, "precipitation_mm", units["distance_short"])
             metric_with_delta(left, "Wind Speed", data, "wind_speed_kmh", units["speed"])
-            direction = latest["wind_direction_deg"]
             right.metric(
                 label="Wind Direction",
-                # S-05: 348.75-360 degrees gives key 16, which does not exist.
-                value=f"{direction} {units['direction']} - "
-                + wind_direction_descr[round(direction / 22.5, 0)].get("short"),
+                value=wind_label(latest["wind_direction_deg"], units["direction"]),
                 border=True,
             )
             right.metric(label="Data last updated at", value=str(latest["measured_utc"]))
