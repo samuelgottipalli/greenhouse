@@ -14,6 +14,7 @@ from datetime import datetime
 from time import sleep
 
 from core import db
+from core.health import Heartbeat
 from core.weather_api import clean_data, fetch_weather
 
 log = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ def slot_start(moment: datetime) -> datetime:
     return moment.replace(minute=moment.minute - moment.minute % SLOT_MINUTES, second=0, microsecond=0)
 
 
-def run(now=datetime.now, pause=sleep, max_passes: int | None = None) -> None:
+def run(now=datetime.now, pause=sleep, max_passes: int | None = None, heartbeat: Heartbeat | None = None) -> None:
     """
     Collect once per slot, forever (or for ``max_passes`` loop passes).
 
@@ -54,8 +55,12 @@ def run(now=datetime.now, pause=sleep, max_passes: int | None = None) -> None:
         now (callable): Returns the current time (injected in tests).
         pause (callable): Sleeps for a number of seconds (injected in tests).
         max_passes (int | None): Stop after this many passes; None runs forever.
+        heartbeat (Heartbeat | None): Defaults to ``Heartbeat("weather")``;
+            unhealthy while the latest slot could not be stored.
     """
+    heartbeat = heartbeat or Heartbeat("weather")
     last_slot = None
+    last_ok = True
     passes = 0
     while max_passes is None or passes < max_passes:
         passes += 1
@@ -68,6 +73,8 @@ def run(now=datetime.now, pause=sleep, max_passes: int | None = None) -> None:
                 pause(RETRY_SECONDS)
                 stored = collect_once()
             log.info("Slot %s stored: %s", slot, stored)
+            last_ok = stored
+        heartbeat.beat(last_ok, "latest slot stored" if last_ok else "latest slot failed")
         pause(POLL_SECONDS)
 
 

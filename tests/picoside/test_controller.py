@@ -57,6 +57,9 @@ class FakeNet:
     def ip_address(self):
         return "192.168.1.50" if self.wifi_ok else None
 
+    def rssi(self):
+        return -61 if self.wifi_ok else None
+
     def of(self, suffix):
         return [p for s, p, _ in self.published if s == suffix]
 
@@ -132,7 +135,7 @@ def test_first_tick_reads_and_publishes(ctl):
     (telemetry,) = ctl.net.of("telemetry")
     assert telemetry == {
         "device_id": 1, "ts_utc": "2026-09-26 19:00:00", "temperature_c": 21.5,
-        "humidity_pct": 45.0, "light_raw": 30000, "relays": [0] * 8, "uptime_s": 0,
+        "humidity_pct": 45.0, "light_raw": 30000, "relays": [0] * 8, "uptime_s": 0, "mem_free": None, "rssi_dbm": -61,
     }
 
 

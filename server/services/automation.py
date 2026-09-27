@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 from core import db, settings
 from core.automation import Reading, RelayState, decide, device_settings
+from core.health import Heartbeat
 from core.mqtt import publish_device_settings, publish_relay_command
 from core.timeutil import parse_utc_timestamp
 
@@ -131,22 +132,30 @@ def run_once(now: datetime | None = None, device_id: int = settings.DEVICE_ID) -
     return sent
 
 
-def main(pause=sleep, max_passes: int | None = None) -> None:
+def main(pause=sleep, max_passes: int | None = None, heartbeat: Heartbeat | None = None) -> None:
     """
     Run the automation loop.
+
+    A heartbeat is recorded after each pass that completes; a pass that
+    raises does not beat, so repeated failures show as "down" and the
+    systemd watchdog restarts the service.
 
     Args:
         pause (callable): Sleep function (injected in tests).
         max_passes (int | None): Stop after this many passes; None runs forever.
+        heartbeat (Heartbeat | None): Defaults to ``Heartbeat("automation")``.
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    heartbeat = heartbeat or Heartbeat("automation")
     passes = 0
     while max_passes is None or passes < max_passes:
         passes += 1
         try:
-            run_once()
+            sent = run_once()
         except Exception:
             log.exception("Automation pass failed")
+        else:
+            heartbeat.beat(True, f"{len(sent)} changes last pass")
         pause(POLL_SECONDS)
 
 

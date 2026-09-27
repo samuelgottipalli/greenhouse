@@ -18,6 +18,8 @@ System status at a glance:
 *   **Controller:** Online or Offline, as last reported by the greenhouse controller.
 *   **Greenhouse readings:** Fresh, or Stale if the latest reading is more than 15 minutes old.
 *   **Relays:** each device's last recorded state and who set it (web, auto or device).
+*   **Controller details:** when it last sent a message, how long it has been running, Wi-Fi signal (good, fair or weak) and free memory.
+*   **Services:** the three background services (ingest, automation, weather) show OK, Degraded (running but with a problem, e.g. the MQTT broker is unreachable) or Down (silent for 2 minutes). Down services are restarted automatically.
 
 ### Reports › Weather Data
 

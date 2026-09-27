@@ -1,4 +1,4 @@
--- Greenhouse database schema, version 3.
+-- Greenhouse database schema, version 4.
 --
 -- Conventions
 --   * Tables are STRICT: SQLite rejects values of the wrong type (needs SQLite >= 3.37).
@@ -98,12 +98,17 @@ CREATE TABLE weather_readings (
     sunset_utc             TEXT
 ) STRICT;
 
--- Latest online/offline status per device, from its MQTT status topic.
+-- Latest online/offline status per device (MQTT status topic) and its health
+-- as last reported in telemetry.
 CREATE TABLE device_status (
-    device_id   INTEGER PRIMARY KEY REFERENCES devices (device_id) ON DELETE CASCADE,
-    status      TEXT    NOT NULL CHECK (status IN ('online', 'offline')),
-    updated_utc TEXT    NOT NULL
-        CHECK (updated_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
+    device_id     INTEGER PRIMARY KEY REFERENCES devices (device_id) ON DELETE CASCADE,
+    status        TEXT    NOT NULL CHECK (status IN ('online', 'offline')),
+    updated_utc   TEXT    NOT NULL
+        CHECK (updated_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'),
+    last_seen_utc TEXT,
+    uptime_s      INTEGER,
+    mem_free      INTEGER,
+    rssi_dbm      INTEGER
 ) STRICT;
 
 -- Dashboard display preferences (units, formats, zone), shared by all sessions.
@@ -112,4 +117,13 @@ CREATE TABLE app_preferences (
     value TEXT NOT NULL
 ) STRICT;
 
-PRAGMA user_version = 3;
+-- Last sign of life from each background service (core/health.py).
+CREATE TABLE service_heartbeats (
+    service     TEXT PRIMARY KEY,
+    updated_utc TEXT NOT NULL
+        CHECK (updated_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'),
+    healthy     INTEGER NOT NULL DEFAULT 1 CHECK (healthy IN (0, 1)),
+    detail      TEXT NOT NULL DEFAULT ''
+) STRICT;
+
+PRAGMA user_version = 4;

@@ -129,6 +129,11 @@ class FakeWLAN:
         if self.connect_succeeds:
             self.connected = True
 
+    def status(self, param=None):
+        if param == "rssi":
+            return -58
+        return 3
+
     def ifconfig(self):
         return ("192.168.1.50", "255.255.255.0", "192.168.1.1", "8.8.8.8")
 

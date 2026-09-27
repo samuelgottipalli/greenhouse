@@ -60,3 +60,17 @@ def test_rendered_files_use_lf(tmp_path):
 def test_main_without_enable_prints_next_step(tmp_path, capsys):
     assert install_services.main(["--dest", str(tmp_path), "--user", "pi"]) == 0
     assert "systemctl enable --now greenhouse-ingest" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("unit", ["greenhouse-ingest", "greenhouse-automation", "greenhouse-weather"])
+def test_background_services_have_watchdog(installed, unit):
+    from core.health import STALE_AFTER_S
+
+    service = installed[unit]["Service"]
+    assert int(service["WatchdogSec"]) <= STALE_AFTER_S
+    assert service["NotifyAccess"] == "main"
+
+
+def test_web_has_no_watchdog(installed):
+    # Streamlit does not ping the watchdog, so it must not be killed for silence.
+    assert "WatchdogSec" not in installed["greenhouse-web"]["Service"]

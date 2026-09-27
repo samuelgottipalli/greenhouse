@@ -81,7 +81,7 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 |---|---|---|---|---|
 | 3.1 ✅ | DB layer: one engine per process (`st.cache_resource` in the app, a module-level engine in services), `st.cache_data(ttl=60)` for reads, a primary key and index on `relay_status(deviceid, relayid, actiontime)` plus an index on `greenhouse_data`, and replace the bare-column `GROUP BY`. | S-10 | `scripts/bench.py` with one year of synthetic data (about 105k telemetry rows and 50k relay rows) shows each page query at 50 ms or less and a warm full page render at 500 ms or less. | 1 d |
 | 3.2 🟡 | Pico robustness: `machine.WDT`, non-blocking Wi-Fi and MQTT reconnect with backoff, a ring buffer of the last 48 readings replayed on reconnect, button IRQs that only set flags, one shared `Display`, and `ticks_diff` everywhere. | P-04, P-05, P-07, P-08, P-09 | Firmware tests for the buffer and reconnect state machine; a 7-day soak with a 30-minute Wi-Fi outage each day shows no hang or reboot loop, and buffered readings arrive after reconnect. | 2 d |
-| 3.3 🟡 | Services: switch to `logging` with rotating files, add systemd units (or one supervisor script) for `ingest`, `automation` and `weather`, and have each write a heartbeat row. | S-14 | `systemctl kill` restarts the service within 10 s; the Home page shows each service's last heartbeat. | 4 h |
+| 3.3 ✅ | Services: switch to `logging` with rotating files, add systemd units (or one supervisor script) for `ingest`, `automation` and `weather`, and have each write a heartbeat row. | S-14 | `systemctl kill` restarts the service within 10 s; the Home page shows each service's last heartbeat. | 4 h |
 | 3.4 | Retention: nightly job that rolls telemetry older than 90 days into hourly averages. | (scale) | The database grows by 5 MB/year or less per device (measured on synthetic data). | 3 h |
 
 ---
@@ -91,7 +91,7 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | Step | Work | Fixes | Done when | Effort |
 |---|---|---|---|---|
 | 4.1 ✅ | Indoor dashboard (`greenhouse.py`): current temperature, humidity and light, plus 24 h / 7 d / 30 d history with high and low. Port the gauge and history ideas from the retired Dash app. | S-15 | Page test with fixture data; charts match the database values. | 1.5 d |
-| 4.2 🟡 | Home page: system status (device online, reading age, relay states, service heartbeats, active alerts). | S-15 | Page test covers the online, stale and offline states. | 1 d |
+| 4.2 ✅ | Home page: system status (device online, reading age, relay states, service heartbeats, active alerts). | S-15 | Page test covers the online, stale and offline states. | 1 d |
 | 4.3 ✅ | Manual override: per-relay `auto` / `manual until <time>` mode that the automation respects, reusing the Pico's `relay_modes`. | S-06 (5) | Automation tests: a manual toggle holds until expiry, then automation resumes. | 1 d |
 | 4.4 | Multiple devices: drive devices and relays from `devices`/`relays`, add a device selector, and remove the fixed relay IDs in `services/automation.py` and `views/control.py`. | S-11 | No device or relay IDs are hard-coded outside seed data; tests run with two devices. | 1.5 d |
 | 4.5 ✅ | Web login (Streamlit OIDC, or a reverse proxy with auth) and persistent per-user preferences in the database. | SEC-03, S-18 | Unauthenticated requests are redirected to login; preferences survive a browser restart. | 1 d |

@@ -12,15 +12,19 @@ subscribes to the device topics in docs/MQTT.md and writes:
   state differs from the last logged one (so echoes of web/automation
   commands and retained repeats are not duplicated).
 * ``<prefix>/<device>/status`` -> ``device_status`` (online/offline).
+  Telemetry also updates the device's health there (last seen, uptime, free
+  memory, Wi-Fi signal).
 
 The MQTT client reconnects on its own (1-60 s backoff).
 """
 import json
 import logging
+from time import sleep
 
 from paho.mqtt.client import CallbackAPIVersion, Client
 
 from core import db, settings
+from core.health import Heartbeat
 from core.timeutil import parse_utc_timestamp, utc_timestamp
 
 log = logging.getLogger(__name__)
@@ -32,6 +36,7 @@ TELEMETRY_MEASURES: dict[str, str] = {
     "light_raw": "light_raw",
 }
 SOURCES = ("auto", "web", "device")
+WATCH_SECONDS = 10
 
 
 def subscriptions(prefix: str = settings.MQTT_TOPIC_PREFIX) -> list[str]:
@@ -64,6 +69,13 @@ def valid_timestamp(value) -> str | None:
     except ValueError:
         return None
     return value
+
+
+def _int_or_none(value) -> int | None:
+    """Return an integer health value from a payload, or None if absent or not a number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
 
 
 def handle_message(topic: str, payload: bytes, received_utc: str,
@@ -107,6 +119,12 @@ def handle_message(topic: str, payload: bytes, received_utc: str,
             if isinstance(data.get(field), (int, float)) and not isinstance(data.get(field), bool)
         }
         stored = db.insert_sensor_readings(values, at, device_id=device_id)
+        db.update_device_health(
+            device_id, received_utc,
+            uptime_s=_int_or_none(data.get("uptime_s")),
+            mem_free=_int_or_none(data.get("mem_free")),
+            rssi_dbm=_int_or_none(data.get("rssi_dbm")),
+        )
         return f"telemetry from {device_id}: {stored} new readings"
 
     if len(rest) == 3 and rest[0] == "relay" and rest[2] == "state" and rest[1].isdigit():
@@ -153,7 +171,33 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     client = make_client()
     client.connect_async(settings.MQTT_HOST, settings.MQTT_PORT, keepalive=60)
-    client.loop_forever(retry_first_connection=True)
+    client.loop_start()
+    watch(client, Heartbeat("ingest"))
+
+
+def watch(client: Client, heartbeat: "Heartbeat", pause=sleep, max_passes: int | None = None) -> None:
+    """
+    Keep the service's heartbeat going while the MQTT network thread runs.
+
+    Healthy means connected to the broker. If the network thread dies the
+    heartbeat stops, and the systemd watchdog restarts the service.
+
+    Args:
+        client (Client): Started MQTT client.
+        heartbeat (Heartbeat): This service's heartbeat.
+        pause (callable): Sleep function (injected in tests).
+        max_passes (int | None): Stop after this many passes; None runs forever.
+    """
+    passes = 0
+    while max_passes is None or passes < max_passes:
+        passes += 1
+        thread = getattr(client, "_thread", None)
+        if thread is not None and not thread.is_alive():
+            log.error("MQTT network thread stopped")
+            return
+        connected = client.is_connected()
+        heartbeat.beat(connected, "connected" if connected else "broker unreachable")
+        pause(WATCH_SECONDS)
 
 
 if __name__ == "__main__":

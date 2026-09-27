@@ -125,6 +125,7 @@ def make_v2(path):
     conn = sqlite3.connect(path)
     conn.execute("DROP TABLE device_status")
     conn.execute("DROP TABLE app_preferences")
+    conn.execute("DROP TABLE service_heartbeats")
     conn.execute("UPDATE measures SET name = 'light_intensity', si_unit = 'lm', us_unit = 'lm' WHERE measure_id = 6")
     conn.execute("INSERT INTO sensor_readings VALUES (1, 6, '2026-01-01 00:00:00', 30000)")
     conn.execute("PRAGMA user_version = 2")
@@ -134,8 +135,8 @@ def make_v2(path):
 
 def test_upgrade_v2_to_v3(db_file):
     make_v2(db_file)
-    assert "from version 2 to 3" in migrations.upgrade(db_file)
-    assert query(db_file, "PRAGMA user_version") == [(3,)]
+    assert "from version 2 to 4" in migrations.upgrade(db_file)
+    assert query(db_file, "PRAGMA user_version") == [(4,)]
     assert query(db_file, "SELECT name, si_unit FROM measures WHERE measure_id = 6") == [("light_raw", "raw")]
     assert query(db_file, "SELECT count(*) FROM device_status") == [(0,)]
     assert query(db_file, "SELECT count(*) FROM app_preferences") == [(0,)]
@@ -162,3 +163,38 @@ def test_future_version_is_refused(db_file):
     conn.close()
     with pytest.raises(RuntimeError, match="unsupported schema version 99"):
         migrations.upgrade(db_file)
+
+
+def make_v3(path):
+    """Turn a fresh current database back into the version 3 layout, with one status row."""
+    migrations.upgrade(path)
+    conn = sqlite3.connect(path)
+    conn.execute("DROP TABLE service_heartbeats")
+    conn.execute("DROP TABLE device_status")
+    conn.execute(migrations.V3_DDL[0])
+    conn.execute("INSERT INTO device_status (device_id, status, updated_utc) VALUES (1, 'online', '2026-09-26 19:00:00')")
+    conn.execute("PRAGMA user_version = 3")
+    conn.commit()
+    conn.close()
+
+
+def test_upgrade_v3_to_v4_keeps_status(db_file):
+    make_v3(db_file)
+    assert "from version 3 to 4" in migrations.upgrade(db_file)
+    assert query(db_file, "PRAGMA user_version") == [(4,)]
+    assert query(db_file, "SELECT * FROM device_status") == [(1, "online", "2026-09-26 19:00:00", None, None, None, None)]
+    assert query(db_file, "SELECT count(*) FROM service_heartbeats") == [(0,)]
+
+
+def test_every_step_matches_fresh_schema(db_file, tmp_path):
+    """A database upgraded step by step has the same tables and columns as a new one."""
+    fresh = tmp_path / "fresh.db"
+    migrations.upgrade(fresh)
+    make_v2(db_file)
+    migrations.upgrade(db_file)
+
+    def layout(path):
+        tables = [r[0] for r in query(path, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
+        return {t: [(c[1], c[2], c[3]) for c in query(path, f"PRAGMA table_info({t})")] for t in tables}
+
+    assert layout(db_file) == layout(fresh)

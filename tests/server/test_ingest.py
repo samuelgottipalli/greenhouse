@@ -83,7 +83,8 @@ def test_bad_relay_state_is_ignored(seeded_db, bad):
 
 def test_status_is_stored(seeded_db):
     assert ingest.handle_message("greenhouse/1/status", b"offline", NOW) == "device 1 offline"
-    assert db.device_status() == {"status": "offline", "updated_utc": NOW}
+    status = db.device_status()
+    assert (status["status"], status["updated_utc"], status["uptime_s"]) == ("offline", NOW, None)
     ingest.handle_message("greenhouse/1/status", b"online", "2026-09-26 19:05:00")
     assert db.device_status()["status"] == "online"
 

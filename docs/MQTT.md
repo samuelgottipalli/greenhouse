@@ -33,7 +33,9 @@ sends them after reconnecting.
   "humidity_pct": 45.0,
   "light_raw": 30000,
   "relays": [0, 1, 0, 0, 0, 0, 0, 0],
-  "uptime_s": 86400
+  "uptime_s": 86400,
+  "mem_free": 142336,
+  "rssi_dbm": -61
 }
 ```
 
@@ -42,6 +44,10 @@ sends them after reconnecting.
 - `light_raw` is the uncalibrated 16-bit ADC reading from the light sensor
   (see FINDINGS P-10).
 - `relays` lists relays 1–8, where 1 means on.
+- `uptime_s`, `mem_free` (free heap in bytes) and `rssi_dbm` (Wi-Fi signal; closer to 0 is
+  stronger, below about -80 is weak) are the device's health. The ingest service keeps the
+  latest values in `device_status`, and the Home page shows them. `mem_free` and `rssi_dbm` may be
+  `null`.
 
 ## Relay state
 

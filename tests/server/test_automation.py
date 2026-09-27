@@ -146,7 +146,7 @@ def test_settings_retried_after_publish_failure(sent, monkeypatch):
 
 def test_automation_stands_back_while_controller_offline(sent, settings_sent, db_conn):
     add_reading(db_conn, 1, 5.0)  # cold: heater would switch on
-    db_conn.execute("INSERT INTO device_status VALUES (1, 'offline', '2025-10-22 22:41:00')")
+    db_conn.execute("INSERT INTO device_status (device_id, status, updated_utc) VALUES (1, 'offline', '2025-10-22 22:41:00')")
     db_conn.commit()
     assert automation.run_once(now=FRESH_NOW) == []
     assert sent == []

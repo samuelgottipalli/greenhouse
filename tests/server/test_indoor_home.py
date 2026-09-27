@@ -88,7 +88,7 @@ def test_indoor_page_without_readings(seeded_db, db_conn):
 
 def test_home_page_fresh_and_online(seeded_db, db_conn):
     add_recent_readings(db_conn)
-    db_conn.execute("INSERT INTO device_status VALUES (1, 'online', ?)", (utc_timestamp(),))
+    db_conn.execute("INSERT INTO device_status (device_id, status, updated_utc) VALUES (1, 'online', ?)", (utc_timestamp(),))
     db_conn.commit()
     at = run_page("views/home.py")
     assert not at.exception
@@ -100,7 +100,7 @@ def test_home_page_fresh_and_online(seeded_db, db_conn):
 
 
 def test_home_page_offline_and_stale(seeded_db, db_conn):
-    db_conn.execute("INSERT INTO device_status VALUES (1, 'offline', '2026-01-01 00:00:00')")
+    db_conn.execute("INSERT INTO device_status (device_id, status, updated_utc) VALUES (1, 'offline', '2026-01-01 00:00:00')")
     db_conn.commit()
     markdown = [m.value for m in run_page("views/home.py").markdown]
     assert ":red-badge[:material/error: Offline]" in markdown

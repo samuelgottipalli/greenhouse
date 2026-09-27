@@ -32,6 +32,7 @@ Every relay change, whatever its source, is published as a retained state
 message, and all eight states are re-published whenever the MQTT link comes
 up (boot or reconnect), so the server's view stays in step.
 """
+import gc
 import time
 
 import local_rules
@@ -259,6 +260,8 @@ class Controller:
             "light_raw": self.light,
             "relays": self.relays.states(),
             "uptime_s": self.uptime_ms // 1000,
+            "mem_free": gc.mem_free() if hasattr(gc, "mem_free") else None,
+            "rssi_dbm": self.net.rssi(),
         })
 
     # --- relays ----------------------------------------------------------

@@ -91,7 +91,7 @@ been removed. It is still in the git history.
 
 | Page | What you can do |
 |---|---|
-| **Home** | At a glance: controller online/offline, how fresh the greenhouse readings are, and each relay's state. |
+| **Home** | Health at a glance: controller online/offline with uptime, Wi-Fi signal and memory; how fresh the readings are; each relay's state; and whether the background services are OK. |
 | **Reports › Weather Data** | Today's outdoor weather, with small trend charts. |
 | **Reports › Greenhouse Weather** | Latest temperature, humidity and light inside the greenhouse, plus 24-hour, 7-day and 30-day history charts. |
 | **Control › Remote Control** | Switch the fan, heater, light and water on or off. |

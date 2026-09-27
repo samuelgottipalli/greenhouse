@@ -273,7 +273,7 @@ def test_control_failed_publish_is_not_logged(seeded_db, db_conn, monkeypatch):
 
 def test_control_disabled_while_controller_offline(seeded_db, db_conn):
     # S-20: commands to an offline controller are lost.
-    db_conn.execute("INSERT INTO device_status VALUES (1, 'offline', '2026-09-26 19:00:00')")
+    db_conn.execute("INSERT INTO device_status (device_id, status, updated_utc) VALUES (1, 'offline', '2026-09-26 19:00:00')")
     db_conn.commit()
     at = run_page("views/control.py")
     assert "controller is offline" in at.warning[0].value
@@ -281,7 +281,7 @@ def test_control_disabled_while_controller_offline(seeded_db, db_conn):
 
 
 def test_control_enabled_when_online(seeded_db, db_conn):
-    db_conn.execute("INSERT INTO device_status VALUES (1, 'online', '2026-09-26 19:00:00')")
+    db_conn.execute("INSERT INTO device_status (device_id, status, updated_utc) VALUES (1, 'online', '2026-09-26 19:00:00')")
     db_conn.commit()
     at = run_page("views/control.py")
     assert not at.warning

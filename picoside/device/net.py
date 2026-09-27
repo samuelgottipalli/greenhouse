@@ -88,6 +88,21 @@ class Network:
         """bool: True while Wi-Fi is connected."""
         return self.wlan.isconnected()
 
+    def rssi(self):
+        """
+        Return the Wi-Fi signal strength.
+
+        Returns:
+            int | None: dBm (e.g. -60; closer to 0 is stronger), or None when
+            Wi-Fi is down or the port cannot report it.
+        """
+        if not self.wifi_ok:
+            return None
+        try:
+            return int(self.wlan.status("rssi"))
+        except Exception:
+            return None
+
     def ip_address(self):
         """
         Return the device's IP address.

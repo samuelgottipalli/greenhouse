@@ -1,20 +1,33 @@
 """
-Home page: system status at a glance.
+Home page: system health at a glance.
 
-* Controller: online/offline as last reported on its MQTT status topic.
+* Controller: online/offline, plus the health it reports in telemetry
+  (uptime, Wi-Fi signal, free memory, when it was last heard from).
 * Readings: how old the latest greenhouse reading is (fresh or stale).
 * Relays: the logged state of each controlled relay and who set it.
+* Services: heartbeat of ingest, automation and weather (ok, degraded,
+  down or unknown), from ``core/health.py``.
+
+Every status is shown with an icon and a word, not colour alone.
 """
 from datetime import datetime, timezone
 
 import streamlit as st
 
 from core import db
+from core.health import format_duration, service_health, signal_quality
 from core.indoor_report import age_text, is_stale
 from ui import page_setup
 
 page_setup("Home")
 st.title("Greenhouse")
+
+SERVICE_BADGES = {
+    "ok": ("OK", ":material/check_circle:", "green"),
+    "degraded": ("Degraded", ":material/warning:", "orange"),
+    "down": ("Down", ":material/error:", "red"),
+    "unknown": ("Unknown", ":material/help:", "gray"),
+}
 
 now = datetime.now(timezone.utc)
 controller, readings, relays = st.columns(3)
@@ -25,12 +38,21 @@ with controller.container(border=True):
     if status is None:
         st.badge("Unknown", icon=":material/help:", color="gray")
         st.write("No status received yet.")
-    elif status["status"] == "online":
-        st.badge("Online", icon=":material/check_circle:", color="green")
-        st.write(f"Since {age_text(status['updated_utc'], now)}")
     else:
-        st.badge("Offline", icon=":material/error:", color="red")
+        if status["status"] == "online":
+            st.badge("Online", icon=":material/check_circle:", color="green")
+        else:
+            st.badge("Offline", icon=":material/error:", color="red")
         st.write(f"Since {age_text(status['updated_utc'], now)}")
+        if status["last_seen_utc"]:
+            st.write(
+                f"Last message {age_text(status['last_seen_utc'], now)} · "
+                f"up {format_duration(status['uptime_s'])}"
+            )
+            signal = signal_quality(status["rssi_dbm"])
+            dbm = f" ({status['rssi_dbm']} dBm)" if status["rssi_dbm"] is not None else ""
+            memory = f" · {status['mem_free'] // 1024} KB free" if status["mem_free"] is not None else ""
+            st.write(f"Wi-Fi {signal}{dbm}{memory}")
 
 with readings.container(border=True):
     st.caption("Greenhouse readings")
@@ -54,3 +76,16 @@ with relays.container(border=True):
         for row in states.itertuples():
             icon = ":material/toggle_on:" if row.state else ":material/toggle_off:"
             st.write(f"{icon} **{row.relay.capitalize()}**: {'On' if row.state else 'Off'} ({row.source})")
+
+with st.container(border=True):
+    st.caption("Services")
+    services = service_health(now)
+    for column, entry in zip(st.columns(len(services)), services):
+        label, icon, color = SERVICE_BADGES[entry["status"]]
+        column.write(f"**{entry['service'].capitalize()}**")
+        column.badge(label, icon=icon, color=color)
+        if entry["updated_utc"]:
+            detail = f" · {entry['detail']}" if entry["detail"] else ""
+            column.write(f"Last beat {age_text(entry['updated_utc'], now)}{detail}")
+        else:
+            column.write("Not seen yet.")

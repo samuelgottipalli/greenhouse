@@ -508,7 +508,7 @@ def set_device_status(status: str, updated_utc: str, device_id: int = settings.D
         bool: True if stored.
     """
     return _write([(
-        "INSERT INTO device_status VALUES (:device_id, :status, :at) "
+        "INSERT INTO device_status (device_id, status, updated_utc) VALUES (:device_id, :status, :at) "
         "ON CONFLICT (device_id) DO UPDATE SET status = excluded.status, updated_utc = excluded.updated_utc",
         {"device_id": device_id, "status": status, "at": updated_utc},
     )])
@@ -522,14 +522,19 @@ def device_status(device_id: int = settings.DEVICE_ID) -> dict[str, str] | None:
         device_id (int): Device.
 
     Returns:
-        dict[str, str] | None: ``status`` and ``updated_utc``, or None if the
-        device never reported (or on error).
+        dict | None: ``status``, ``updated_utc`` (when that status began),
+        ``last_seen_utc``, ``uptime_s``, ``mem_free`` and ``rssi_dbm`` (None
+        until the first telemetry), or None if the device never reported.
     """
     data = _read(
-        "SELECT status, updated_utc FROM device_status WHERE device_id = :device_id",
+        "SELECT status, updated_utc, last_seen_utc, uptime_s, mem_free, rssi_dbm "
+        "FROM device_status WHERE device_id = :device_id",
         {"device_id": device_id},
     )
-    return None if data is None else data.iloc[0].to_dict()
+    if data is None:
+        return None
+    row = data.iloc[0].to_dict()
+    return {key: (None if value != value else value) for key, value in row.items()}  # NaN -> None
 
 
 # --- Display preferences ------------------------------------------------------
@@ -562,4 +567,70 @@ def save_preferences(preferences: dict[str, str]) -> bool:
         "INSERT INTO app_preferences VALUES (:key, :value) "
         "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
         [{"key": k, "value": str(v)} for k, v in preferences.items()],
+    )])
+
+
+# --- Service health (core/health.py) -----------------------------------------
+
+
+def record_heartbeat(service: str, healthy: bool = True, detail: str = "", updated_utc: str | None = None) -> bool:
+    """
+    Record that a background service is alive.
+
+    Args:
+        service (str): Service name, e.g. ``"ingest"``.
+        healthy (bool): Whether it is doing its job.
+        detail (str): Short status text.
+        updated_utc (str | None): ``YYYY-MM-DD HH:MM:SS`` UTC; defaults to now.
+
+    Returns:
+        bool: True if stored.
+    """
+    return _write([(
+        "INSERT INTO service_heartbeats VALUES (:service, :at, :healthy, :detail) "
+        "ON CONFLICT (service) DO UPDATE SET updated_utc = excluded.updated_utc, "
+        "healthy = excluded.healthy, detail = excluded.detail",
+        {"service": service, "at": updated_utc or utc_timestamp(), "healthy": 1 if healthy else 0, "detail": detail},
+    )])
+
+
+def read_heartbeats() -> DataFrame | None:
+    """
+    Read every service's last heartbeat.
+
+    Returns:
+        DataFrame | None: Columns ``service``, ``updated_utc``, ``healthy``
+        and ``detail``; None on error or if none are stored.
+    """
+    return _read("SELECT service, updated_utc, healthy, detail FROM service_heartbeats ORDER BY service")
+
+
+def update_device_health(
+    device_id: int,
+    seen_utc: str,
+    uptime_s: int | None = None,
+    mem_free: int | None = None,
+    rssi_dbm: int | None = None,
+) -> bool:
+    """
+    Record a device's health from its telemetry; a message means it is online.
+
+    Args:
+        device_id (int): Device.
+        seen_utc (str): When the message arrived, ``YYYY-MM-DD HH:MM:SS`` UTC.
+        uptime_s (int | None): Seconds since the device booted.
+        mem_free (int | None): Free heap in bytes.
+        rssi_dbm (int | None): Wi-Fi signal strength.
+
+    Returns:
+        bool: True if stored.
+    """
+    return _write([(
+        "INSERT INTO device_status (device_id, status, updated_utc, last_seen_utc, uptime_s, mem_free, rssi_dbm) "
+        "VALUES (:device_id, 'online', :seen, :seen, :uptime, :mem, :rssi) "
+        "ON CONFLICT (device_id) DO UPDATE SET last_seen_utc = excluded.last_seen_utc, "
+        "uptime_s = excluded.uptime_s, mem_free = excluded.mem_free, rssi_dbm = excluded.rssi_dbm, "
+        "status = 'online', updated_utc = CASE WHEN device_status.status = 'online' "
+        "THEN device_status.updated_utc ELSE excluded.updated_utc END",
+        {"device_id": device_id, "seen": seen_utc, "uptime": uptime_s, "mem": mem_free, "rssi": rssi_dbm},
     )])

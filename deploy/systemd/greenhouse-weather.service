@@ -10,6 +10,9 @@ WorkingDirectory=@SERVER_DIR@
 ExecStart=@PYTHON@ -m services.weather_collector
 Environment=PYTHONUNBUFFERED=1
 Restart=always
+# core/health.py pings the watchdog each pass; no ping for 2 min = hung, restart it.
+WatchdogSec=120
+NotifyAccess=main
 RestartSec=5
 
 [Install]

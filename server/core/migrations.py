@@ -6,9 +6,13 @@ Create or upgrade the greenhouse SQLite database.
 * A version 1 database (the original ``d_*`` / ``relay_conditions`` /
   ``weather_data`` tables) is backed up next to itself and converted to the
   current version in one transaction, keeping all data.
-* A version 2 database gets the version 3 additions (``device_status``,
-  ``app_preferences``, and the light measure renamed to ``light_raw`` because
-  the LDR reports raw ADC counts, not lumens).
+* Later versions are upgraded one step at a time (each step has its own
+  frozen SQL, so it never depends on the current ``schema.sql``):
+
+  * 2 -> 3: ``device_status`` and ``app_preferences`` tables; light measure
+    renamed to ``light_raw`` (the LDR reports raw ADC counts, not lumens).
+  * 3 -> 4: ``service_heartbeats`` table; device health columns
+    (``last_seen_utc``, ``uptime_s``, ``mem_free``, ``rssi_dbm``).
 * A current database is left alone.
 
 Run it with ``python -m scripts.upgrade_db`` from the ``server/`` folder.
@@ -24,7 +28,7 @@ from core.timeutil import duration_to_minutes, format_time_of_day
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION: int = 3
+SCHEMA_VERSION: int = 4
 SCHEMA_FILE: Path = Path(__file__).with_name("schema.sql")
 MIN_SQLITE: tuple[int, int, int] = (3, 37, 0)  # STRICT tables
 
@@ -314,7 +318,24 @@ def migrate_v1(conn: sqlite3.Connection) -> dict[str, int]:
     return counts
 
 
-V3_TABLES: tuple[str, ...] = ("device_status", "app_preferences")
+TIMESTAMP_CHECK = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'"
+
+# Frozen DDL for each upgrade step (never edit after release).
+V3_DDL: tuple[str, ...] = (
+    "CREATE TABLE device_status (device_id INTEGER PRIMARY KEY REFERENCES devices (device_id) "
+    "ON DELETE CASCADE, status TEXT NOT NULL CHECK (status IN ('online', 'offline')), "
+    f"updated_utc TEXT NOT NULL CHECK (updated_utc {TIMESTAMP_CHECK})) STRICT",
+    "CREATE TABLE app_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+)
+V4_DDL: tuple[str, ...] = (
+    "ALTER TABLE device_status ADD COLUMN last_seen_utc TEXT",
+    "ALTER TABLE device_status ADD COLUMN uptime_s INTEGER",
+    "ALTER TABLE device_status ADD COLUMN mem_free INTEGER",
+    "ALTER TABLE device_status ADD COLUMN rssi_dbm INTEGER",
+    "CREATE TABLE service_heartbeats (service TEXT PRIMARY KEY, "
+    f"updated_utc TEXT NOT NULL CHECK (updated_utc {TIMESTAMP_CHECK}), "
+    "healthy INTEGER NOT NULL DEFAULT 1 CHECK (healthy IN (0, 1)), detail TEXT NOT NULL DEFAULT '') STRICT",
+)
 
 
 def rename_light_measure(conn: sqlite3.Connection) -> None:
@@ -330,24 +351,50 @@ def rename_light_measure(conn: sqlite3.Connection) -> None:
     )
 
 
-def migrate_v2(conn: sqlite3.Connection) -> None:
+def _step(conn: sqlite3.Connection, statements: tuple[str, ...], to_version: int, extra=None) -> None:
     """
-    Add the version 3 tables and rename the light measure, in one transaction.
+    Apply one upgrade step in a single transaction.
 
     Args:
-        conn (sqlite3.Connection): Connection to a version 2 database.
+        conn (sqlite3.Connection): Open connection.
+        statements (tuple[str, ...]): Frozen DDL for the step.
+        to_version (int): Version stamped when it succeeds.
+        extra (callable | None): Data changes to run in the same transaction.
     """
     conn.execute("BEGIN")
     try:
-        for statement in schema_statements():
-            if any(f"CREATE TABLE {table} " in statement for table in V3_TABLES):
-                conn.execute(statement)
-        rename_light_measure(conn)
-        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        for statement in statements:
+            conn.execute(statement)
+        if extra:
+            extra(conn)
+        conn.execute(f"PRAGMA user_version = {to_version}")
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
         raise
+
+
+def migrate_v2(conn: sqlite3.Connection) -> None:
+    """
+    Upgrade version 2 to 3: status and preferences tables, light measure renamed.
+
+    Args:
+        conn (sqlite3.Connection): Connection to a version 2 database.
+    """
+    _step(conn, V3_DDL, 3, rename_light_measure)
+
+
+def migrate_v3(conn: sqlite3.Connection) -> None:
+    """
+    Upgrade version 3 to 4: service heartbeats and device health columns.
+
+    Args:
+        conn (sqlite3.Connection): Connection to a version 3 database.
+    """
+    _step(conn, V4_DDL, 4)
+
+
+STEPS = {2: migrate_v2, 3: migrate_v3}
 
 
 def upgrade(path: Path | None = None) -> str:
@@ -378,7 +425,7 @@ def upgrade(path: Path | None = None) -> str:
         if version == 0:
             create_new(conn)
             return f"Created {path} at schema version {SCHEMA_VERSION}"
-        if version not in (1, 2):
+        if version != 1 and version not in STEPS:
             raise RuntimeError(f"{path} has unsupported schema version {version}")
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         backup = path.with_name(f"{path.stem}.v{version}-backup-{stamp}{path.suffix}")
@@ -388,7 +435,10 @@ def upgrade(path: Path | None = None) -> str:
         if version == 1:
             counts = migrate_v1(conn)
             return f"Migrated {path} from version 1 (backup: {backup.name}): {counts}"
-        migrate_v2(conn)
-        return f"Upgraded {path} from version 2 to {SCHEMA_VERSION} (backup: {backup.name})"
+        start = version
+        while version < SCHEMA_VERSION:
+            STEPS[version](conn)
+            version += 1
+        return f"Upgraded {path} from version {start} to {SCHEMA_VERSION} (backup: {backup.name})"
     finally:
         conn.close()

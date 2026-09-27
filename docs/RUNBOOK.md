@@ -218,7 +218,8 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 
 - [ ] 0: Wi-Fi password changed (SEC-01)
 - [ ] 2: anonymous MQTT refused
-- [ ] 4: four services running and surviving `sudo reboot`
+- [ ] 4: four services running and surviving `sudo reboot`; Home shows all services **OK**
+- [ ] 4: `sudo systemctl kill -s STOP greenhouse-automation` (freeze it): within ~2 min the watchdog restarts it and Home shows it OK again
 - [ ] 7: device boots to `OK`; status and telemetry seen on the broker
 - [ ] 8a–b: Home Online/Fresh; indoor values match the LCD
 - [ ] 8c–d: web toggle moves the relay and the state is confirmed (P-03, PLAN 2.2)
@@ -240,6 +241,24 @@ Device 1, last 24 h: 287 of 288 expected readings (99.7%)
 
 ---
 
+## Health checks
+
+What watches what, and how often:
+
+| Where | Check | Interval | What happens |
+|---|---|---|---|
+| Pico | Hardware watchdog | fed every loop (~50 ms) | If the program hangs for 8 s the board resets |
+| Pico | Wi-Fi / MQTT link | every loop | Reconnects with backoff from 2 s up to 5 min |
+| Pico | MQTT keep-alive | ping every 30 s | If the device goes silent, the broker publishes its `offline` status after ~90 s |
+| Pico | Sensors | every 30 s | No good DHT22 reading for 5 min: heater off |
+| Pico | Link lost | continuous | After 2 min offline, runs the rules itself (`LOCAL` on the LCD) |
+| Pico | Clock | daily (every 5 min until the first success) | NTP re-sync |
+| Pico → server | Health report | every 5 min, in telemetry | Uptime, free memory and Wi-Fi signal shown on Home |
+| Server | Service heartbeats | each pass (automation 5 s, ingest 10 s, weather 10 s); stored every 30 s | Home shows OK / Degraded / Down (no beat for 2 min) |
+| Server | systemd watchdog | `WatchdogSec=120` on ingest, automation, weather | A service that stops beating is killed and restarted |
+| Server | systemd restart | on exit | A crashed service restarts after 5 s |
+| Server | Automation data checks | every 5 s | Readings older than 15 min: heater off; controller offline: automation stands back |
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -252,6 +271,9 @@ Device 1, last 24 h: 287 of 288 expected readings (99.7%)
 | Web toggle snaps back / relay doesn't move | Device offline, or ACL blocks the command | Home shows Online? Check `greenhouse.acl` has `topic read greenhouse/1/relay/set` |
 | `Clock not set` on the LCD | NTP blocked or no internet | The device retries every 5 min; check the router allows NTP (UDP 123) |
 | Clock off by exactly 1 h | Time zone with an unsupported DST rule | `setup_config.py` warns about this; the LCD shows standard time all year |
+| Home: a service shows **Down** | It has not sent a heartbeat for 2 min (stopped, hung or failing every pass); systemd should already be restarting it | `systemctl status greenhouse-<name>`; `journalctl -u greenhouse-<name> -n 50` |
+| Home: **Ingest Degraded · broker unreachable** | The ingest service is running but cannot reach Mosquitto | `systemctl status mosquitto`; check `MQTT_*` in `server/.env` |
+| Home: Wi-Fi **weak** | Signal below -75 dBm; expect dropouts and `LOCAL` spells | Move the router or Pico, or add an access point |
 | Board resets every ~8 s | Watchdog on while stopped at the REPL, or a crash loop | Set `"watchdog": false` while debugging; read the REPL for the error |
 | Relays on when they should be off | Active-low relay board | `"relay_active_low": true` in `config.json` |
 | Heater switches off by itself | The controller's sensor gave no reading for 5 min (safety cut-off), or server readings are over 15 min old | Check the DHT22 wiring; get telemetry flowing again |
