@@ -15,7 +15,7 @@ robustness, then new features. Each step says:
   Anything that needs real hardware gets a short manual check listed under "Done when".
 - One step per branch or PR, so each can be reviewed and reverted on its own.
 
-**Status (2026-09-26, after the findings pass):** 1 tests pass and no `known_bug` tests remain. Both
+**Status (2026-09-26, after the findings pass):** 408 tests pass and no `known_bug` tests remain. Both
 directions of the device/server contract are tested end to end; what's left is confirming it on the
 hardware ([RUNBOOK.md](RUNBOOK.md)).
 
