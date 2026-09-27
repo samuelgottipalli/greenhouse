@@ -101,6 +101,22 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 
 ---
 
+## Phase 5: Easy setup and updates (about 2 weeks)
+
+Goal: someone who has never written code can set up the server and a controller, and later
+update the controller's code without a USB cable.
+
+| Step | Work | Fixes | Done when | Effort |
+|---|---|---|---|---|
+| 5.1 ✅ | **Controller setup hotspot.** With no Wi-Fi settings, or when the screen button is held at power-on, the Pico starts its own Wi-Fi network (`GreenhouseSetup-XXXX`, password shown on the LCD) and a setup page at `192.168.4.1`. Phones open it automatically (captive portal). The page lists nearby networks, takes the Wi-Fi password, a *setup code* from the dashboard (server address and login) and the time zone (guessed from the phone). If the new Wi-Fi can't be joined on the next boot, setup starts again with the error shown. A router outage never triggers setup; the controller keeps running on its own (local mode). | (usability) | Tests cover the page, form checks, DNS replies, setup code decoding, the time-zone table (checked against `zoneinfo`), and every way into and out of setup mode; all device files compile with `mpy-cross`. | 2 d |
+| 5.2 | **Setup code on the dashboard.** Settings → Controllers shows each controller's setup code and a QR code, and remembers each controller's broker password (`server/data/device_credentials.json`, git-ignored). New setting `PUBLIC_HOST` (the address controllers use to reach this server; blank = detect). | (usability) | Round-trip test: a code made by the server is decoded by the device code into the same settings. | 0.5 d |
+| 5.3 | **Over-the-air updates.** The server publishes a manifest (file list with SHA-256) of `picoside/device/`. The new `greenhouse-firmware` service serves the files over HTTP on the LAN. The dashboard shows *Update available* and an **Update controller** button. The controller downloads only the changed files, checks every hash, swaps them in, and restarts. The new code must reach the broker within 10 minutes and 3 restarts, or `boot.py` puts the old files back. Status goes on `greenhouse/<id>/firmware`; schema v6 stores it. | (feature) | Tests: good update, a corrupt download (nothing changes), a crash-looping update rolls back, a hung update rolls back, and the server's manifest matches what the device installs. | 3 d |
+| 5.4 | **One-command server** (`server/run_all.py`) for Windows and macOS: runs the web app, services, broker and scheduled jobs, and restarts any that stop. Linux keeps systemd. | (usability) | Tests with stand-in processes: crash → restart with backoff; jobs run on schedule; clean shutdown. | 1 d |
+| 5.5 | **Desktop installer** (`setup.bat` / `setup.sh` → PySide6 wizard): installs the packages, asks for location, time zone and dashboard password, installs and locks down Mosquitto (creating passwords), creates the database, starts the services (systemd on Linux, log-in start on Windows/macOS), then sets up the Pico over USB: installs MicroPython if needed, writes Wi-Fi settings (defaulting to this computer's network, warning about 5 GHz), copies the code and waits for the controller to come online. | (usability) | Logic tests for every step (env file, commands per OS, broker files, Pico file list, Wi-Fi detection); GUI smoke test runs offscreen in CI. | 4 d |
+| 5.6 | Docs: a short *Quick start* for the installer and hotspot, RUNBOOK kept as the manual/advanced path, in-app Help updated. | (docs) | Docs tests check every referenced file and command exists. | 0.5 d |
+
+---
+
 ## Tracking
 
 | Phase | Status | Notes |
@@ -112,5 +128,6 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | 2 | 2.1–2.4 ✅ | 2.2 on-hardware check in the RUNBOOK sign-off. Added: controller local mode and sensor-fault heater cut-off (P-15), relay-state resync (P-14), send-before-log (S-19/S-20) |
 | 3 | 3.1–3.4 ✅ | 3.2: 7-day soak simulated in tests; the on-hardware run is in the RUNBOOK sign-off. 3.3: heartbeats + systemd watchdog. 3.4: 2.6 MB/device/year measured |
 | 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
+| 5 | Planned 2026-09-27 | Easy setup (installer, hotspot) and over-the-air updates |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

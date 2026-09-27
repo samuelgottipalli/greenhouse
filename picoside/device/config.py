@@ -2,8 +2,9 @@
 Load and check ``config.json`` for the greenhouse controller.
 
 ``config.json`` holds Wi-Fi and broker credentials, so it is not committed.
-Create it on a computer with ``python picoside/setup_config.py`` and copy it
-to the Pico with the rest of ``picoside/device/``. Any key missing from the
+It is written by the controller's setup hotspot (``provision.py``), by the
+desktop installer, or on a computer with ``python picoside/setup_config.py``
+and then copied to the Pico. Any key missing from the
 file falls back to ``DEFAULTS``. Files in the original format (``relay1_pin``
 ... keys and ``timezone_offset`` in hours) are converted on load.
 
@@ -100,6 +101,29 @@ def load_config(filename="config.json"):
     config = dict(DEFAULTS)
     config.update(upgrade_legacy_keys(raw))
     return config
+
+
+def save_config(config, filename="config.json"):
+    """
+    Write the configuration, replacing the file in one step.
+
+    The new file is written next to the old one and then renamed over it, so
+    a power cut while saving leaves either the old or the new settings.
+
+    Args:
+        config (dict): Complete configuration.
+        filename (str): Path to the JSON file.
+    """
+    import os
+
+    temporary = filename + ".tmp"
+    with open(temporary, "w") as f:
+        json.dump(config, f)
+    try:
+        os.rename(temporary, filename)  # replaces the old file on the Pico (LittleFS)
+    except OSError:  # Windows won't rename over a file (only matters in tests)
+        os.remove(filename)
+        os.rename(temporary, filename)
 
 
 def config_problems(config):

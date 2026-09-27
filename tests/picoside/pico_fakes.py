@@ -120,14 +120,24 @@ class FakeWLAN:
     PM_POWERSAVE = 0xA11C82
 
     def __init__(self, mode=None):
+        self.mode = mode
         self.pm = None
+        self.settings = {}
         self.connected = False
         self.connect_calls = []
         self.connect_succeeds = True
         self.is_active = False
+        self.networks = [(b"greenhouse-net", bytes(6), 6, -50, 3, 0)]
 
-    def config(self, pm=None):
+    def config(self, pm=None, **settings):
         self.pm = pm
+        self.settings.update(settings)
+
+    def scan(self):
+        return list(self.networks)
+
+    def disconnect(self):
+        self.connected = False
 
     def active(self, flag):
         self.is_active = flag
@@ -146,6 +156,8 @@ class FakeWLAN:
         return 3
 
     def ifconfig(self):
+        if self.mode == 1:  # access point
+            return ("192.168.4.1", "255.255.255.0", "192.168.4.1", "192.168.4.1")
         return ("192.168.1.50", "255.255.255.0", "192.168.1.1", "8.8.8.8")
 
 

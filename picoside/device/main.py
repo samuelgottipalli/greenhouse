@@ -6,6 +6,10 @@ each hardware object, runs the boot sequence and then calls
 ``Controller.tick()`` every ``loop_ms`` (see ``controller.py`` for what a tick
 does). A hardware watchdog (on by default) resets the board if a tick ever
 hangs; an unexpected error is shown on the LCD and the board resets after 10 s.
+
+Setup mode (``provision.py``) runs instead when there are no Wi-Fi or server
+settings, when the screen button is held at power-on, or when newly saved
+Wi-Fi settings fail on their first boot. It ends by restarting the board.
 """
 import time
 
@@ -17,6 +21,8 @@ from config import config_problems, load_config
 from controller import Controller
 from display import Display
 from net import Network
+from provision import button_held, clear_unverified, is_unverified, run_setup, setup_reason
+from provision import REASON_WIFI_FAILED
 from relays import Relays
 from sensors import Sensors
 
@@ -27,6 +33,11 @@ def run():
     """Build everything, boot, and loop forever."""
     config = load_config()
     display = Display(config)
+    screen_button = machine.Pin(config["button_toggle_pin"], machine.Pin.IN, machine.Pin.PULL_UP)
+    reason = setup_reason(config, button_held(screen_button, display))
+    if reason:
+        run_setup(config, display, reason)
+        return
     for problem in config_problems(config):
         display.show_message("Config: " + problem)
         time.sleep(2)
@@ -37,6 +48,11 @@ def run():
         config, display, Sensors(config), Relays(config), Buttons(config), net, Clock(config)
     )
     controller.start()
+    if net.wifi_ok:
+        clear_unverified()
+    elif is_unverified():
+        run_setup(config, display, REASON_WIFI_FAILED)
+        return
 
     watchdog = machine.WDT(timeout=WATCHDOG_MS) if config["watchdog"] else None
     if watchdog:

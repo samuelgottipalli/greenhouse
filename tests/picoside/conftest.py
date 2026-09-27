@@ -17,7 +17,8 @@ import pytest
 from pico_fakes import FakeADC, FakeDHT22, FakeLcd, FakePin, FakeTicks, FakeWDT, FakeWLAN
 from support import PICO_DIR
 
-DEVICE_MODULES = ("config", "clock", "display", "relays", "sensors", "buttons", "net", "local_rules", "controller", "main")
+DEVICE_MODULES = ("config", "clock", "display", "relays", "sensors", "buttons", "net", "local_rules", "controller",
+                  "zones", "provision", "main")
 
 
 @pytest.fixture
@@ -34,12 +35,14 @@ def fake_env(monkeypatch, ticks, tmp_path):
     machine.I2C = lambda *a, **k: object()
     machine.WDT = FakeWDT
     machine.reset = lambda: None
+    machine.unique_id = lambda: bytes([0xE6, 0x61, 0x41, 0x04, 0x03, 0x2F, 0x3F, 0x2A])
     FakeWDT.instances = []
 
     dht = types.ModuleType("dht")
     dht.DHT22 = FakeDHT22
     network = types.ModuleType("network")
     network.STA_IF = 0
+    network.AP_IF = 1
     network.WLAN = FakeWLAN
     ntptime = types.ModuleType("ntptime")
     ntptime.host = None
