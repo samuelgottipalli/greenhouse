@@ -45,7 +45,7 @@ below still use the file paths from review time: `server-streamlit/` is now `ser
 | P-11 | High | Pico | Screen and IP buttons are swapped (pull-up reads 0 when pressed), and the 500 ms debounce made double-press impossible | Code | **Fixed** (found during the rewrite) |
 | P-12 | Medium | Pico | First sensor reading comes 5 minutes after boot, so the LCD shows no values until then | Code | **Fixed**: first read and publish at boot |
 | P-13 | Low | Pico | Vendored `umqtt` printed debug output on every message check and had no socket timeout | Code | **Fixed** |
-| S-08 | Medium | Web | Hysteresis buffers are shown as °F but stored and used as °C | Code | Open |
+| S-08 | Medium | Web | Hysteresis buffers are shown as °F but stored and used as °C | Code | **Fixed**: buffers converted as temperature differences (2 °C = 3.6 °F) on display and save |
 | S-09 | Medium | Web | Control and Settings pages crash on an empty database | Code | **Fixed**: Settings and Control show an error when the tables are missing; Control shows relays with no history as off |
 | S-10 | Medium | Server | New DB engine per query, never disposed; no indexes on the growing log tables | Test + Code | Partial: one cached engine, foreign keys on, index on `relay_events`; no read cache yet |
 | S-11 | Medium | Server | Device `001`, relay IDs and names hard-coded; four near-identical copy-pasted blocks | Code | Partial: device from `DEVICE_ID`, names from the DB, toggles built in a loop; automation still hard-codes relay IDs |

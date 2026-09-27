@@ -4,8 +4,9 @@ schedule used by ``services/automation.py``.
 
 Shows fan/heater temperature triggers and the fan humidity trigger (each with
 a hysteresis buffer), and four watering slots (start time + minutes).
-Temperatures are stored in °C; when the session's units are "US" they are
-shown in °F and converted back on save.
+Temperatures and their buffers are stored in °C; when the session's units
+are "US" they are shown in °F (buffers as temperature differences, without the
+32° offset) and converted back on save.
 
 Buttons:
     * Save: store the values shown.
@@ -15,6 +16,12 @@ Buttons:
 import streamlit as st
 
 from core import db
+from core.conversions import (
+    celsius_delta_to_fahrenheit,
+    celsius_to_fahrenheit,
+    fahrenheit_delta_to_celsius,
+    fahrenheit_to_celsius,
+)
 from core.timeutil import format_time_of_day
 from ui import page_setup
 
@@ -22,6 +29,7 @@ page_setup("Greenhouse Settings")
 st.title("Greenhouse Settings")
 
 TEMPERATURE_FIELDS = ["fan_on_temp", "heater_on_temp"]
+TEMPERATURE_BUFFER_FIELDS = ["fan_on_temp_buffer", "heater_on_temp_buffer"]
 THRESHOLD_FIELDS = {
     # widget key: (threshold name, "value" | "buffer")
     "fan_on_temp": ("fan_on_temp_c", "value"),
@@ -71,7 +79,9 @@ limits = thresholds.set_index("name")
 initial = {key: float(limits.loc[name, part]) for key, (name, part) in THRESHOLD_FIELDS.items()}
 if us_units:
     for key in TEMPERATURE_FIELDS:
-        initial[key] = round((initial[key] * 9 / 5) + 32, 2)
+        initial[key] = celsius_to_fahrenheit(initial[key])
+    for key in TEMPERATURE_BUFFER_FIELDS:
+        initial[key] = celsius_delta_to_fahrenheit(initial[key])
 slots = schedule.set_index("slot")
 temperature_unit = units["temperature"]
 
@@ -84,7 +94,7 @@ with st.container(border=True):
         value=initial["fan_on_temp"],
     )
     fan_on_temp_buffer = right.number_input(
-        label=f"Buffer ({temperature_unit})",  # S-08: shown with the °F label but kept in °C
+        label=f"Buffer ({temperature_unit})",
         help="""Temperature buffer at which the fan should turn off.
         Example: If the fan turned on at 70 (F) and buffer is 2 (F), then the fan will turn
         off when temperature drops to 68 (F).""",
@@ -141,8 +151,10 @@ with st.container(border=True):
 with st.container(horizontal=True, horizontal_alignment="right"):
     if st.button("Save", icon=":material/save:"):
         if us_units:
-            fan_on_temp = round((fan_on_temp - 32) * 5 / 9, 2)
-            heater_on_temp = round((heater_on_temp - 32) * 5 / 9, 2)
+            fan_on_temp = fahrenheit_to_celsius(fan_on_temp)
+            heater_on_temp = fahrenheit_to_celsius(heater_on_temp)
+            fan_on_temp_buffer = fahrenheit_delta_to_celsius(fan_on_temp_buffer)
+            heater_on_temp_buffer = fahrenheit_delta_to_celsius(heater_on_temp_buffer)
         saved = db.save_settings(
             thresholds={
                 "fan_on_temp_c": (fan_on_temp, fan_on_temp_buffer),

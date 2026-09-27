@@ -94,6 +94,31 @@ def test_settings_save_round_trips_temperatures(seeded_db, db_conn):
     ).fetchone() == (32.0,)
 
 
+def test_settings_buffers_convert_as_differences(seeded_db, db_conn):
+    # Formerly S-08: buffers were labelled F but stored unconverted.
+    at = run_page("views/greenhouse_settings.py")
+    assert at.number_input(key="fan_on_temp_buffer").value == 3.6  # 2 C difference
+    at.number_input(key="heater_on_temp_buffer").set_value(2.0)
+    next(b for b in at.button if b.label == "Save").click().run()
+    rows = dict(db_conn.execute(
+        "SELECT name, buffer FROM thresholds WHERE profile = 'current'"
+    ).fetchall())
+    assert rows["heater_on_temp_c"] == 1.11  # 2 F difference
+    assert rows["fan_on_temp_c"] == 2.0  # unchanged round trip
+
+
+def test_settings_si_units_are_stored_as_entered(seeded_db, db_conn):
+    at = AppTest.from_file(str(SERVER_DIR / "views/greenhouse_settings.py"), default_timeout=30)
+    at.session_state["units"] = "SI"
+    at.run()
+    assert at.number_input(key="fan_on_temp").value == 32.0
+    at.number_input(key="fan_on_temp_buffer").set_value(3.0)
+    next(b for b in at.button if b.label == "Save").click().run()
+    assert db_conn.execute(
+        "SELECT value, buffer FROM thresholds WHERE profile = 'current' AND name = 'fan_on_temp_c'"
+    ).fetchone() == (32.0, 3.0)
+
+
 def test_settings_save_keeps_hh_mm_and_minutes(seeded_db, db_conn):
     # Formerly known bug S-02: times were saved as HH:MM:SS.
     at = run_page("views/greenhouse_settings.py")
