@@ -371,3 +371,157 @@ def insert_weather(row: dict[str, str | int | float | None] | None) -> bool:
     columns = ", ".join(row)
     values = ", ".join(f":{name}" for name in row)
     return _write([(f"INSERT INTO weather_readings ({columns}) VALUES ({values})", row)])
+
+
+# --- Device telemetry (written by services/ingest.py) ----------------------
+
+
+def insert_sensor_readings(
+    values: dict[str, float],
+    reading_utc: str,
+    device_id: int = settings.DEVICE_ID,
+) -> int | None:
+    """
+    Store one timestamped set of sensor values, skipping duplicates.
+
+    The device may resend queued telemetry after a reconnect, so a reading
+    that is already stored (same device, measure and time) is ignored.
+
+    Args:
+        values (dict[str, float]): Measure name (e.g. ``"temperature"``) to value.
+        reading_utc (str): ``YYYY-MM-DD HH:MM:SS`` UTC.
+        device_id (int): Reporting device.
+
+    Returns:
+        int | None: Number of new rows, or None on a database error (including
+        an unknown measure name, in which case nothing is stored).
+    """
+    rows = [{"device_id": device_id, "measure": name, "at": reading_utc, "value": float(value)}
+            for name, value in values.items()]
+    if not rows:
+        return 0
+    try:
+        with get_engine().begin() as conn:
+            inserted = 0
+            for row in rows:
+                result = conn.execute(text(
+                    "INSERT OR IGNORE INTO sensor_readings (device_id, measure_id, reading_utc, value) "
+                    "SELECT :device_id, measure_id, :at, :value FROM measures WHERE name = :measure"
+                ), row)
+                if result.rowcount == 0 and conn.execute(
+                    text("SELECT 1 FROM measures WHERE name = :measure"), row
+                ).first() is None:
+                    raise ValueError(f"Unknown measure {row['measure']!r}")
+                inserted += result.rowcount
+    except (SQLAlchemyError, ValueError) as err:
+        log.error("Storing readings failed: %s", err)
+        return None
+    return inserted
+
+
+def record_relay_state(
+    relay_id: int,
+    state: int,
+    source: str,
+    event_utc: str,
+    device_id: int = settings.DEVICE_ID,
+) -> bool | None:
+    """
+    Log a relay state reported by the device, unless it is already the latest.
+
+    The web app and automation log their own commands, and the device echoes
+    every change (and repeats retained states on reconnect), so an event is
+    only added when the reported state differs from the last logged one.
+
+    Args:
+        relay_id (int): Relay number, 1-8.
+        state (int): 1 on, 0 off.
+        source (str): ``"auto"``, ``"web"`` or ``"device"``.
+        event_utc (str): ``YYYY-MM-DD HH:MM:SS`` UTC.
+        device_id (int): Reporting device.
+
+    Returns:
+        bool | None: True if logged, False if it matched the latest state,
+        None on a database error.
+    """
+    current = _read(
+        "SELECT state FROM relay_events WHERE device_id = :device_id AND relay_id = :relay_id "
+        "ORDER BY event_utc DESC, event_id DESC LIMIT 1",
+        {"device_id": device_id, "relay_id": int(relay_id)},
+        none_if_empty=False,
+    )
+    if current is None:
+        return None
+    if not current.empty and int(current.iloc[0]["state"]) == int(state):
+        return False
+    return log_relay_event(relay_id, state, source, device_id=device_id, event_utc=event_utc) or None
+
+
+def set_device_status(status: str, updated_utc: str, device_id: int = settings.DEVICE_ID) -> bool:
+    """
+    Record a device's online/offline status.
+
+    Args:
+        status (str): ``"online"`` or ``"offline"``.
+        updated_utc (str): ``YYYY-MM-DD HH:MM:SS`` UTC.
+        device_id (int): Device.
+
+    Returns:
+        bool: True if stored.
+    """
+    return _write([(
+        "INSERT INTO device_status VALUES (:device_id, :status, :at) "
+        "ON CONFLICT (device_id) DO UPDATE SET status = excluded.status, updated_utc = excluded.updated_utc",
+        {"device_id": device_id, "status": status, "at": updated_utc},
+    )])
+
+
+def device_status(device_id: int = settings.DEVICE_ID) -> dict[str, str] | None:
+    """
+    Read a device's last reported status.
+
+    Args:
+        device_id (int): Device.
+
+    Returns:
+        dict[str, str] | None: ``status`` and ``updated_utc``, or None if the
+        device never reported (or on error).
+    """
+    data = _read(
+        "SELECT status, updated_utc FROM device_status WHERE device_id = :device_id",
+        {"device_id": device_id},
+    )
+    return None if data is None else data.iloc[0].to_dict()
+
+
+# --- Display preferences ------------------------------------------------------
+
+
+def read_preferences() -> dict[str, str]:
+    """
+    Read the stored dashboard preferences.
+
+    Returns:
+        dict[str, str]: Key to value; empty if none are stored or on error.
+    """
+    data = _read("SELECT key, value FROM app_preferences")
+    return {} if data is None else dict(zip(data["key"], data["value"]))
+
+
+def save_preferences(preferences: dict[str, str]) -> bool:
+    """
+    Store dashboard preferences, replacing values for the given keys.
+
+    Args:
+        preferences (dict[str, str]): Key to value.
+
+    Returns:
+        bool: True if stored.
+    """
+    if not preferences:
+        return True
+    return _write([(
+        "INSERT INTO app_preferences VALUES (:key, :value) "
+        "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        [{"key": k, "value": str(v)} for k, v in preferences.items()],
+    )])

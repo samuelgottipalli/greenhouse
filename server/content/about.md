@@ -20,6 +20,8 @@ The system has two parts that exchange messages through an MQTT broker.
         control and settings.
     *   **Automation service** (`services/automation.py`): applies the fan, heater and watering
         rules from *Greenhouse Settings* and sends relay commands.
+    *   **Ingest service** (`services/ingest.py`): stores the controller's readings, relay changes
+        and online/offline status.
     *   **Weather collector** (`services/weather_collector.py`): stores outdoor weather from Open-Meteo every
         15 minutes.
     *   **Database** (`data/greenhouse.db`, SQLite): settings, sensor readings, relay history and

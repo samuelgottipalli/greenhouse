@@ -23,7 +23,7 @@ planned work and `docs/MQTT.md` for the message contract.
     *   `core/`: `settings.py` (the only place `.env` is read), `db.py` (all SQL), `schema.sql`
         (current schema, version in `PRAGMA user_version`), `migrations.py`, `mqtt.py`, `weather_api.py`, `timeutil.py`,
         `conversions.py`, `weather_codes.py`.
-    *   `services/`: `automation.py` and `weather_collector.py` (`python -m services.<name>`).
+    *   `services/`: `ingest.py`, `automation.py` and `weather_collector.py` (`python -m services.<name>`).
     *   `scripts/upgrade_db.py`: creates or migrates the database (`python -m scripts.upgrade_db`).
 
 ### 2. Conventions

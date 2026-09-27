@@ -76,8 +76,19 @@ The device ignores invalid commands. It confirms a valid command by
 publishing the relay's state message, so the server should treat that state
 message, not its own command, as the confirmation.
 
-## Not built yet
+## How the server stores these messages
 
-The server does not yet subscribe to telemetry or state messages and write
-them to `sensor_readings` and `relay_events`. That is PLAN step 2.3. Until then
-the web app and the automation service log their own commands as events.
+`services/ingest.py` subscribes to `<prefix>/+/telemetry`,
+`<prefix>/+/relay/+/state` and `<prefix>/+/status`:
+
+- **Telemetry** goes to `sensor_readings`, one row per non-null value
+  (`temperature_c` becomes `temperature`, `humidity_pct` becomes `humidity`,
+  `light_raw` stays `light_raw`). Replayed messages from the device's
+  offline queue are ignored.
+- **State** goes to `relay_events` only when it differs from the last logged
+  state. The web app and automation log their own commands, so the device's
+  echo is not stored twice.
+- **Status** goes to `device_status`.
+
+The contract is checked end to end in
+`tests/picoside/test_contract_with_server.py`.

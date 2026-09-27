@@ -76,7 +76,7 @@ flowchart LR
 | `picoside/device/` | Everything that is copied onto the Pico. `main.py` starts at power-on, `controller.py` is the main loop, and `lib/` holds third-party drivers. |
 | `picoside/setup_config.py` | Run on your computer to create the controller's `config.json` (Wi-Fi, broker, time zone). |
 | `server/app.py` | The web dashboard. Its pages are in `server/views/` and the About/Help text is in `server/content/`. |
-| `server/services/` | Background services: `automation.py` and `weather_collector.py`. |
+| `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py` and `weather_collector.py`. |
 | `server/core/` | Shared code: database access, settings, MQTT, the weather API client, unit conversions. |
 | `server/scripts/` | Maintenance: `upgrade_db.py` creates or upgrades the database. |
 | `server/data/` | The SQLite database. |
@@ -116,7 +116,7 @@ been removed. It is still in the git history.
 | Weather collector saves outdoor weather | ✅ Works when running |
 | Dashboard: weather page, settings pages, control toggles | ✅ Mostly works (see findings S-03 to S-09) |
 | Server → device: commands move the relays | 🟡 Both sides now agree on the message format; not yet tried on the hardware |
-| Device → server: readings stored in the database | ❌ No service stores them yet (S-01, next up) |
+| Device → server: readings, relay changes and online status stored | 🟡 `services/ingest.py` built and tested end to end; not yet tried on the hardware |
 | Automation service | ⚠️ Runs, but has logic bugs (S-06) and acts on old data |
 | Security | ⚠️ Secrets in the repo, no login, open MQTT (SEC-01 to SEC-03) |
 
@@ -131,6 +131,7 @@ python -m scripts.upgrade_db             # first time, or after pulling changes 
 streamlit run app.py                     # web dashboard (http://localhost:8501)
 python -m services.weather_collector     # weather collector (leave running)
 python -m services.automation            # automation service (leave running)
+python -m services.ingest                # stores what the Pico sends (leave running)
 ```
 
 Settings such as the database location, broker address, time zone and weather location come from
