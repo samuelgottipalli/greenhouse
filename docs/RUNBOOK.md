@@ -265,8 +265,9 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 | Controller loop in standalone/local mode | ✅ 75 s with no errors |
 | Hardware watchdog | ✅ stopping the program resets the board after ~8 s (reset cause 3 = watchdog) |
 | Update rollback on the board (5.3) | ✅ a broken `controller.py` crash-looped and `boot.py` restored the old files on the 4th start |
-| Wi-Fi to the home network | ✖ network visible (-40 dBm, channel 7) but never connects: most likely the saved Wi-Fi password is old. Re-run setup (hold the screen button at power-on) and type the current password |
-| NTP clock, MQTT, updates over Wi-Fi, buttons | ⏳ need Wi-Fi, the server, or a person at the board |
+| Wi-Fi to the home network | ✅ connected within 40 s of a restart (-44 dBm). (Hand-driven connection attempts made while the program was interrupted mid-connect stayed stuck on "connecting"; the controller itself connects fine) |
+| NTP clock and daylight saving (P-02) | ✅ an RTC set to 2020 was corrected by NTP; local time matched the PC (PDT) to the second |
+| MQTT, updates over Wi-Fi, buttons, 48 h clock | ⏳ need the server, a person at the board, or time |
 
 Check 24 hours of telemetry on the server (exit code 0 means at least 99 % arrived):
 
