@@ -143,3 +143,33 @@ def test_insert_weather_rejects_empty_and_duplicates(seeded_db):
     row = db.recent_weather(limit=1).iloc[0].to_dict()
     assert db.insert_weather(None) is False
     assert db.insert_weather(row) is False  # same measured_utc already stored
+
+
+def test_sensor_history_raw_and_hourly(seeded_db, db_conn):
+    db_conn.executemany(
+        "INSERT INTO sensor_readings VALUES (1, 1, ?, ?)",
+        [("2030-01-01 10:05:00", 20.0), ("2030-01-01 10:35:00", 22.0), ("2030-01-01 11:10:00", 30.0)],
+    )
+    db_conn.commit()
+    raw = db.sensor_history("2030-01-01 00:00:00")
+    assert list(raw["value"]) == [20.0, 22.0, 30.0]
+    hourly = db.sensor_history("2030-01-01 00:00:00", bucket="hour")
+    assert hourly[["reading_utc", "value"]].values.tolist() == [
+        ["2030-01-01 10:00:00", 21.0],
+        ["2030-01-01 11:00:00", 30.0],
+    ]
+    assert db.sensor_history("2031-01-01 00:00:00") is None
+    with pytest.raises(ValueError):
+        db.sensor_history("2030-01-01 00:00:00", bucket="minute")
+
+
+def test_latest_sensor_readings_picks_newest_per_measure(seeded_db, db_conn):
+    db_conn.executemany(
+        "INSERT INTO sensor_readings VALUES (1, ?, ?, ?)",
+        [(1, "2030-01-01 00:00:00", 5.0), (1, "2029-01-01 00:00:00", 9.0), (6, "2030-02-01 00:00:00", 100.0)],
+    )
+    db_conn.commit()
+    latest = db.latest_sensor_readings().set_index("measure")
+    assert latest.loc["temperature", "value"] == 5.0
+    assert latest.loc["light_raw", "reading_utc"] == "2030-02-01 00:00:00"
+    assert latest.loc["humidity", "value"] == 45.0

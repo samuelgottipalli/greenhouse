@@ -57,7 +57,7 @@ for column, (measure, label) in zip(columns, LABELS.items()):
 
 period = st.segmented_control("Period", list(PERIODS), default="24 hours") or "24 hours"
 since = utc_timestamp(now - timedelta(days=PERIODS[period]))
-history = db.sensor_history(since)
+history = db.sensor_history(since, bucket=None if PERIODS[period] == 1 else "hour")
 if history is None:
     st.info(f"No readings in the last {period}.")
     st.stop()

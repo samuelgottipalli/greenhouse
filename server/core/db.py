@@ -265,34 +265,51 @@ def latest_sensor_readings(device_id: int = settings.DEVICE_ID) -> DataFrame | N
         DataFrame | None: Columns ``measure``, ``reading_utc`` and ``value``,
         one row per measure; None on error or if there are no readings.
     """
+    # One index lookup per measure (not a subquery per row): fast however long
+    # the history grows.
     return _read(
-        "SELECT m.name AS measure, r.reading_utc, r.value "
-        "FROM sensor_readings r JOIN measures m USING (measure_id) "
-        "WHERE r.device_id = :device_id AND r.reading_utc = ("
-        "  SELECT max(reading_utc) FROM sensor_readings "
-        "  WHERE device_id = r.device_id AND measure_id = r.measure_id) "
-        "ORDER BY m.name",
+        "WITH latest AS ("
+        "  SELECT m.measure_id, m.name, ("
+        "    SELECT max(reading_utc) FROM sensor_readings "
+        "    WHERE device_id = :device_id AND measure_id = m.measure_id) AS reading_utc "
+        "  FROM measures m) "
+        "SELECT l.name AS measure, l.reading_utc, r.value "
+        "FROM latest l JOIN sensor_readings r "
+        "  ON r.device_id = :device_id AND r.measure_id = l.measure_id AND r.reading_utc = l.reading_utc "
+        "ORDER BY l.name",
         {"device_id": device_id},
     )
 
 
-def sensor_history(since_utc: str, device_id: int = settings.DEVICE_ID) -> DataFrame | None:
+def sensor_history(
+    since_utc: str,
+    device_id: int = settings.DEVICE_ID,
+    bucket: str | None = None,
+) -> DataFrame | None:
     """
-    Read every sensor reading of a device since a moment, oldest first.
+    Read a device's sensor readings since a moment, oldest first.
 
     Args:
         since_utc (str): ``YYYY-MM-DD HH:MM:SS`` UTC (inclusive).
         device_id (int): Device to read.
+        bucket (str | None): ``"hour"`` to return hourly averages (one point
+            per measure per hour, timestamped at the start of the hour), which
+            keeps week- and month-long charts light; None for every reading.
 
     Returns:
         DataFrame | None: Columns ``measure``, ``reading_utc`` and ``value``;
         None on error or if there are no readings in the period.
     """
+    if bucket not in (None, "hour"):
+        raise ValueError(f"Unsupported bucket {bucket!r}")
+    time_expr = "substr(r.reading_utc, 1, 13) || ':00:00'" if bucket else "r.reading_utc"
+    value_expr = "round(avg(r.value), 2)" if bucket else "r.value"
+    group = "GROUP BY m.name, 2 " if bucket else ""
     return _read(
-        "SELECT m.name AS measure, r.reading_utc, r.value "
-        "FROM sensor_readings r JOIN measures m USING (measure_id) "
-        "WHERE r.device_id = :device_id AND r.reading_utc >= :since "
-        "ORDER BY r.reading_utc",
+        f"SELECT m.name AS measure, {time_expr} AS reading_utc, {value_expr} AS value "
+        "FROM measures m JOIN sensor_readings r "
+        "  ON r.measure_id = m.measure_id AND r.device_id = :device_id AND r.reading_utc >= :since "
+        f"{group}ORDER BY 2",
         {"device_id": device_id, "since": since_utc},
     )
 

@@ -134,6 +134,9 @@ python -m services.automation            # automation service (leave running)
 python -m services.ingest                # stores what the Pico sends (leave running)
 ```
 
+`python -m scripts.bench` times the dashboard's queries on a year of synthetic data (the real
+database is not touched).
+
 Settings such as the database location, broker address, time zone and weather location come from
 `server/.env`. The database needs SQLite 3.37 or newer.
 
