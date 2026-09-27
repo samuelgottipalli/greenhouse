@@ -35,3 +35,16 @@ def test_text_files_are_utf8():
 @pytest.mark.parametrize("secret", ["server/.env", "picoside/device/config.json", "server/data/greenhouse.db"])
 def test_secrets_and_data_are_not_tracked(secret):
     assert secret not in tracked_files()
+
+
+def test_deploy_and_docs_files_are_tracked():
+    # An old "*.conf" ignore rule once kept deploy/mosquitto/greenhouse.conf out of git.
+    tracked = set(tracked_files())
+    missing = [
+        path.relative_to(REPO_ROOT).as_posix()
+        for folder in ("deploy", "docs")
+        for path in (REPO_ROOT / folder).rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+        and path.relative_to(REPO_ROOT).as_posix() not in tracked
+    ]
+    assert missing == []
