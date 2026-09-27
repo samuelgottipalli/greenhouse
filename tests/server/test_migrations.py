@@ -227,3 +227,24 @@ def test_upgrade_v4_to_v5_keeps_a_calibrated_light_level(db_file):
     migrations.upgrade(db_file)
     assert query(db_file, "SELECT value, buffer FROM thresholds WHERE name = 'light_on_level' AND profile = 'current'") == [
         (22000.0, 8000.0)]
+
+
+def test_backup_includes_changes_still_in_the_wal(db_file, tmp_path):
+    migrations.upgrade(db_file)
+    writer = sqlite3.connect(db_file)
+    writer.execute("PRAGMA journal_mode = WAL")
+    writer.execute("INSERT INTO sensor_readings VALUES (1, 1, '2030-01-01 00:00:00', 42.0)")
+    writer.commit()  # committed, but still in greenhouse.db-wal
+    target = tmp_path / "copy.db"
+    migrations.backup_to(writer, target)
+    writer.close()
+    assert query(target, "SELECT value FROM sensor_readings") == [(42.0,)]
+
+
+def test_backup_db_script(seeded_db, tmp_path, capsys):
+    from scripts import backup_db
+
+    target = tmp_path / "manual.db"
+    assert backup_db.main([str(target)]) == 0
+    assert query(target, "SELECT count(*) FROM relay_events") == query(seeded_db, "SELECT count(*) FROM relay_events")
+    assert "Backed up" in capsys.readouterr().out

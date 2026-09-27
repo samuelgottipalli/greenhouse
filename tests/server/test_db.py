@@ -173,3 +173,29 @@ def test_latest_sensor_readings_picks_newest_per_measure(seeded_db, db_conn):
     assert latest.loc["temperature", "value"] == 5.0
     assert latest.loc["light_raw", "reading_utc"] == "2030-02-01 00:00:00"
     assert latest.loc["humidity", "value"] == 45.0
+
+
+def test_sqlite_uses_wal_and_busy_timeout(seeded_db):
+    from sqlalchemy import text
+
+    with db.get_engine().connect() as conn:
+        assert conn.execute(text("PRAGMA journal_mode")).scalar() == "wal"
+        assert conn.execute(text("PRAGMA busy_timeout")).scalar() == 5000
+
+
+def test_concurrent_writers_do_not_fail(seeded_db):
+    import threading
+
+    results = []
+
+    def writer(relay_id):
+        for i in range(100):
+            results.append(db.log_relay_event(relay_id=relay_id, state=i % 2, source="auto",
+                                              event_utc=f"2030-01-01 00:{i // 60:02d}:{i % 60:02d}"))
+
+    threads = [threading.Thread(target=writer, args=(r,)) for r in (1, 2, 3, 4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(results) == 400 and all(results)

@@ -378,8 +378,13 @@ after 60 s without a button press. Things to know before moving off mains power:
 
 ## Rolling back
 
-- **Database:** every upgrade leaves `server/data/greenhouse.v<N>-backup-<time>.db`. Stop the
-  services (`sudo systemctl stop 'greenhouse-*'`) and copy a backup over `greenhouse.db`.
+- **Backups:** every upgrade leaves `server/data/greenhouse.v<N>-backup-<time>.db`. For a manual
+  backup at any time, even while the services run, use `python -m scripts.backup_db [target]`.
+  The database uses WAL mode, so recent changes may still be in `greenhouse.db-wal`; a plain file
+  copy of `greenhouse.db` alone can miss them.
+- **Restore:** stop everything (`sudo systemctl stop 'greenhouse-*'`), delete `greenhouse.db-wal`
+  and `greenhouse.db-shm` if present, copy the backup over `greenhouse.db`, then start the services
+  again.
 - **Services:** `sudo systemctl disable --now greenhouse-ingest greenhouse-automation greenhouse-weather greenhouse-web`.
 - **Controller:** relays default to off at boot. To stop the program entirely, `mpremote rm :main.py`
   (copy it back later with `mpremote cp main.py :`).

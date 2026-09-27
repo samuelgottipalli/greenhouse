@@ -11,3 +11,8 @@ def test_bench_runs_and_meets_target_on_small_data(capsys, seeded_db):
     assert "latest_sensor_readings" in out and "SLOW" not in out
     # The benchmark must not leave the app pointing at its throwaway database.
     assert db.latest_relay_states() is not None
+
+
+def test_bench_with_several_devices(seeded_db, capsys):
+    assert bench.main(["--days", "2", "--runs", "1", "--devices", "3"]) == 0
+    assert "3 device(s)" in capsys.readouterr().out

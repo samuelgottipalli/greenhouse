@@ -37,3 +37,7 @@ server/data/*.db
 
 # deployment configs are part of the project
 !deploy/**/*.conf
+
+# SQLite WAL side files
+server/data/*.db-wal
+server/data/*.db-shm

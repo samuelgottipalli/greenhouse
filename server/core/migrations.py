@@ -20,7 +20,6 @@ Create or upgrade the greenhouse SQLite database.
 Run it with ``python -m scripts.upgrade_db`` from the ``server/`` folder.
 """
 import logging
-import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -429,6 +428,24 @@ def migrate_v4(conn: sqlite3.Connection) -> None:
 STEPS = {2: migrate_v2, 3: migrate_v3, 4: migrate_v4}
 
 
+def backup_to(conn: sqlite3.Connection, target: Path) -> None:
+    """
+    Copy a live database to a file with SQLite's backup API.
+
+    Unlike a plain file copy this includes changes still in the WAL file and
+    is consistent even while other processes are writing.
+
+    Args:
+        conn (sqlite3.Connection): Open connection to the database to copy.
+        target (Path): Backup file to create.
+    """
+    destination = sqlite3.connect(target)
+    try:
+        conn.backup(destination)
+    finally:
+        destination.close()
+
+
 def upgrade(path: Path | None = None) -> str:
     """
     Bring a database file to the current schema version.
@@ -461,9 +478,7 @@ def upgrade(path: Path | None = None) -> str:
             raise RuntimeError(f"{path} has unsupported schema version {version}")
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         backup = path.with_name(f"{path.stem}.v{version}-backup-{stamp}{path.suffix}")
-        conn.close()
-        shutil.copy2(path, backup)
-        conn = connect(path)
+        backup_to(conn, backup)
         if version == 1:
             counts = migrate_v1(conn)
             return f"Migrated {path} from version 1 (backup: {backup.name}): {counts}"

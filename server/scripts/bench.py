@@ -5,6 +5,7 @@ Usage (from the ``server/`` folder)::
 
     python -m scripts.bench                 # one year of data, 20 runs per query
     python -m scripts.bench --days 30 --runs 5
+    python -m scripts.bench --devices 5          # five controllers, a year each
 
 Creates a throwaway database in a temporary folder (the real database is never
 touched), fills it with ``--days`` of readings every 5 minutes (temperature,
@@ -23,13 +24,14 @@ from pathlib import Path
 TARGET_MS = 50.0
 
 
-def fill(path: Path, days: int) -> dict[str, int]:
+def fill(path: Path, days: int, devices: int = 1) -> dict[str, int]:
     """
     Create a database and fill it with synthetic data.
 
     Args:
         path (Path): New database file.
         days (int): Days of history to generate, ending now.
+        devices (int): Controllers to create and fill (IDs 1..devices).
 
     Returns:
         dict[str, int]: Rows written per table.
@@ -38,6 +40,10 @@ def fill(path: Path, days: int) -> dict[str, int]:
 
     conn = migrations.connect(path)
     migrations.create_new(conn)
+    for device_id in range(2, devices + 1):
+        conn.execute("BEGIN")
+        migrations.seed_device(conn, device_id, f"picow{device_id}")
+        conn.execute("COMMIT")
     end = datetime.now(timezone.utc).replace(microsecond=0)
     start = end - timedelta(days=days)
     fmt = "%Y-%m-%d %H:%M:%S"
@@ -49,9 +55,10 @@ def fill(path: Path, days: int) -> dict[str, int]:
             moment += timedelta(minutes=step_minutes)
 
     conn.execute("BEGIN")
-    readings = [(1, measure, at, value) for at in times(5) for measure, value in ((1, 21.0), (8, 50.0), (6, 30000.0))]
+    readings = [(d, measure, at, value) for d in range(1, devices + 1) for at in times(5)
+                for measure, value in ((1, 21.0), (8, 50.0), (6, 30000.0))]
     conn.executemany("INSERT INTO sensor_readings VALUES (?, ?, ?, ?)", readings)
-    events = [(1, 1 + i % 4, at, i % 2, "auto") for i, at in enumerate(times(20))]
+    events = [(d, 1 + i % 4, at, i % 2, "auto") for d in range(1, devices + 1) for i, at in enumerate(times(20))]
     conn.executemany(
         "INSERT INTO relay_events (device_id, relay_id, event_utc, state, source) VALUES (?, ?, ?, ?, ?)", events
     )
@@ -64,12 +71,13 @@ def fill(path: Path, days: int) -> dict[str, int]:
     return {"sensor_readings": len(readings), "relay_events": len(events), "weather_readings": len(weather)}
 
 
-def measure(runs: int) -> dict[str, float]:
+def measure(runs: int, device_id: int = 1) -> dict[str, float]:
     """
     Time each page query against the configured database.
 
     Args:
         runs (int): Repetitions per query; the median is reported.
+        device_id (int): Controller whose pages are timed.
 
     Returns:
         dict[str, float]: Query name to median milliseconds.
@@ -79,11 +87,13 @@ def measure(runs: int) -> dict[str, float]:
 
     now = datetime.now(timezone.utc)
     queries = {
-        "latest_sensor_readings": db.latest_sensor_readings,
-        "latest_relay_states": db.latest_relay_states,
-        "sensor_history_24h": lambda: db.sensor_history(utc_timestamp(now - timedelta(days=1))),
-        "sensor_history_7d_hourly": lambda: db.sensor_history(utc_timestamp(now - timedelta(days=7)), bucket="hour"),
-        "sensor_history_30d_hourly": lambda: db.sensor_history(utc_timestamp(now - timedelta(days=30)), bucket="hour"),
+        "latest_sensor_readings": lambda: db.latest_sensor_readings(device_id=device_id),
+        "latest_relay_states": lambda: db.latest_relay_states(device_id=device_id),
+        "sensor_history_24h": lambda: db.sensor_history(utc_timestamp(now - timedelta(days=1)), device_id=device_id),
+        "sensor_history_7d_hourly": lambda: db.sensor_history(
+            utc_timestamp(now - timedelta(days=7)), device_id=device_id, bucket="hour"),
+        "sensor_history_30d_hourly": lambda: db.sensor_history(
+            utc_timestamp(now - timedelta(days=30)), device_id=device_id, bucket="hour"),
         "recent_weather": db.recent_weather,
         "read_thresholds": db.read_thresholds,
         "relay_names": db.relay_names,
@@ -110,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--days", type=int, default=365)
     parser.add_argument("--runs", type=int, default=20)
+    parser.add_argument("--devices", type=int, default=1, help="controllers to simulate (pages timed for the last)")
     args = parser.parse_args(argv)
 
     from core import db, settings
@@ -117,12 +128,12 @@ def main(argv: list[str] | None = None) -> int:
     original_url = settings.DB_URL
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "bench.db"
-        counts = fill(path, args.days)
+        counts = fill(path, args.days, args.devices)
         settings.DB_URL = f"sqlite:///{path.as_posix()}"
         db.get_engine.cache_clear()
         try:
-            print(f"Synthetic data for {args.days} days: {counts}")
-            results = measure(args.runs)
+            print(f"Synthetic data for {args.days} days, {args.devices} device(s): {counts}")
+            results = measure(args.runs, device_id=args.devices)
         finally:
             db.get_engine().dispose()
             settings.DB_URL = original_url

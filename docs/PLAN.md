@@ -97,7 +97,7 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | 4.5 ✅ | Web login (Streamlit OIDC, or a reverse proxy with auth) and persistent per-user preferences in the database. | SEC-03, S-18 | Unauthenticated requests are redirected to login; preferences survive a browser restart. | 1 d |
 | 4.6 ✅ | Alerts: temperature out of range, device offline, or service down, sent by email or push with a cooldown. | (feature) | A test triggers each alert once per cooldown window. | 1 d |
 | 4.7 ✅ | Light automation from a calibrated LDR plus sunrise/sunset in `weather_data`. | P-10 | Calibration procedure documented; automation tests for day, night and cloudy cases. | 1 d |
-| 4.8 | If more than about 5 devices or several years of data: move from SQLite to PostgreSQL/TimescaleDB. Only `DB_CONNECTION_STRING` and the SQL dialect should change. | (scale) | The test suite passes against Postgres in CI. | 1–2 d |
+| 4.8 ✅ | If more than about 5 devices or several years of data: move from SQLite to PostgreSQL/TimescaleDB. Only `DB_CONNECTION_STRING` and the SQL dialect should change. **Evaluated 2026-09-26: not needed.** `python -m scripts.bench --devices 5` (five controllers, a year of raw 5-minute readings each, 1.58 M rows, no retention) keeps every page query at 33 ms or less; with retention a device adds ~2.6 MB/year. SQLite now runs in WAL mode with a busy timeout so the four processes can write concurrently. Revisit if there are more than ~20 controllers, if `database is locked` appears in the logs, or if the dashboard must run on a different machine than the database. | (scale) | The test suite passes against Postgres in CI. | 1–2 d |
 
 ---
 
@@ -111,6 +111,6 @@ Goal: runs unattended for weeks, and stays fast as data grows.
 | 1 | 1.1–1.9 ✅ | Hardware confirmations for 1.6/1.7 are in the RUNBOOK sign-off |
 | 2 | 2.1–2.4 ✅ | 2.2 on-hardware check in the RUNBOOK sign-off. Added: controller local mode and sensor-fault heater cut-off (P-15), relay-state resync (P-14), send-before-log (S-19/S-20) |
 | 3 | 3.1–3.4 ✅ | 3.2: 7-day soak simulated in tests; the on-hardware run is in the RUNBOOK sign-off. 3.3: heartbeats + systemd watchdog. 3.4: 2.6 MB/device/year measured |
-| 4 | 4.1 ✅ · 4.2 ✅ · 4.3 ✅ · 4.5 ✅ · 4.4, 4.6–4.8 open | |
+| 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

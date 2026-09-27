@@ -78,7 +78,7 @@ flowchart LR
 | `server/app.py` | The web dashboard. Its pages are in `server/views/` and the About/Help text is in `server/content/`. |
 | `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py`, `weather_collector.py`, and `alerts.py` (push/email alerts, every 2 min). |
 | `server/core/` | Shared code: database access, settings, MQTT, the weather API client, unit conversions. |
-| `server/scripts/` | Maintenance: `upgrade_db.py` creates or upgrades the database; `add_device.py` registers another controller; `set_password.py`, `bench.py`, `retention.py`, `telemetry_report.py`. |
+| `server/scripts/` | Maintenance: `upgrade_db.py` creates or upgrades the database; `add_device.py` registers another controller; `backup_db.py` makes a safe live backup; `set_password.py`, `bench.py`, `retention.py`, `telemetry_report.py`. |
 | `deploy/` | systemd service files and their installer; MQTT broker config. |
 | `server/data/` | The SQLite database. |
 | `tests/` | Automated tests for both sides (see [Running the tests](#running-the-tests)). |

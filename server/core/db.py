@@ -1,8 +1,9 @@
 """
 All database reads and writes for the web app and background services.
 
-One SQLAlchemy engine is created per process and reused (SQLite foreign keys
-are switched on for every connection). Read functions return a DataFrame, or
+One SQLAlchemy engine is created per process and reused. Every SQLite
+connection enforces foreign keys and uses WAL journaling with a 5 s busy
+timeout, so the web app and the services can read and write concurrently. Read functions return a DataFrame, or
 ``None`` if the query failed or found no rows. Write functions return True on
 success and False on a database error. Errors are logged, not raised.
 
@@ -39,8 +40,13 @@ def get_engine(url: str | None = None) -> Engine:
     if engine.dialect.name == "sqlite":
 
         @event.listens_for(engine, "connect")
-        def _enable_foreign_keys(dbapi_conn, _record):
+        def _configure_sqlite(dbapi_conn, _record):
             dbapi_conn.execute("PRAGMA foreign_keys = ON")
+            # Several processes share the file (web, ingest, automation, alerts):
+            # WAL lets readers and one writer work at once, and the busy timeout
+            # makes a writer wait for another instead of failing.
+            dbapi_conn.execute("PRAGMA journal_mode = WAL")
+            dbapi_conn.execute("PRAGMA busy_timeout = 5000")
 
     return engine
 
