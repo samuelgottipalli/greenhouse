@@ -12,9 +12,10 @@ import streamlit as st
 from core import db
 from core.mqtt import publish_relay_command
 from core.timeutil import utc_timestamp
-from ui import current_device, page_setup
+from ui import auto_refresh, current_device, page_setup
 
 page_setup("Greenhouse Control")
+auto_refresh("control", ("device", "relays"))
 
 # Display order, by relay name. The widget key is the relay number.
 CONTROLLED_RELAYS: list[str] = ["fan", "heater", "light", "water"]

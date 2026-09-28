@@ -32,9 +32,10 @@ from core.indoor_report import (
     readings_table,
 )
 from core.timeutil import utc_timestamp
-from ui import current_device, display_zone, page_setup
+from ui import auto_refresh, current_device, display_zone, page_setup
 
 page_setup("Greenhouse Weather", layout="wide")
+auto_refresh("greenhouse", ("device",))
 st.title("Greenhouse Weather")
 
 CHART_COLORS = {"temperature": "#ef4444", "humidity": "#3b82f6", "light_raw": "#eab308"}

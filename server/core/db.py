@@ -675,6 +675,41 @@ def update_firmware_status(device_id: int, version: str, state: str, detail: str
     )])
 
 
+def data_version(device_id: int = settings.DEVICE_ID,
+                 parts: tuple[str, ...] = ("device", "relays", "weather", "alerts")) -> str | None:
+    """
+    A short fingerprint of the newest data, for pages that refresh themselves.
+
+    Every part is one key lookup or index read, never a table scan, so pages
+    can check it every few seconds even on a Raspberry Pi:
+
+    * ``device``: the controller's status row (changes with every telemetry
+      message, status change or firmware report).
+    * ``relays``: the newest relay event number (any device).
+    * ``weather``: the newest outdoor weather slot.
+    * ``alerts``: the number of active alerts and the newest one's start.
+
+    Args:
+        device_id (int): Controller.
+        parts (tuple[str, ...]): Which parts to include.
+
+    Returns:
+        str | None: Changes whenever any included part changes; None on error.
+    """
+    queries = {
+        "device": "SELECT coalesce((SELECT status || updated_utc || coalesce(last_seen_utc, '') || "
+                  "coalesce(firmware_state, '') FROM device_status WHERE device_id = :device_id), '')",
+        "relays": "SELECT coalesce(max(event_id), 0) FROM relay_events",
+        "weather": "SELECT coalesce(max(measured_utc), '') FROM weather_readings",
+        "alerts": "SELECT count(*) || coalesce(max(since_utc), '') FROM alerts WHERE active = 1",
+    }
+    sql = "SELECT " + ", ".join(f"({queries[part]}) AS {part}" for part in parts)
+    data = _read(sql, {"device_id": device_id})
+    if data is None:
+        return None
+    return "|".join(str(value) for value in data.iloc[0].tolist())
+
+
 def update_device_health(
     device_id: int,
     seen_utc: str,

@@ -2,7 +2,7 @@
 Weather Data report page: today's outdoor conditions from ``weather_readings``.
 
 Shows date/time (refreshed every minute) and the latest Open-Meteo reading
-(refreshed every 15 minutes):
+(the page reloads itself when a new reading arrives, see ``ui.auto_refresh``):
 
 * **Gauges** for temperature, humidity and wind speed, each with the change
   over the last hour and a chart of the day underneath (``core/gauges.py``,
@@ -26,9 +26,10 @@ from core.charts import time_chart
 from core.gauges import change_over, gauge_svg, humidity_zones, outdoor_temperature_zones, wind_zones
 from core.weather_codes import weather_code_descr
 from core.weather_report import to_display_units, wind_label
-from ui import display_zone, page_setup
+from ui import auto_refresh, display_zone, page_setup
 
 page_setup("Weather Data", layout="wide")
+auto_refresh("weather", ("weather",))
 st.title(body="Weather Data")
 
 TIME_COLUMNS = ["measured_utc", "sunrise_utc", "sunset_utc"]
@@ -60,12 +61,11 @@ def metric_with_delta(column, label: str, data: DataFrame, field: str, unit: str
     )
 
 
-@st.fragment(run_every=timedelta(minutes=15))
 def get_weather_data(weathertoast: DeltaGenerator) -> None:
     """
     Load today's weather readings and render the metric cards.
 
-    Runs as a fragment that re-executes every 15 minutes. Reads the most
+    The page reloads itself when a new reading arrives (``ui.auto_refresh``). Reads the most
     recent 216 rows (about 2 days at 15-minute intervals), converts times from
     UTC to the chosen zone, keeps today's rows and converts units. With no
     readings for today it says so and shows when the last reading was taken.

@@ -19,9 +19,10 @@ import streamlit as st
 from core import db, firmware
 from core.health import format_duration, service_health, signal_quality
 from core.indoor_report import age_text, is_stale
-from ui import current_device, page_setup
+from ui import auto_refresh, current_device, page_setup
 
 page_setup("Home")
+auto_refresh("home")
 st.title("Greenhouse")
 
 SERVICE_BADGES = {

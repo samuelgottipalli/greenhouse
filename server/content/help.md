@@ -71,6 +71,12 @@ Choose how the app displays information:
 *   **Display Units:** SI (°C, km/h, cm) or US (°F, mph, in).
 *   **Date Format** and **Time Format** (12- or 24-hour).
 *   **Timezone:** UTC, or a local time zone.
+*   **Colour scheme:** Light, Dark, or follow your device's setting.
+*   **Page width:** Automatic (reports use the full width, other pages stay narrow), Wide or
+    Centered.
+*   **Refresh pages automatically:** Home, the reports and Remote Control check for new data every
+    30 seconds (one small database query) and update themselves when something changed. Turn it
+    off to update only when you reload the page.
 
 These choices are saved and apply to every browser that opens the dashboard.
 

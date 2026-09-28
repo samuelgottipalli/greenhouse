@@ -3,3 +3,8 @@
 [browser]
 # Do not send usage statistics to Streamlit.
 gatherUsageStats = false
+
+[client]
+# Hide Streamlit's own menu (Rerun, Settings, Print, Clear cache, Deploy). The colour
+# scheme and page width are chosen on the dashboard's App Settings page instead.
+toolbarMode = "minimal"

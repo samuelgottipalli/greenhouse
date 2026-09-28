@@ -1,5 +1,6 @@
 """
-App Settings page: display preferences (units, formats, time zone).
+App Settings page: display preferences (units, formats, time zone, colour
+scheme, page width and automatic refresh).
 
 Choices apply to the current session immediately and are saved to the
 database, so new sessions start with them. The keys are listed in ``ui.py``.
@@ -8,7 +9,7 @@ import zoneinfo
 
 import streamlit as st
 
-from ui import PREFERENCE_DEFAULTS, page_setup, save_preferences
+from ui import PAGE_WIDTHS, PREFERENCE_DEFAULTS, THEMES, page_setup, save_preferences
 
 page_setup("App Settings")
 before = {key: st.session_state[key] for key in PREFERENCE_DEFAULTS}
@@ -70,8 +71,33 @@ with st.container(border=True):
             index=load_value(timezone_list, st.session_state["timezone_name"]),
         )
 
+with st.container(border=True):
+    st.session_state["theme"] = st.radio(
+        "Colour scheme",
+        THEMES,
+        horizontal=True,
+        index=load_value(THEMES, st.session_state["theme"]),
+        help="Use system setting follows your phone's or computer's light/dark mode.",
+    )
+    st.session_state["page_width"] = st.radio(
+        "Page width",
+        PAGE_WIDTHS,
+        horizontal=True,
+        index=load_value(PAGE_WIDTHS, st.session_state["page_width"]),
+        help="Automatic: report pages use the full width, the others stay narrow and easy to read.",
+    )
+    refresh = st.toggle(
+        "Refresh pages automatically when new data arrives",
+        value=st.session_state["auto_refresh"] == "On",
+        help="Home, the reports and Remote Control check for new readings every 30 seconds with one "
+             "small database query, and reload only when something changed.",
+    )
+    st.session_state["auto_refresh"] = "On" if refresh else "Off"
+
 if {key: st.session_state[key] for key in PREFERENCE_DEFAULTS} != before:
     if save_preferences():
         st.toast("Preferences saved", icon=":material/check_circle:")
+        if st.session_state["page_width"] != before["page_width"] or st.session_state["theme"] != before["theme"]:
+            st.rerun()  # apply the new width or colour scheme now
     else:
         st.toast("Preferences could not be saved", icon=":material/error:")

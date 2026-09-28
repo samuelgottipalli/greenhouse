@@ -10,7 +10,16 @@ session starts, under these keys:
 * ``time_format``: "12-hour" or "24-hour"
 * ``timezone``: "UTC" or "Local"
 * ``timezone_name``: IANA zone used when ``timezone`` is "Local"
+* ``theme``: "Use system setting", "Light" or "Dark"
+* ``page_width``: "Automatic" (each page's own), "Wide" or "Centered"
+* ``auto_refresh``: "On" or "Off": pages reload themselves when new data arrives
+
+Streamlit's own menu (with its theme and wide-mode settings) is hidden
+(``.streamlit/config.toml``); the colour scheme is applied by writing the
+browser setting Streamlit reads at start-up (:func:`apply_theme`).
 """
+import json
+from datetime import timedelta
 from time import sleep
 from pathlib import Path
 
@@ -31,7 +40,16 @@ PREFERENCE_DEFAULTS: dict[str, str] = {
     "time_format": "12-hour",
     "timezone": "Local",
     "timezone_name": settings.TIMEZONE,
+    "theme": "Use system setting",
+    "page_width": "Automatic",
+    "auto_refresh": "On",
 }
+THEMES: list[str] = ["Use system setting", "Light", "Dark"]
+PAGE_WIDTHS: list[str] = ["Automatic", "Wide", "Centered"]
+# URL paths of the pages (app.py). Streamlit keeps the chosen theme per path.
+PAGE_PATHS: list[str] = ["", "home", "weather", "greenhouse", "control", "appsettings", "greenhousesettings",
+                         "controllers", "about", "help"]
+REFRESH_EVERY = timedelta(seconds=30)
 
 
 def init_preferences() -> None:
@@ -198,12 +216,113 @@ def page_setup(title: str, layout: str = "centered") -> None:
 
     Args:
         title (str): Browser tab title.
-        layout (str): ``"centered"`` or ``"wide"``.
+        layout (str): The page's own width, ``"centered"`` or ``"wide"``; the
+            *Page width* preference can override it.
     """
-    st.set_page_config(page_title=title, page_icon=FAVICON, layout=layout)
-    st.logo(FAVICON, icon_image=FAVICON, size="large")
     init_preferences()
+    st.set_page_config(page_title=title, page_icon=FAVICON,
+                       layout=effective_layout(layout, st.session_state["page_width"]))
+    st.logo(FAVICON, icon_image=FAVICON, size="large")
+    apply_theme(st.session_state["theme"])
     device_selector()
+
+
+def effective_layout(page_layout: str, page_width: str) -> str:
+    """
+    The layout a page should use.
+
+    Args:
+        page_layout (str): The page's own choice.
+        page_width (str): The *Page width* preference.
+
+    Returns:
+        str: ``"wide"`` or ``"centered"``.
+    """
+    return {"Wide": "wide", "Centered": "centered"}.get(page_width, page_layout)
+
+
+def theme_script(theme: str, paths: list[str] = PAGE_PATHS) -> str:
+    """
+    JavaScript that makes the browser use a colour scheme.
+
+    Streamlit reads the scheme at start-up from local storage, one entry per
+    page path (``stActiveTheme-<path>-v1``). The script writes the entry for
+    every page (removing it for *Use system setting*) and reloads the page
+    if the current one changed.
+
+    Args:
+        theme (str): One of ``THEMES``.
+        paths (list[str]): Page URL paths.
+
+    Returns:
+        str: A ``<script>`` element.
+    """
+    wanted = json.dumps({"name": theme}, separators=(",", ":")) if theme in ("Light", "Dark") else None  # as Streamlit writes it
+    keys = json.dumps([f"stActiveTheme-/{path}-v1" for path in paths])
+    return ("<script>try{const w=window.parent,s=w.localStorage,want=" + json.dumps(wanted) + ";"
+            "const keys=new Set(" + keys + ");const here='stActiveTheme-'+w.location.pathname+'-v1';"
+            "keys.add(here);let reload=false;"
+            "for(const k of keys){if(s.getItem(k)!==want){if(k===here)reload=true;"
+            "if(want===null)s.removeItem(k);else s.setItem(k,want);}}"
+            "if(reload)w.location.reload();}catch(e){}</script>")
+
+
+def apply_theme(theme: str) -> None:
+    """
+    Apply the colour scheme preference, once per session and whenever it changes.
+
+    Args:
+        theme (str): One of ``THEMES``.
+    """
+    if st.session_state.get("_applied_theme") == theme:
+        return
+    st.session_state["_applied_theme"] = theme
+    components.html(theme_script(theme), height=0)
+
+
+def data_changed(key: str, version: str | None, state=None) -> bool:
+    """
+    Remember a data fingerprint and tell whether it differs from last time.
+
+    Args:
+        key (str): Which page is asking.
+        version (str | None): Output of ``db.data_version`` (None = unknown).
+        state (dict | None): Where to remember it (default ``st.session_state``).
+
+    Returns:
+        bool: True if there was an earlier fingerprint and this one differs.
+    """
+    state = st.session_state if state is None else state
+    if version is None:
+        return False
+    seen = state.get(key)
+    state[key] = version
+    return seen is not None and seen != version
+
+
+def auto_refresh(key: str, parts: tuple[str, ...] = ("device", "relays", "weather", "alerts"),
+                 every: timedelta = REFRESH_EVERY) -> None:
+    """
+    Reload the page when new data arrives (if the *Auto-refresh* preference is on).
+
+    A fragment checks ``db.data_version`` every ``every`` (one tiny query)
+    and reruns the whole page only when it changed.
+
+    Args:
+        key (str): Page name, so each page tracks its own fingerprint.
+        parts (tuple[str, ...]): Which data the page shows (see ``db.data_version``).
+        every (timedelta): How often to check.
+    """
+    if st.session_state.get("auto_refresh", "On") != "On":
+        return
+    state_key = f"_data_version_{key}"
+
+    @st.fragment(run_every=every)
+    def watch():
+        if data_changed(state_key, db.data_version(current_device(), parts)):
+            st.rerun(scope="app")
+
+    watch()
 
 
 def display_zone() -> str:
