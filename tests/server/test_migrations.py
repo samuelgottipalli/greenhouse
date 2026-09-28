@@ -136,8 +136,8 @@ def make_v2(path):
 
 def test_upgrade_v2_to_v3(db_file):
     make_v2(db_file)
-    assert "from version 2 to 6" in migrations.upgrade(db_file)
-    assert query(db_file, "PRAGMA user_version") == [(6,)]
+    assert f"from version 2 to {migrations.SCHEMA_VERSION}" in migrations.upgrade(db_file)
+    assert query(db_file, "PRAGMA user_version") == [(migrations.SCHEMA_VERSION,)]
     assert query(db_file, "SELECT name, si_unit FROM measures WHERE measure_id = 6") == [("light_raw", "raw")]
     assert query(db_file, "SELECT count(*) FROM device_status") == [(0,)]
     assert query(db_file, "SELECT count(*) FROM app_preferences") == [(0,)]
@@ -182,10 +182,10 @@ def make_v3(path):
 
 def test_upgrade_v3_to_v4_keeps_status(db_file):
     make_v3(db_file)
-    assert "from version 3 to 6" in migrations.upgrade(db_file)
-    assert query(db_file, "PRAGMA user_version") == [(6,)]
+    assert f"from version 3 to {migrations.SCHEMA_VERSION}" in migrations.upgrade(db_file)
+    assert query(db_file, "PRAGMA user_version") == [(migrations.SCHEMA_VERSION,)]
     assert query(db_file, "SELECT * FROM device_status") == [
-        (1, "online", "2026-09-26 19:00:00") + (None,) * 8]
+        (1, "online", "2026-09-26 19:00:00") + (None,) * 9]
     assert query(db_file, "SELECT count(*) FROM service_heartbeats") == [(0,)]
 
 
@@ -203,7 +203,25 @@ def test_every_step_matches_fresh_schema(db_file, tmp_path):
     assert layout(db_file) == layout(fresh)
 
 
-FIRMWARE_COLUMNS = ("firmware_version", "firmware_state", "firmware_detail", "firmware_utc")
+FIRMWARE_COLUMNS = ("firmware_version", "firmware_name", "firmware_state", "firmware_detail", "firmware_utc")
+
+
+def make_v6(path):
+    """Turn a fresh current database back into the version 6 layout, with one reported build."""
+    migrations.upgrade(path)
+    conn = sqlite3.connect(path)
+    conn.execute("ALTER TABLE device_status DROP COLUMN firmware_name")
+    conn.execute("INSERT INTO device_status (device_id, status, updated_utc, firmware_version, firmware_state) "
+                 "VALUES (1, 'online', '2026-09-26 19:00:00', '3f9a0c1b2d4e', 'running')")
+    conn.execute("PRAGMA user_version = 6")
+    conn.commit()
+    conn.close()
+
+
+def test_upgrade_v6_to_v7_adds_the_version_name(db_file):
+    make_v6(db_file)
+    assert "from version 6 to 7" in migrations.upgrade(db_file)
+    assert query(db_file, "SELECT firmware_version, firmware_name FROM device_status") == [("3f9a0c1b2d4e", None)]
 
 
 def make_v5(path):
@@ -221,7 +239,7 @@ def make_v5(path):
 
 def test_upgrade_v5_to_v6_adds_firmware_columns(db_file):
     make_v5(db_file)
-    assert "from version 5 to 6" in migrations.upgrade(db_file)
+    assert f"from version 5 to {migrations.SCHEMA_VERSION}" in migrations.upgrade(db_file)
     assert query(db_file, "SELECT uptime_s, firmware_version, firmware_state FROM device_status") == [(60, None, None)]
     conn = sqlite3.connect(db_file)
     with pytest.raises(sqlite3.IntegrityError):
@@ -245,7 +263,7 @@ def make_v4(path, light=(3.0, 0.0)):
 
 def test_upgrade_v4_to_v5_fixes_old_light_default(db_file):
     make_v4(db_file)
-    assert "from version 4 to 6" in migrations.upgrade(db_file)
+    assert f"from version 4 to {migrations.SCHEMA_VERSION}" in migrations.upgrade(db_file)
     assert query(db_file, "SELECT profile, value, buffer FROM thresholds WHERE name = 'light_on_level' ORDER BY profile") == [
         ("current", 15000.0, 10000.0), ("default", 15000.0, 10000.0)]
     assert query(db_file, "SELECT count(*) FROM alerts") == [(0,)]

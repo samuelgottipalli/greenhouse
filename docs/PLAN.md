@@ -115,6 +115,32 @@ update the controller's code without a USB cable.
 | 5.5 ✅ | **Desktop installer** (`setup.bat` / `setup.sh` → PySide6 wizard): installs the packages, asks for location, time zone and dashboard password, installs and locks down Mosquitto (creating passwords), creates the database, starts the services (systemd on Linux, log-in start on Windows/macOS), then sets up the Pico over USB: installs MicroPython if needed, writes Wi-Fi settings (defaulting to this computer's network, warning about 5 GHz), copies the code and waits for the controller to come online. | (usability) | Logic tests for every step (env file, commands per OS, broker files, Pico file list, Wi-Fi detection); GUI smoke test runs offscreen in CI. | 4 d |
 | 5.6 ✅ | Docs: a short *Quick start* for the installer and hotspot, RUNBOOK kept as the manual/advanced path, in-app Help updated. | (docs) | Docs tests check every referenced file and command exists. | 0.5 d |
 
+## Phase 6: Version numbers people can read (about 2 days)
+
+Goal: the dashboard, the controller and the installer say "1.1.0", not a code like `3f9a0c1b2d4e`,
+and each release has a short list of what changed. Work happens on the `develop` branch; `main`
+holds released versions only (tagged `v1.0.0`, `v1.1.0`, ...).
+
+| Step | Work | Fixes | Done when | Effort |
+|---|---|---|---|---|
+| 6.1 ✅ | **Version numbers.** `server/version.py` and `picoside/device/version.py` each hold a version like `1.1.0` (major.minor.patch: major = big or breaking change, minor = new features, patch = fixes only). While a release is being built it ends in `-dev`. `CHANGELOG.md` lists what changed in each release, in plain words. Releases are merged to `main` and tagged. | (usability) | Tests: both versions are valid, and `CHANGELOG.md` has an entry for each. | 0.5 d |
+| 6.2 ✅ | **The controller says its version.** Update messages carry the version name next to the exact build (the file hash that was the only "version" before). The controller reports both, records the name with each update ("Updated from 1.0.0 to 1.1.0"), and shows its version on the screen while starting. 1.0.0 controllers still update: the manifest keeps the fields they read. | (usability) | Tests: a 1.0.0-style controller accepts the new manifest; a new controller reports name and build; rollback still works. | 0.5 d |
+| 6.3 ✅ | **The dashboard shows versions.** Schema v7 stores the controller's version name. Settings › Controllers shows *Installed 1.1.0* / *Available 1.1.0* (with the build underneath for support); an update is offered when the build differs, or by name when the build is unknown. Help › About and the installer show the server version. | (usability) | Tests: migration, the update-available rule for known/unknown builds and old controllers, and the page text. | 0.5 d |
+| 6.4 ✅ | **Installer records the build** when it copies the code over USB, so a freshly set-up controller doesn't show *Update available*. (Already in place since 5.5.) | (usability) | Test: the staged files include `firmware.json` with the manifest's build. | 0.25 d |
+
+## Phase 7: Cloud MQTT services (about 4 days)
+
+Goal: anyone who would rather not run Mosquitto can use a hosted MQTT service (for example HiveMQ
+Cloud's free plan), with encrypted and verified connections from the server and the controllers.
+
+| Step | Work | Fixes | Done when | Effort |
+|---|---|---|---|---|
+| 7.1 | **Encrypted connections from the server.** New settings `MQTT_TLS` (on automatically for port 8883) and `MQTT_CA_FILE` (optional). Every server connection (ingest, relay commands, settings, updates, installer checks) goes through one helper. | (feature) | Tests: each connection gets the login and TLS settings; a real TLS login to a public test broker in a network test (skipped offline). | 0.5 d |
+| 7.2 | **Encrypted connections from the controller.** A small set of root certificates (Let's Encrypt, Amazon, DigiCert, GlobalSign, Google, Sectigo) ships in `picoside/device/certs/` as `.py` text files, so 1.0.0 controllers can still update to it. New config `mqtt_tls` and `mqtt_ca` (a root's name; empty = find the one that works and remember it). TLS waits for the clock (certificates have dates). | (feature) | Tests: context set-up, root discovery, a certificate that doesn't match is refused, clock-not-set handling. On the real Pico: verified connection to a Let's Encrypt broker, memory measured. | 1 d |
+| 7.3 | **Setup codes and the setup page** carry *encrypted* and the root's name (`t`, `c`); the setup page's manual section gets an *Encrypted connection (TLS)* box. | (feature) | Round-trip tests of the new keys; old codes still decode. | 0.5 d |
+| 7.4 | **Installer: "Use a cloud MQTT service".** Address, port 8883, the server's login and controller 1's login (both created in the service's console). It checks both logins over TLS and finds which bundled root the service uses, warning if none does. | (usability) | Logic tests for the page's choices and saved settings. | 1 d |
+| 7.5 | **Dashboard and docs.** Settings › Controllers lets you type the controller's login name (cloud services choose their own) and builds the code with the cloud address. RUNBOOK gets a HiveMQ Cloud walkthrough; MQTT.md and Help are updated. Over-the-air updates still come from the server on your network. | (docs) | Docs tests; page tests for a cloud set-up. | 1 d |
+
 ---
 
 ## Tracking
@@ -129,5 +155,7 @@ update the controller's code without a USB cable.
 | 3 | 3.1–3.4 ✅ | 3.2: 7-day soak simulated in tests; the on-hardware run is in the RUNBOOK sign-off. 3.3: heartbeats + systemd watchdog. 3.4: 2.6 MB/device/year measured |
 | 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
 | 5 | 5.1–5.6 ✅ | Installer (`setup.bat`/`setup.sh`), setup hotspot, setup codes, updates over Wi-Fi, `run_all.py`. On-hardware checks are in the RUNBOOK sign-off |
+| 6 | 6.1–6.4 ✅ | On `develop`. Versions 1.1.0-dev; schema v7 stores the controller's version name |
+| 7 | Planned | On the `develop` branch |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

@@ -185,9 +185,36 @@ def test_install_then_confirm(pico, installed, source, serve):
     assert pico.ota.confirm() is True
     assert pico.ota.confirm() is False
     assert not (installed / "ota_old").exists()
-    assert pico.ota.take_result() == ("updated", "Updated from old-version")
+    # Neither side has a version.py: both count as 1.0.0 (from before version names).
+    assert pico.ota.take_result() == ("updated", "Updated from 1.0.0 to 1.0.0")
     assert pico.ota.take_result() is None
     assert pico.ota.current_version() == manifest["version"] and not pico.ota.is_pending()
+
+
+def test_update_records_version_names(pico, installed, source, serve):
+    (installed / "version.py").write_text('"""Old."""\n\nVERSION = "1.1.0"\n')
+    (source / "version.py").write_text('"""New."""\n\nVERSION = "1.2.0"\n')
+    manifest = update_for(source, serve(source))
+    assert manifest["name"] == "1.2.0"
+    assert pico.ota.version_name() == "1.1.0"
+    pico.ota.install(manifest, pico.ota.stage(manifest))
+    assert pico.ota.version_name() == "1.2.0"  # read from the file, before the restart
+    state = pico.ota.read_state()
+    assert (state["name"], state["previous_name"]) == ("1.2.0", "1.1.0")
+    pico.ota.confirm()
+    assert pico.ota.take_result() == ("updated", "Updated from 1.1.0 to 1.2.0")
+
+
+def test_a_1_0_0_controller_accepts_the_new_manifest(pico, source):
+    """1.0.0 checks the manifest with the same rules; the extra "name" key must not upset it."""
+    manifest = update_for(source, "http://192.168.1.20:8081/")
+    assert set(manifest) == {"version", "name", "url", "files"}
+    assert pico.ota.valid_manifest(manifest)
+    assert len(manifest["version"]) == 12  # still the build, which 1.0.0 compares
+
+
+def test_version_name_without_a_file(pico, tmp_path):
+    assert pico.ota.version_name(str(tmp_path / "missing.py")) == "1.0.0"
 
 
 # --- boot.py rollback --------------------------------------------------------------

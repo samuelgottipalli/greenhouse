@@ -17,6 +17,7 @@ the larger ones split into tabs (``ui.open_tabs``; the tabs' contents are in
 import streamlit as st
 
 from ui import require_login
+from version import VERSION
 
 pages = [
     st.Page("views/home.py", title="Home", icon=":material/home:", url_path="home", default=True),
@@ -28,5 +29,6 @@ pages = [
 
 if not require_login():
     st.stop()
+st.sidebar.caption(f"Greenhouse {VERSION} · [What's new](/help?tab=about)")
 
 st.navigation(pages).run()

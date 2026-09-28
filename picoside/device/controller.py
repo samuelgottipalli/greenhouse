@@ -138,7 +138,7 @@ class Controller:
         :meth:`tick` to retry.
         """
         if self.config["wifi_ssid"]:
-            self.display.show_message("Connecting to WiFi...")
+            self.display.show_message("Greenhouse v{}. Connecting to WiFi...".format(ota.version_name()))
         if self.net.connect_wifi():
             self.display.show_message("WiFi connected. Syncing clock...")
             if self.clock.sync():
@@ -333,6 +333,7 @@ class Controller:
         self.net.publish("firmware", {
             "device_id": self.config["device_id"],
             "version": ota.current_version(),
+            "name": ota.version_name(),
             "state": state,
             "detail": detail,
             "ts_utc": self.clock.utc_str(),
@@ -388,7 +389,7 @@ class Controller:
             return "current"
         self.display.set_backlight(True)
         self.display.show_message("Updating the controller's software. Please wait...")
-        self.publish_firmware("updating", "Downloading version " + manifest["version"])
+        self.publish_firmware("updating", "Downloading version " + (manifest.get("name") or manifest["version"]))
         try:
             changed = ota.stage(manifest, feed=self.net.feed)
             if not changed:

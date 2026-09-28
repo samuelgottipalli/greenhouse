@@ -44,6 +44,24 @@ def system() -> str:
     return {"Windows": "windows", "Darwin": "macos"}.get(name, "linux")
 
 
+def server_version() -> str:
+    """
+    The server's version, e.g. ``1.1.0``, read from ``server/version.py``
+    (read, not imported: it works before the server's packages are installed).
+
+    Returns:
+        str: The version, or ``"unknown"`` if the file is missing.
+    """
+    import re
+
+    try:
+        text = (SERVER_DIR / "version.py").read_text(encoding="utf-8")
+    except OSError:
+        return "unknown"
+    found = re.search(r'^VERSION = "([^"]+)"$', text, re.M)
+    return found.group(1) if found else "unknown"
+
+
 def server_import_path() -> None:
     """Let this process import the server's modules (``core``, ``scripts``)."""
     if str(SERVER_DIR) not in sys.path:

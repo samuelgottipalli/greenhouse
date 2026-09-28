@@ -4,14 +4,17 @@ The controller code the server offers as over-the-air updates.
 The code lives in ``picoside/device/`` of this checkout, so pulling a newer
 version of the project (or the installer's update step) makes a new
 controller version available. :func:`manifest` lists every updatable file
-with its SHA-256 and size; the version is a hash over that list, so it
-changes whenever any file does. ``services/firmware_server.py`` serves the
+with its SHA-256 and size. Each version has a *build*, a hash over that list
+that changes whenever any file does (sent as ``version``, the key 1.0.0
+controllers compare), and a *name* people read, like ``1.1.0``, from
+``picoside/device/version.py`` (sent as ``name``). ``services/firmware_server.py`` serves the
 files and :func:`publish_update` tells a controller to fetch them (see
 docs/MQTT.md, "Over-the-air updates", and ``picoside/device/ota.py``).
 """
 import hashlib
 import json
 import logging
+import re
 from pathlib import Path
 
 from paho.mqtt.publish import single
@@ -24,6 +27,7 @@ log = logging.getLogger(__name__)
 DEVICE_DIR: Path = settings.SERVER_DIR.parent / "picoside" / "device"
 # Never sent over the air: the loader and rollback guard, and settings files.
 NOT_UPDATED: tuple[str, ...] = ("boot.py", "main.py")
+OLDEST_NAME = "1.0.0"  # controllers from before version names; they report none
 
 
 def updatable_files(device_dir: Path | None = None) -> list[str]:
@@ -102,16 +106,17 @@ def manifest(device_dir: Path | None = None, url: str | None = None) -> dict:
         url (str | None): Where controllers download it (default :func:`firmware_url`).
 
     Returns:
-        dict: ``version``, ``url`` and ``files``; see docs/MQTT.md.
+        dict: ``version`` (the build), ``name``, ``url`` and ``files``; see docs/MQTT.md.
     """
     root = device_dir or DEVICE_DIR
     files = [file_entry(root, relative) for relative in updatable_files(root)]
-    return {"version": version_of(files), "url": url if url is not None else firmware_url(), "files": files}
+    return {"version": version_of(files), "name": available_name(root),
+            "url": url if url is not None else firmware_url(), "files": files}
 
 
 def available_version(device_dir: Path | None = None) -> str:
     """
-    The version of the controller code in this checkout.
+    The build of the controller code in this checkout.
 
     Args:
         device_dir (Path | None): Controller code folder.
@@ -120,6 +125,62 @@ def available_version(device_dir: Path | None = None) -> str:
         str: 12 hex digits.
     """
     return manifest(device_dir, url="")["version"]
+
+
+def available_name(device_dir: Path | None = None) -> str:
+    """
+    The version name of the controller code in this checkout.
+
+    Args:
+        device_dir (Path | None): Controller code folder.
+
+    Returns:
+        str: e.g. ``"1.1.0"`` from ``version.py`` (``OLDEST_NAME`` without one).
+    """
+    path = (device_dir or DEVICE_DIR) / "version.py"
+    if not path.exists():
+        return OLDEST_NAME
+    found = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', path.read_text(encoding="utf-8"), re.M)
+    return found.group(1) if found else OLDEST_NAME
+
+
+def installed_name(status: dict) -> str | None:
+    """
+    The version name a controller reported.
+
+    Args:
+        status (dict): From ``db.device_status``.
+
+    Returns:
+        str | None: Its name; ``OLDEST_NAME`` for a 1.0.0 controller (it reports
+        a build but no name); None if it never reported.
+    """
+    if not status.get("firmware_version"):
+        return None
+    return status.get("firmware_name") or OLDEST_NAME
+
+
+def update_available(status: dict, build: str | None = None, name: str | None = None) -> bool | None:
+    """
+    Tell whether this server offers a controller different code.
+
+    Builds are compared when the controller knows its build; one set up by
+    hand (build ``"unknown"``) is compared by version name.
+
+    Args:
+        status (dict): From ``db.device_status``.
+        build (str | None): Build on offer (default: this checkout's).
+        name (str | None): Name on offer (default: this checkout's).
+
+    Returns:
+        bool | None: None if the controller never reported its version.
+    """
+    installed = status.get("firmware_version")
+    if not installed:
+        return None
+    if installed != "unknown":
+        return installed != (build or available_version())
+    return installed_name(status) != (name or available_name())
 
 
 def firmware_url() -> str:

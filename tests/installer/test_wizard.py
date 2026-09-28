@@ -302,3 +302,10 @@ def test_real_background_runner(app):
         time.sleep(0.01)
     assert results == [(True, "finished")] and lines == ["working"]
     w.close()
+
+
+def test_window_title_shows_the_version(window):
+    from version import VERSION
+
+    assert window.windowTitle() == f"Greenhouse setup {VERSION}"
+    assert steps.server_version() == VERSION

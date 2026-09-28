@@ -209,3 +209,56 @@ def test_home_links_to_available_update(seeded_db):
     at = AppTest.from_file(str(SERVER_DIR / "views/home.py"), default_timeout=30).run()
     assert not at.exception
     assert any("Software update available" in m.value for m in at.markdown)
+
+
+# --- version names (Phase 6) -------------------------------------------------
+
+
+def test_available_name_reads_the_version_file(tmp_path):
+    assert firmware.available_name(tmp_path) == "1.0.0"  # no version.py: older than names
+    (tmp_path / "version.py").write_text('"""Doc."""\n\nVERSION = "2.3.4-dev"\n', encoding="utf-8")
+    assert firmware.available_name(tmp_path) == "2.3.4-dev"
+    assert firmware.manifest(tmp_path, url="")["name"] == "2.3.4-dev"
+
+
+def test_this_checkout_offers_its_own_version():
+    from version import VERSION
+
+    assert firmware.available_name() == firmware.manifest(url="")["name"]
+    assert firmware.available_name()  # picoside/device/version.py is there
+    assert VERSION  # server/version.py
+
+
+@pytest.mark.parametrize("status, expected", [
+    ({}, None),                                                              # never reported
+    ({"firmware_version": "aaaaaaaaaaaa"}, True),                            # 1.0.0 controller, other build
+    ({"firmware_version": "bbbbbbbbbbbb", "firmware_name": "1.0.0"}, False),  # same build
+    ({"firmware_version": "unknown", "firmware_name": "1.1.0"}, False),      # set up by hand: same name
+    ({"firmware_version": "unknown", "firmware_name": "1.0.9"}, True),       # set up by hand: other name
+    ({"firmware_version": "unknown"}, True),                                  # 1.0.0 set up by hand
+])
+def test_update_available(status, expected):
+    assert firmware.update_available(status, "bbbbbbbbbbbb", "1.1.0") is expected
+
+
+def test_installed_name():
+    assert firmware.installed_name({}) is None
+    assert firmware.installed_name({"firmware_version": "abc"}) == "1.0.0"
+    assert firmware.installed_name({"firmware_version": "abc", "firmware_name": "1.1.0"}) == "1.1.0"
+
+
+def test_ingest_stores_the_version_name(seeded_db):
+    ingest.handle_message("greenhouse/1/firmware", report(version="3f9a0c1b2d4e", name="1.1.0"),
+                          "2026-09-27 10:00:05")
+    status = db.device_status(1)
+    assert (status["firmware_version"], status["firmware_name"]) == ("3f9a0c1b2d4e", "1.1.0")
+    ingest.handle_message("greenhouse/1/firmware", report(version="3f9a0c1b2d4e"), "2026-09-27 10:00:06")
+    assert db.device_status(1)["firmware_name"] is None  # a 1.0.0 report has no name
+
+
+def test_page_shows_version_names(controllers_page):
+    ingest.handle_message("greenhouse/1/firmware", report(version="aaaaaaaaaaaa"), "2026-09-27 10:00:05")
+    at = controllers_page()
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics == {"Installed": "1.0.0", "Available": firmware.available_name()}
+    assert any("Builds: installed `aaaaaaaaaaaa`" in c.value for c in at.caption)

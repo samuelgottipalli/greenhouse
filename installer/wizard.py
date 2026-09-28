@@ -618,7 +618,7 @@ class InstallerWizard(QWizard):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(TITLE)
+        self.setWindowTitle(f"{TITLE} {steps.server_version()}")
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.resize(720, 560)
         self.threads = []

@@ -162,6 +162,18 @@ Pages link to a tab with `?tab=`, e.g. `/settings?tab=controllers`.
 
 Details and fixes are in [docs/FINDINGS.md](docs/FINDINGS.md) and [docs/PLAN.md](docs/PLAN.md).
 
+## Versions
+
+The server and the controller each have a version like **1.1.0** (*major.minor.patch*: major for
+big changes, minor for new features, patch for fixes). The dashboard shows them in the menu, on
+Help › About and on Settings › Controllers; the controller shows its version on its screen while
+starting. [CHANGELOG.md](CHANGELOG.md) says what changed in each release.
+
+- `main` holds released versions only, each tagged (`v1.0.0`, ...). To stay on the stable
+  version, use `main`.
+- New work happens on the `develop` branch; its versions end in `-dev` until they are released.
+- The numbers live in `server/version.py` and `picoside/device/version.py`.
+
 ## Running it (quick reference)
 
 The installer does all of this. By hand:

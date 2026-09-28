@@ -4,9 +4,9 @@ Settings › Controllers tab: connect a controller to Wi-Fi, and update its soft
 For the controller chosen in the sidebar it shows:
 
 * **Software**: the version it runs and the version this server offers
-  (``core/firmware.py``), how the last update went, and an **Update
-  controller** button while it is online and out of date (see docs/MQTT.md,
-  "Over-the-air updates").
+  (names like 1.1.0, with the exact builds underneath; ``core/firmware.py``),
+  how the last update went, and an **Update controller** button while it is
+  online and out of date (see docs/MQTT.md, "Over-the-air updates").
 * **Connect it to Wi-Fi**: how to start the controller's setup hotspot, and a
   QR code and setup code holding this server's address and the controller's
   broker login (``core/setup_code.py``). When the broker needs logins but the
@@ -43,13 +43,16 @@ def render() -> None:
     available = firmware.available_version()
     online = status.get("status") == "online"
     left, right = st.columns(2)
-    left.metric("Installed", installed or "Not reported")
-    right.metric("Available", available)
+    left.metric("Installed", firmware.installed_name(status) or "Not reported")
+    right.metric("Available", firmware.available_name())
     if status.get("firmware_state"):
         when = age_text(status["firmware_utc"], datetime.now(timezone.utc)) if status.get("firmware_utc") else ""
         detail = f": {status['firmware_detail']}" if status.get("firmware_detail") else ""
         st.caption(f"{FIRMWARE_STATES.get(status['firmware_state'], status['firmware_state'])}{detail} ({when})")
-    if installed == available:
+    if installed:
+        st.caption(f"Builds: installed `{installed}`, available `{available}`.")
+    newer = firmware.update_available(status, available)
+    if newer is False:
         st.success("Up to date.", icon=":material/check_circle:")
     else:
         if installed is None:

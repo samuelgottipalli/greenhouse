@@ -4,8 +4,12 @@ Over-the-air updates of the controller's code.
 The dashboard's **Update controller** button publishes a manifest on
 ``<prefix>/<id>/firmware/update`` (see docs/MQTT.md)::
 
-    {"version": "3f9a0c1b2d4e", "url": "http://192.168.1.20:8081/",
+    {"version": "3f9a0c1b2d4e", "name": "1.1.0", "url": "http://192.168.1.20:8081/",
      "files": [{"path": "controller.py", "sha256": "...", "size": 17342}, ...]}
+
+``version`` is the exact *build* (a hash of the files; 1.0.0 controllers
+compare it, so it keeps that key) and ``name`` the version people read
+(``version.py``). ``firmware.json`` keeps the build under ``version`` too.
 
 The manifest arrives over the logged-in MQTT link, so it is trusted; the
 files come over plain HTTP from the server's ``greenhouse-firmware`` service
@@ -34,6 +38,8 @@ import json
 import os
 
 STATE_FILE = "firmware.json"
+VERSION_FILE = "version.py"
+OLDEST_NAME = "1.0.0"  # code from before version.py existed
 STAGE_DIR = "ota_new"
 BACKUP_DIR = "ota_old"
 MAX_BOOTS = 3  # must match boot.py
@@ -92,6 +98,30 @@ def current_version():
         str: The version from the last update or install, or ``"unknown"``.
     """
     return read_state().get("version") or "unknown"
+
+
+def version_name(path=VERSION_FILE):
+    """
+    The installed code's version as people read it, from ``version.py``.
+
+    Read from the file rather than imported, so it is right even between an
+    update's file swap and the restart.
+
+    Args:
+        path (str): The version file.
+
+    Returns:
+        str: e.g. ``"1.1.0"``; ``"1.0.0"`` when there is no ``version.py``
+        (it arrived after 1.0.0).
+    """
+    try:
+        with open(path) as f:
+            for line in f:
+                if line.startswith("VERSION"):
+                    return line.split("=", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    return OLDEST_NAME
 
 
 def is_pending():
@@ -379,6 +409,8 @@ def install(manifest, changed):
     state = {
         "version": manifest["version"],
         "previous": current_version(),
+        "name": manifest.get("name") or manifest["version"],
+        "previous_name": version_name(),
         "pending": True,
         "installed": False,
         "boots": 0,
@@ -408,8 +440,11 @@ def confirm():
     state = read_state()
     if not state.get("pending"):
         return False
-    write_state({"version": state.get("version"), "pending": False, "result": "updated",
-                 "detail": "Updated from {}".format(state.get("previous"))})
+    if state.get("previous_name"):
+        detail = "Updated from {} to {}".format(state["previous_name"], state.get("name"))
+    else:
+        detail = "Updated from {}".format(state.get("previous"))
+    write_state({"version": state.get("version"), "pending": False, "result": "updated", "detail": detail})
     remove_tree(BACKUP_DIR)
     return True
 

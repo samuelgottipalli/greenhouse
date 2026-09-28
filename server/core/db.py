@@ -564,13 +564,14 @@ def device_status(device_id: int = settings.DEVICE_ID) -> dict[str, str] | None:
     Returns:
         dict | None: ``status``, ``updated_utc`` (when that status began),
         ``last_seen_utc``, ``uptime_s``, ``mem_free`` and ``rssi_dbm`` (None
-        until the first telemetry), ``firmware_version``, ``firmware_state``,
+        until the first telemetry), ``firmware_version`` (the build),
+        ``firmware_name`` (e.g. ``1.1.0``; None from 1.0.0 controllers), ``firmware_state``,
         ``firmware_detail`` and ``firmware_utc`` (None until the controller
         reports them), or None if the device never reported.
     """
     data = _read(
         "SELECT status, updated_utc, last_seen_utc, uptime_s, mem_free, rssi_dbm, "
-        "firmware_version, firmware_state, firmware_detail, firmware_utc "
+        "firmware_version, firmware_name, firmware_state, firmware_detail, firmware_utc "
         "FROM device_status WHERE device_id = :device_id",
         {"device_id": device_id},
     )
@@ -651,27 +652,32 @@ def read_heartbeats() -> DataFrame | None:
 FIRMWARE_STATES: tuple[str, ...] = ("running", "updating", "restarting", "updated", "failed", "rolled_back")
 
 
-def update_firmware_status(device_id: int, version: str, state: str, detail: str, at_utc: str) -> bool:
+def update_firmware_status(device_id: int, version: str, state: str, detail: str, at_utc: str,
+                           name: str | None = None) -> bool:
     """
     Record a controller's installed code version and update progress.
 
     Args:
         device_id (int): Device.
-        version (str): Installed version (or ``"unknown"``).
+        version (str): Installed build (or ``"unknown"``).
         state (str): One of ``FIRMWARE_STATES``.
         detail (str): Short explanation.
         at_utc (str): When it was reported, ``YYYY-MM-DD HH:MM:SS`` UTC.
+        name (str | None): Version name, e.g. ``"1.1.0"`` (1.0.0 controllers send none).
 
     Returns:
         bool: True if stored.
     """
     return _write([(
-        "INSERT INTO device_status (device_id, status, updated_utc, firmware_version, firmware_state, "
-        "firmware_detail, firmware_utc) VALUES (:device_id, 'online', :at, :version, :state, :detail, :at) "
+        "INSERT INTO device_status (device_id, status, updated_utc, firmware_version, firmware_name, "
+        "firmware_state, firmware_detail, firmware_utc) "
+        "VALUES (:device_id, 'online', :at, :version, :name, :state, :detail, :at) "
         "ON CONFLICT (device_id) DO UPDATE SET firmware_version = excluded.firmware_version, "
+        "firmware_name = excluded.firmware_name, "
         "firmware_state = excluded.firmware_state, firmware_detail = excluded.firmware_detail, "
         "firmware_utc = excluded.firmware_utc",
-        {"device_id": device_id, "version": version, "state": state, "detail": detail, "at": at_utc},
+        {"device_id": device_id, "version": version, "name": name, "state": state, "detail": detail,
+         "at": at_utc},
     )])
 
 

@@ -134,8 +134,9 @@ def handle_message(topic: str, payload: bytes, received_utc: str,
         if not isinstance(version, str) or not version or state not in db.FIRMWARE_STATES:
             return f"ignored bad firmware report from {device_id}"
         detail = data.get("detail") if isinstance(data.get("detail"), str) else ""
-        db.update_firmware_status(device_id, version[:40], state, detail[:200], received_utc)
-        return f"firmware of {device_id}: {version} {state}"
+        name = data.get("name")[:20] if isinstance(data.get("name"), str) and data.get("name") else None
+        db.update_firmware_status(device_id, version[:40], state, detail[:200], received_utc, name=name)
+        return f"firmware of {device_id}: {name or version} {state}"
 
     if len(rest) == 3 and rest[0] == "relay" and rest[2] == "state" and rest[1].isdigit():
         state = data.get("state")

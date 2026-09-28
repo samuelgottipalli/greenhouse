@@ -113,7 +113,8 @@ CREATE TABLE device_status (
     firmware_state   TEXT,
     firmware_detail  TEXT,
     firmware_utc     TEXT
-        CHECK (firmware_utc IS NULL OR firmware_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
+        CHECK (firmware_utc IS NULL OR firmware_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'),
+    firmware_name    TEXT  -- e.g. 1.1.0 (schema v7)
 ) STRICT;
 
 -- Dashboard display preferences (units, formats, zone), shared by all sessions.
@@ -142,4 +143,4 @@ CREATE TABLE alerts (
         CHECK (last_sent_utc IS NULL OR last_sent_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
 ) STRICT;
 
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;

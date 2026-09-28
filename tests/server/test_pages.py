@@ -364,3 +364,12 @@ def test_control_enabled_when_online(seeded_db, db_conn):
     at = run_page("views/control.py")
     assert not at.warning
     assert not any(t.disabled for t in at.toggle)
+
+
+def test_sidebar_and_about_show_the_server_version(seeded_db):
+    from version import VERSION
+
+    at = AppTest.from_file(str(SERVER_DIR / "app.py"), default_timeout=30).run()
+    assert any(f"Greenhouse {VERSION}" in c.value for c in at.sidebar.caption)
+    about = run_page("views/help.py").tabs[1]
+    assert any(f"Server software {VERSION}" in c.value for c in about.caption)
