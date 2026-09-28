@@ -222,6 +222,20 @@ def wind_zones(units: str) -> tuple[float, float, list[Zone]]:
     return 0.0, speed(80), zones
 
 
+def precipitation_zones(units: str) -> tuple[float, float, list[Zone]]:
+    """
+    Dial range and zones for the rain rate (mm/h or in/h): dry, light,
+    moderate, heavy, violent (the usual meteorological bands).
+    """
+    if units == "US":
+        zones = [Zone(0.004, SLATE, "dry"), Zone(0.1, SKY, "light"), Zone(0.3, BLUE, "moderate"),
+                 Zone(2.0, NAVY, "heavy"), Zone(math.inf, RED, "violent")]
+        return 0.0, 1.0, zones
+    zones = [Zone(0.1, SLATE, "dry"), Zone(2.5, SKY, "light"), Zone(7.6, BLUE, "moderate"),
+             Zone(50, NAVY, "heavy"), Zone(math.inf, RED, "violent")]
+    return 0.0, 20.0, zones
+
+
 def greenhouse_temperature_zones(units: str, heater_on_c: float | None,
                                  fan_on_c: float | None) -> tuple[float, float, list[Zone]]:
     """

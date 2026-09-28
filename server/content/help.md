@@ -33,6 +33,10 @@ for 30 days. Use **Log out** at the bottom of the menu on a shared computer.
     automatically.
 *   **Alerts** show in red at the top while something is wrong.
 
+## Reports
+
+The date and time are at the top of the page, and each tab says when its data was last updated.
+
 ## Reports › Greenhouse
 
 *   **Gauges** for temperature, humidity and light. The needle shows the current value and the
@@ -47,9 +51,11 @@ for 30 days. Use **Log out** at the bottom of the menu on a shared computer.
 
 ## Reports › Outdoor weather
 
-Gauges for the temperature, humidity and wind outside, with a chart of the day under each, plus
-sunrise, sunset, the conditions, rain and wind direction. It comes from the free Open-Meteo
-forecast for your location and updates every 15 minutes.
+Today's conditions, sunrise, sunset and hours of daylight, then gauges for the temperature,
+humidity, rain and wind outside, each with a chart of the day. The rain gauge shows how hard it is
+raining right now (per hour), with today's total underneath; the wind card says which way it is
+blowing from. It comes from the free Open-Meteo forecast for your location and updates every 15
+minutes.
 
 ## Remote Control
 

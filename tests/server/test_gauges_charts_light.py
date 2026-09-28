@@ -124,6 +124,21 @@ def test_zone_presets():
     assert (low, high) == (1.0, 100_000.0) and gauges.zone_of(500, zones).name == "overcast"
 
 
+@pytest.mark.parametrize("units, rate, name", [
+    ("SI", 0.0, "dry"), ("SI", 1.0, "light"), ("SI", 5.0, "moderate"), ("SI", 12.0, "heavy"),
+    ("SI", 60.0, "violent"), ("US", 0.05, "light"), ("US", 0.5, "heavy"),
+])
+def test_precipitation_zones(units, rate, name):
+    _low, _high, zones = gauges.precipitation_zones(units)
+    assert gauges.zone_of(rate, zones).name == name
+
+
+def test_precipitation_dial_labels_are_whole_numbers():
+    for units in ("SI", "US"):
+        low, high, _zones = gauges.precipitation_zones(units)
+        assert low == 0 and high == int(high)  # the dial ends are printed without decimals
+
+
 def test_change_over_an_hour():
     times = date_range("2026-09-27 10:00", periods=13, freq="10min")
     frame = DataFrame({"time": times, "t": [20.0 + i * 0.1 for i in range(13)]})

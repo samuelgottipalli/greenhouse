@@ -1,166 +1,155 @@
 """
 Reports › Outdoor weather tab: today's outdoor conditions from ``weather_readings``.
 
-Shows date/time (refreshed every minute) and the latest Open-Meteo reading
-(the page reloads itself when a new reading arrives, see ``ui.auto_refresh``):
+Shows when the data was last updated, then two even rows of four (the page
+reloads itself when a new reading arrives, see ``ui.auto_refresh``):
 
-* **Gauges** for temperature, humidity and wind speed, each with the change
-  over the last hour and a chart of the day underneath (``core/gauges.py``,
-  ``core/charts.py``).
-* Cards for sunrise/sunset, the weather description, precipitation, wind
-  direction and when the data was last updated.
+* Cards for the conditions, sunrise, sunset and hours of daylight, each with
+  a Material Symbols icon.
+* **Gauges** for temperature, humidity, precipitation (as a rain rate) and
+  wind speed, each with the change over the last hour, one short line
+  (feels-like, today's range, today's rain, wind direction) and a chart of the day
+  underneath (``core/gauges.py``, ``core/charts.py``).
 
-Honours the units, time zone and date/time formats chosen on the App
-Settings page.
+The date and time are shown above the tabs by ``views/reports.py``. Honours
+the units, time zone and date/time formats chosen on Settings › Display.
 """
 import zoneinfo
 from datetime import datetime as dtt
-from datetime import timedelta
 
 import streamlit as st
 from pandas import DataFrame, to_datetime
-from streamlit.delta_generator import DeltaGenerator
 
 from core import db
 from core.charts import time_chart
-from core.gauges import change_over, gauge_svg, humidity_zones, outdoor_temperature_zones, wind_zones
-from core.weather_codes import weather_code_descr
-from core.weather_report import to_display_units, wind_label
-from ui import display_zone
+from core.conversions import degrees_to_compass_index
+from core.gauges import (
+    change_over,
+    format_number,
+    gauge_svg,
+    humidity_zones,
+    outdoor_temperature_zones,
+    precipitation_zones,
+    wind_zones,
+)
+from core.weather_codes import weather_code_descr, weather_icon, wind_direction_descr
+from core.weather_report import rain_rate, rain_total, rain_units, to_display_units
+from ui import display_zone, last_updated, time_pattern
 
 
 TIME_COLUMNS = ["measured_utc", "sunrise_utc", "sunset_utc"]
 
 
-def metric_with_delta(column, label: str, data: DataFrame, field: str, unit: str) -> None:
+def daylight_text(sunrise: dtt, sunset: dtt) -> str:
+    """Hours of daylight between sunrise and sunset, e.g. ``"11 h 42 min"``."""
+    minutes = max(int((sunset - sunrise).total_seconds() // 60), 0)
+    return f"{minutes // 60} h {minutes % 60:02d} min"
+
+
+def summary_cards(latest, time_format: str) -> None:
     """
-    Show the latest value of a field, with the change since the previous
-    reading and a sparkline when there is more than one reading.
+    The row of cards above the gauges: conditions, sunrise, sunset, daylight.
 
     Args:
-        column (DeltaGenerator): Streamlit column to draw in.
-        label (str): Card title.
-        data (DataFrame): Today's readings, oldest first (at least one row).
+        latest: The newest reading (times still as local datetimes).
+        time_format (str): ``strftime`` pattern for times.
+    """
+    code = int(latest["weather_code"])
+    night = not (latest["sunrise_utc"] <= latest["measured_utc"] < latest["sunset_utc"])
+    cards = [
+        (f"{weather_icon(code, night)} Conditions", weather_code_descr.get(code, "Unknown")),
+        (":material/wb_twilight: Sunrise", latest["sunrise_utc"].strftime(time_format)),
+        (":material/nights_stay: Sunset", latest["sunset_utc"].strftime(time_format)),
+        (":material/sunny: Daylight", daylight_text(latest["sunrise_utc"], latest["sunset_utc"])),
+    ]
+    for column, (label, value) in zip(st.columns(len(cards)), cards):
+        column.metric(label=label, value=value, border=True)
+
+
+def gauge_card(column, label: str, data: DataFrame, field: str, unit: str, dial: tuple, color: str,
+               note: str, decimals: int = 1) -> None:
+    """
+    One gauge card: title, gauge with the last hour's change, a line about
+    the day, and a chart of the day.
+
+    Args:
+        column (DeltaGenerator): Column to draw in.
+        label (str): Card title (also the gauge's accessible title).
+        data (DataFrame): Today's readings in display units, oldest first.
         field (str): Column to show.
-        unit (str): Unit label appended to the value and delta.
+        unit (str): Unit label.
+        dial (tuple): ``(low, high, zones)`` from a ``*_zones`` preset.
+        color (str): Chart line colour.
+        note (str): Caption under the gauge.
+        decimals (int): Decimal places for the value.
     """
-    latest = data.iloc[-1][field]
-    delta = None
-    if len(data) > 1:
-        delta = f"{round(latest - data.iloc[-2][field], 2)} {unit}"
-    column.metric(
-        label=label,
-        value=f"{latest} {unit}",
-        delta=delta,
-        delta_color="off",
-        border=True,
-        chart_data=data[[field]] if len(data) > 1 else None,
-    )
-
-
-def get_weather_data() -> None:
-    """
-    Load today's weather readings and render the metric cards.
-
-    The page reloads itself when a new reading arrives (``ui.auto_refresh``). Reads the most
-    recent 216 rows (about 2 days at 15-minute intervals), converts times from
-    UTC to the chosen zone, keeps today's rows and converts units. With no
-    readings for today it says so and shows when the last reading was taken.
-
-    Raises:
-        ValueError: If loading or rendering fails unexpectedly.
-    """
-    zone = display_zone()
-    current_date = dtt.now(tz=zoneinfo.ZoneInfo(zone)).date()
-    units = db.unit_labels(st.session_state["units"])
-    time_format = "%I:%M %p" if st.session_state["time_format"] == "12-hour" else "%H:%M"
-
-    try:
-        data = db.recent_weather(limit=216)
-        if data is None:
-            st.info("No weather readings yet. Is the weather collector running?")
-            return
-        for column in TIME_COLUMNS:
-            data[column] = to_datetime(data[column]).dt.tz_localize("UTC").dt.tz_convert(zone)
-        last_reading = data["measured_utc"].max()
-        data = data[data["measured_utc"].dt.date == current_date].sort_values(by="measured_utc")
-        if data.empty:
-            st.info(
-                "No weather readings yet today. The last one was taken "
-                f"{last_reading.strftime('%Y-%m-%d ' + time_format)}. Is the weather collector running?"
-            )
-            return
-
-        data = to_display_units(data, st.session_state["units"])
-        data["time"] = data["measured_utc"].dt.tz_localize(None)  # local wall time, for charts
-        for column in TIME_COLUMNS:
-            data[column] = data[column].dt.strftime(time_format)
-
-        latest = data.iloc[-1]
-        gauges = [
-            ("Temperature", "temperature_c", units["temperature"],
-             outdoor_temperature_zones(st.session_state["units"]), "#ef4444"),
-            ("Humidity", "relative_humidity_pct", units["humidity"], humidity_zones(), "#3b82f6"),
-            ("Wind speed", "wind_speed_kmh", units["speed"], wind_zones(st.session_state["units"]), "#22c55e"),
-        ]
-        for column, (label, field, unit, (low, high, zones), color) in zip(st.columns(3), gauges):
-            with column.container(border=True):
-                st.markdown(f"**{label}**")
-                value = float(latest[field])
-                st.markdown(gauge_svg(value, unit, low, high, zones, change=change_over(data, field),
-                                  title=f"{label}: {value} {unit}"), unsafe_allow_html=True)
-                if len(data) > 1:
-                    st.altair_chart(time_chart(data, field, unit, 1, st.session_state["time_format"],
-                                               color=color, height=150), use_container_width=True)
-
-        with st.container(border=True, horizontal=True):
-            left, middle, right = st.columns(3)
-            left.metric(label="Sunrise 🌅", value=str(latest["sunrise_utc"]), border=True)
-            middle.metric(label="Sunset 🌇", value=str(latest["sunset_utc"]), border=True)
-            right.metric(
-                label="Weather",
-                value=weather_code_descr.get(int(latest["weather_code"]), "Unknown"),
-                border=True,
-            )
-            metric_with_delta(left, "Precipitation", data, "precipitation_mm", units["distance_short"])
-            middle.metric(
-                label="Wind Direction",
-                value=wind_label(latest["wind_direction_deg"], units["direction"]),
-                border=True,
-            )
-            right.metric(label="Data last updated at", value=str(latest["measured_utc"]), border=True)
-
-        if st.checkbox("Show raw data"):
-            st.subheader("Raw data")
-            st.write(data)
-
-    except Exception as e:
-        raise ValueError(f"Error fetching weather data: {e}") from e
-
-
-@st.fragment(run_every=timedelta(minutes=1))
-def update_datetime() -> None:
-    """
-    Render the current date and time in the user's zone and formats.
-
-    Runs as a fragment that re-executes every minute.
-    """
-    current_datetime = dtt.now(tz=zoneinfo.ZoneInfo(display_zone()))
-    date_formats = {
-        "DD/MM/YYYY": "%d/%m/%Y",
-        "MM/DD/YYYY": "%m/%d/%Y",
-        "YYYY/MM/DD": "%Y/%m/%d",
-    }
-    display_date = current_datetime.strftime(
-        date_formats.get(st.session_state["date_format"], "%A, %d %B %Y")
-    )
-    time_format = "%I:%M %p" if st.session_state["time_format"] == "12-hour" else "%H:%M"
-    with st.container(border=True, horizontal=True):
-        st.metric(label="Date", value=display_date)
-        st.metric(label="Time", value=current_datetime.strftime(time_format))
+    low, high, zones = dial
+    value = float(data.iloc[-1][field])
+    with column.container(border=True):
+        st.markdown(f"**{label}**")
+        st.markdown(gauge_svg(value, unit, low, high, zones, change=change_over(data, field), decimals=decimals,
+                              title=f"{label}: {format_number(value, decimals)} {unit}"), unsafe_allow_html=True)
+        st.caption(note)
+        if len(data) > 1:
+            st.altair_chart(time_chart(data, field, unit, 1, st.session_state["time_format"], color=color,
+                                       height=150, decimals=decimals), use_container_width=True)
 
 
 def render() -> None:
-    """Draw this section (called by its tabbed page)."""
-    update_datetime()
-    get_weather_data()
+    """
+    Draw this section (called by its tabbed page).
+
+    Reads the most recent 216 rows (about 2 days at 15-minute intervals),
+    converts times from UTC to the chosen zone, keeps today's rows and
+    converts units. With no readings for today it says so and shows when the
+    last reading was taken.
+    """
+    zone = display_zone()
+    current_date = dtt.now(tz=zoneinfo.ZoneInfo(zone)).date()
+    units = st.session_state["units"]
+    labels = db.unit_labels(units)
+    time_format = time_pattern(st.session_state["time_format"])
+
+    data = db.recent_weather(limit=216)
+    if data is None:
+        st.info("No weather readings yet. Is the weather collector running?")
+        return
+    newest_utc = str(data["measured_utc"].max())
+    for column in TIME_COLUMNS:
+        data[column] = to_datetime(data[column]).dt.tz_localize("UTC").dt.tz_convert(zone)
+    last_reading = data["measured_utc"].max()
+    data = data[data["measured_utc"].dt.date == current_date].sort_values(by="measured_utc")
+    if data.empty:
+        st.info(
+            "No weather readings yet today. The last one was taken "
+            f"{last_reading.strftime('%Y-%m-%d ' + time_format)}. Is the weather collector running?"
+        )
+        return
+
+    last_updated(newest_utc, "from Open-Meteo")
+    rate_unit, total_unit = rain_units(units)
+    total = rain_total(data["precipitation_mm"], units)
+    data["rain_rate"] = data["precipitation_mm"].map(lambda mm: rain_rate(mm, units))
+    data = to_display_units(data, units)
+    data["time"] = data["measured_utc"].dt.tz_localize(None)  # local wall time, for charts
+    latest = data.iloc[-1]
+
+    summary_cards(latest, time_format)
+
+    temp_unit = labels["temperature"]
+    compass = wind_direction_descr[degrees_to_compass_index(float(latest["wind_direction_deg"]))]
+    columns = st.columns(4)
+    gauge_card(columns[0], "Temperature", data, "temperature_c", temp_unit, outdoor_temperature_zones(units),
+               "#ef4444", f"Feels like {format_number(latest['apparent_temperature_c'])} {temp_unit}")
+    gauge_card(columns[1], "Humidity", data, "relative_humidity_pct", labels["humidity"], humidity_zones(),
+               "#3b82f6", f"Today {format_number(data['relative_humidity_pct'].min(), 0)}–"
+               f"{format_number(data['relative_humidity_pct'].max(), 0)} %")
+    gauge_card(columns[2], "Precipitation", data, "rain_rate", rate_unit, precipitation_zones(units),
+               "#06b6d4", f"Today's total {format_number(total, 2)} {total_unit}",
+               decimals=2 if units == "US" else 1)
+    gauge_card(columns[3], "Wind speed", data, "wind_speed_kmh", labels["speed"], wind_zones(units),
+               "#22c55e", f"From the {compass['long'].lower()}")
+
+    if st.checkbox("Show raw data"):
+        st.subheader("Raw data")
+        st.write(data)

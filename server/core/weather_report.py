@@ -1,11 +1,14 @@
 """
-Pure helpers behind Reports › Outdoor weather: unit conversion and wind labels.
+Pure helpers behind Reports › Outdoor weather: unit conversion, wind labels
+and rain rates.
 
 ``weather_readings`` stores SI units (°C, mm, cm, km/h). The page shows
 precipitation in cm (SI) or inches (US), matching the ``distance_short``
-measure, snowfall in cm or inches, wind in km/h or mph.
+measure, snowfall in cm or inches, wind in km/h or mph. The precipitation
+gauge shows a rain rate (mm/h or in/h) and the day's total (mm or inches),
+the usual units for rain.
 """
-from pandas import DataFrame
+from pandas import DataFrame, Series
 
 from core.conversions import (
     celsius_to_fahrenheit,
@@ -59,3 +62,41 @@ def wind_label(degrees: float, unit: str) -> str:
         str: Degrees plus the 16-point compass abbreviation.
     """
     return f"{degrees} {unit} - {wind_direction_descr[degrees_to_compass_index(degrees)]['short']}"
+
+
+RAIN_INTERVAL_MINUTES = 15  # Open-Meteo's "current" precipitation is the sum of the preceding 15 minutes
+
+
+def rain_rate(precipitation_mm: float, units: str) -> float:
+    """
+    Turn a 15-minute precipitation sum into a rate: mm/h (SI) or in/h (US).
+
+    Args:
+        precipitation_mm (float): Stored ``precipitation_mm`` (the preceding 15 minutes).
+        units (str): ``"SI"`` or ``"US"``.
+
+    Returns:
+        float: Rate per hour, in display units.
+    """
+    per_hour = precipitation_mm * 60 / RAIN_INTERVAL_MINUTES
+    return mm_to_inches(per_hour, 3) if units == "US" else round(per_hour, 2)
+
+
+def rain_total(precipitation_mm: Series, units: str) -> float:
+    """
+    Add up 15-minute precipitation sums: mm (SI) or inches (US).
+
+    Args:
+        precipitation_mm (Series): Stored ``precipitation_mm`` values.
+        units (str): ``"SI"`` or ``"US"``.
+
+    Returns:
+        float: Total, in display units.
+    """
+    total = float(precipitation_mm.fillna(0).sum())
+    return mm_to_inches(total, 2) if units == "US" else round(total, 1)
+
+
+def rain_units(units: str) -> tuple[str, str]:
+    """Unit labels for a rain rate and a rain total: ``("mm/h", "mm")`` or ``("in/h", "in")``."""
+    return ("in/h", "in") if units == "US" else ("mm/h", "mm")

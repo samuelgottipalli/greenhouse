@@ -9,8 +9,8 @@ Reports › Greenhouse tab: conditions inside the greenhouse.
   hover details, and the period's high and low.
 * **Table** of readings, one row per time with a column per measure.
 
-Readings are stored by ``services/ingest.py``; a warning shows when they are
-too old for automation.
+Readings are stored by ``services/ingest.py``. The tab says when they were
+last updated, and warns when they are too old for automation.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -32,7 +32,7 @@ from core.indoor_report import (
     readings_table,
 )
 from core.timeutil import utc_timestamp
-from ui import current_device, display_zone
+from ui import current_device, display_zone, last_updated
 
 
 CHART_COLORS = {"temperature": "#ef4444", "humidity": "#3b82f6", "light_raw": "#eab308"}
@@ -57,6 +57,7 @@ def render() -> None:
 
     rows = latest.set_index("measure")
     newest = rows["reading_utc"].max()
+    last_updated(newest, "from the controller")
     if is_stale(newest, now):
         st.warning(
             f"Latest reading was {age_text(newest, now)}. Automation ignores readings older "

@@ -19,15 +19,17 @@ Streamlit's own menu (with its theme and wide-mode settings) is hidden
 browser setting Streamlit reads at start-up (:func:`apply_theme`).
 """
 import json
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from time import sleep
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 import streamlit.components.v1 as components
 
 from core import db, settings
 from core.auth import REMEMBER_DAYS, login_token_valid, make_login_token, verify_password
+from core.timeutil import parse_utc_timestamp
 
 AUTH_COOKIE: str = "greenhouse_auth"
 APP_DIR: Path = Path(__file__).resolve().parent
@@ -49,6 +51,7 @@ PAGE_WIDTHS: list[str] = ["Automatic", "Wide", "Centered"]
 # URL paths of the pages (app.py). Streamlit keeps the chosen theme per path.
 PAGE_PATHS: list[str] = ["", "home", "reports", "control", "settings", "help"]
 REFRESH_EVERY = timedelta(seconds=30)
+DATE_FORMATS: dict[str, str] = {"DD/MM/YYYY": "%d/%m/%Y", "MM/DD/YYYY": "%m/%d/%Y", "YYYY/MM/DD": "%Y/%m/%d"}
 
 
 def init_preferences() -> None:
@@ -334,6 +337,59 @@ def display_zone() -> str:
     if st.session_state["timezone"] == "UTC":
         return "UTC"
     return st.session_state["timezone_name"]
+
+
+def date_pattern(date_format: str) -> str:
+    """The ``strftime`` pattern for a date format preference, e.g. "MM/DD/YYYY"."""
+    return DATE_FORMATS.get(date_format, "%A, %d %B %Y")
+
+
+def time_pattern(time_format: str) -> str:
+    """The ``strftime`` pattern for a time format preference ("12-hour" or "24-hour")."""
+    return "%I:%M %p" if time_format == "12-hour" else "%H:%M"
+
+
+def moment_text(moment: datetime, today: date, date_format: str, time_format: str) -> str:
+    """
+    A time for "last updated" lines: just the time today, the date and time otherwise.
+
+    Args:
+        moment (datetime): The moment, in the display zone.
+        today (date): Today's date in the display zone.
+        date_format (str): Date format preference.
+        time_format (str): Time format preference.
+
+    Returns:
+        str: e.g. ``"03:45 PM"`` or ``"09/27/2026 03:45 PM"``.
+    """
+    text = moment.strftime(time_pattern(time_format))
+    if moment.date() != today:
+        text = f"{moment.strftime(date_pattern(date_format))} {text}"
+    return text
+
+
+@st.fragment(run_every=timedelta(minutes=1))
+def date_and_time() -> None:
+    """The current date and time in the chosen zone and formats, redrawn every minute."""
+    now = datetime.now(ZoneInfo(display_zone()))
+    with st.container(border=True, horizontal=True):
+        st.metric(":material/calendar_today: Date", now.strftime(date_pattern(st.session_state["date_format"])))
+        st.metric(":material/schedule: Time", now.strftime(time_pattern(st.session_state["time_format"])))
+
+
+def last_updated(moment_utc: str, source: str = "") -> None:
+    """
+    Say when the data on a tab was last updated.
+
+    Args:
+        moment_utc (str): ``YYYY-MM-DD HH:MM:SS`` UTC of the newest data.
+        source (str): Where the data comes from, added after the time.
+    """
+    zone = ZoneInfo(display_zone())
+    moment = parse_utc_timestamp(moment_utc).astimezone(zone)
+    text = moment_text(moment, datetime.now(zone).date(), st.session_state["date_format"],
+                       st.session_state["time_format"])
+    st.caption(f":material/update: Data last updated at **{text}**" + (f" · {source}" if source else ""))
 
 
 def render_markdown(filename: str) -> None:

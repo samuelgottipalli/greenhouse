@@ -92,9 +92,42 @@ def gauges(at):
 def test_weather_page_shows_latest_reading(seeded_db):
     at = run_section("weather")
     labels = [m.label for m in at.metric]
-    assert {"Sunrise \U0001f305", "Sunset \U0001f307", "Precipitation", "Wind Direction"} <= set(labels)
-    assert set(gauges(at)) == {"Temperature", "Humidity", "Wind speed"}
-    assert len(at.get("arrow_vega_lite_chart")) == 3  # a chart of the day under each gauge
+    assert labels == [":material/cloud: Conditions", ":material/wb_twilight: Sunrise",
+                      ":material/nights_stay: Sunset", ":material/sunny: Daylight"]
+    values = [m.value for m in at.metric]
+    assert values[0] == "Overcast" and values[3] == "12 h 00 min"  # fixture sun: 06:00-18:00 UTC
+    assert set(gauges(at)) == {"Temperature", "Humidity", "Precipitation", "Wind speed"}
+    assert len(at.get("arrow_vega_lite_chart")) == 4  # a chart of the day under each gauge
+    captions = [c.value for c in at.caption]
+    assert captions[0] == ":material/update: Data last updated at **12:00 PM** · from Open-Meteo"
+    assert "Today's total 0.03 in" in captions  # 4 x 0.2 mm, fixture units are US
+    assert "From the south-southwest" in captions
+    assert "Feels like 46.4 °F" in captions and "Today 50–53 %" in captions
+    assert not any(ord(ch) > 0x2000 for m in at.metric for ch in m.label + m.value)  # no emoji
+
+
+def test_reports_date_and_time_sit_above_the_tabs(seeded_db):
+    at = run_page("views/reports.py")
+    assert not at.exception
+    labels = [m.label for m in at.metric]
+    assert labels[:2] == [":material/calendar_today: Date", ":material/schedule: Time"]
+    for tab in at.tabs:  # not repeated inside a tab
+        assert ":material/calendar_today: Date" not in [m.label for m in tab.metric]
+    greenhouse, outdoor = at.tabs
+    assert greenhouse.caption[0].value.startswith(":material/update: Data last updated at **")
+    assert greenhouse.caption[0].value.endswith("· from the controller")
+    assert outdoor.caption[0].value.startswith(":material/update: Data last updated at **")
+
+
+@pytest.mark.parametrize("sun, icon", [(("+1 hours", "+12 hours"), ":material/clear_night:"),
+                                        (("-6 hours", "+6 hours"), ":material/sunny:")])
+def test_conditions_icon_follows_day_and_night(seeded_db, db_conn, sun, icon):
+    """Clear sky shows a sun between sunrise and sunset, and a moon otherwise."""
+    db_conn.execute("UPDATE weather_readings SET weather_code = 0, sunrise_utc = datetime(measured_utc, ?), "
+                    "sunset_utc = datetime(measured_utc, ?)", sun)
+    db_conn.commit()
+    at = run_section("weather")
+    assert at.metric[0].label == f"{icon} Conditions"
 
 
 @pytest.fixture
@@ -269,15 +302,14 @@ def test_weather_page_handles_north_wind(seeded_db):
     build_db(TEST_DB_PATH, wind_direction=350)
     at = run_section("weather")
     assert not at.exception
-    assert next(m for m in at.metric if m.label == "Wind Direction").value.endswith("- N")
+    assert "From the north" in [c.value for c in at.caption]
 
 
 def test_weather_page_us_values(seeded_db):
     # Latest fixture row: 10 C, apparent 8 C, 0.2 mm precipitation, 5 km/h.
     at = run_section("weather")
-    value = {m.label: m.value for m in at.metric}
-    assert value["Precipitation"] == "0.01 in"
     found = gauges(at)
+    assert "0.03 in/h" in found["Precipitation"] and "light" in found["Precipitation"]  # 0.8 mm/h
     assert "50 °F" in found["Temperature"] and "cool" in found["Temperature"]  # 10 C
     assert "3.1 mph" in found["Wind speed"] and "light" in found["Wind speed"]
 

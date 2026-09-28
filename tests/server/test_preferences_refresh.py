@@ -142,3 +142,13 @@ def test_data_version_never_scans_a_table(seeded_db, db_conn):
     full_scans = [d for d in details if re.match(r"SCAN (device_status|relay_events|weather_readings)\b", d)
                   and "USING" not in d]
     assert full_scans == [], details
+
+
+def test_last_updated_time_shows_the_date_only_when_not_today():
+    from datetime import date, datetime
+
+    from ui import moment_text
+
+    moment = datetime(2026, 9, 27, 15, 45)
+    assert moment_text(moment, date(2026, 9, 27), "MM/DD/YYYY", "12-hour") == "03:45 PM"
+    assert moment_text(moment, date(2026, 9, 28), "DD/MM/YYYY", "24-hour") == "27/09/2026 15:45"
