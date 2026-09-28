@@ -13,7 +13,7 @@ import sys
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from support import PICO_DIR, SERVER_DIR
+from support import PICO_DIR, SERVER_DIR, run_section, section_app
 
 
 @pytest.fixture
@@ -65,8 +65,10 @@ def test_setup_link_and_qr():
 
     link = setup_code.setup_link("GH1-abc")
     assert link == "http://192.168.4.1/?code=GH1-abc"
-    svg = setup_code.qr_svg(link)
-    assert svg.startswith("<svg") and "</svg>" in svg
+    png = setup_code.qr_png(link)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    width = int.from_bytes(png[16:20], "big")
+    assert width >= 200  # big enough to scan from a screen
 
 
 def test_server_address(monkeypatch):
@@ -134,7 +136,7 @@ def page(seeded_db, monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "MQTT_USERNAME", "greenhouse-server")
 
     def run():
-        return AppTest.from_file(str(SERVER_DIR / "views/controllers.py"), default_timeout=30).run()
+        return run_section("controllers")
 
     return run
 

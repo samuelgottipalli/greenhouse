@@ -1,5 +1,5 @@
 """
-Pure helpers behind the Home and Greenhouse Weather (indoor) pages: reading
+Pure helpers behind Home and Reports › Greenhouse: reading
 ages, staleness, display values (light as estimated lux), chart-ready
 history, highs and lows, and the readings table.
 """

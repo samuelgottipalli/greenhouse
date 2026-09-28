@@ -1,5 +1,5 @@
 """
-Pure helpers behind the Weather Data page: unit conversion and wind labels.
+Pure helpers behind Reports › Outdoor weather: unit conversion and wind labels.
 
 ``weather_readings`` stores SI units (°C, mm, cm, km/h). The page shows
 precipitation in cm (SI) or inches (US), matching the ``distance_short``

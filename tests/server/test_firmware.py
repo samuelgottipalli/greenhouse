@@ -13,7 +13,7 @@ from streamlit.testing.v1 import AppTest
 
 from core import db, firmware, settings, setup_code
 from services import firmware_server, ingest
-from support import SERVER_DIR
+from support import SERVER_DIR, run_section, section_app
 
 
 @pytest.fixture
@@ -160,7 +160,7 @@ def controllers_page(seeded_db, monkeypatch, tmp_path):
     monkeypatch.setattr(setup_code, "lan_address", lambda: "192.168.1.20")
 
     def run():
-        return AppTest.from_file(str(SERVER_DIR / "views/controllers.py"), default_timeout=30).run()
+        return run_section("controllers")
 
     return run
 

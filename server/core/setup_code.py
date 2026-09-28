@@ -1,7 +1,7 @@
 """
 Setup codes: how a controller learns where the server is and how to log in.
 
-The dashboard (Settings, Controllers) shows each controller's code and a QR
+The dashboard (Settings › Controllers) shows each controller's code and a QR
 code. On the controller's setup page (``picoside/device/provision.py``, which
 decodes it) the code fills in the broker address, port, login, controller
 number and time zone, so nobody has to type an IP address on a phone.
@@ -98,16 +98,20 @@ def setup_link(code: str) -> str:
     return f"{SETUP_PAGE}?code={code}"
 
 
-def qr_svg(text: str) -> str:
+def qr_png(text: str) -> bytes:
     """
-    Draw a QR code.
+    Draw a QR code as a PNG image (dark on white, so phones read it in either theme).
 
     Args:
         text (str): Content, e.g. a setup link.
 
     Returns:
-        str: SVG markup (scalable, dark on white).
+        bytes: PNG data.
     """
+    import io
+
     import segno
 
-    return segno.make(text, error="m").svg_inline(scale=6, border=2, dark="#1d2b1f", light="#ffffff")
+    buffer = io.BytesIO()
+    segno.make(text, error="m").save(buffer, kind="png", scale=8, border=3, dark="#1d2b1f", light="#ffffff")
+    return buffer.getvalue()

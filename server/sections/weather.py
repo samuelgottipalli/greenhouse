@@ -1,5 +1,5 @@
 """
-Weather Data report page: today's outdoor conditions from ``weather_readings``.
+Reports › Outdoor weather tab: today's outdoor conditions from ``weather_readings``.
 
 Shows date/time (refreshed every minute) and the latest Open-Meteo reading
 (the page reloads itself when a new reading arrives, see ``ui.auto_refresh``):
@@ -26,11 +26,8 @@ from core.charts import time_chart
 from core.gauges import change_over, gauge_svg, humidity_zones, outdoor_temperature_zones, wind_zones
 from core.weather_codes import weather_code_descr
 from core.weather_report import to_display_units, wind_label
-from ui import auto_refresh, display_zone, page_setup
+from ui import display_zone
 
-page_setup("Weather Data", layout="wide")
-auto_refresh("weather", ("weather",))
-st.title(body="Weather Data")
 
 TIME_COLUMNS = ["measured_utc", "sunrise_utc", "sunset_utc"]
 
@@ -61,7 +58,7 @@ def metric_with_delta(column, label: str, data: DataFrame, field: str, unit: str
     )
 
 
-def get_weather_data(weathertoast: DeltaGenerator) -> None:
+def get_weather_data() -> None:
     """
     Load today's weather readings and render the metric cards.
 
@@ -69,9 +66,6 @@ def get_weather_data(weathertoast: DeltaGenerator) -> None:
     recent 216 rows (about 2 days at 15-minute intervals), converts times from
     UTC to the chosen zone, keeps today's rows and converts units. With no
     readings for today it says so and shows when the last reading was taken.
-
-    Args:
-        weathertoast (DeltaGenerator): Toast used to report progress.
 
     Raises:
         ValueError: If loading or rendering fails unexpectedly.
@@ -83,7 +77,6 @@ def get_weather_data(weathertoast: DeltaGenerator) -> None:
 
     try:
         data = db.recent_weather(limit=216)
-        weathertoast.toast("Weather data fetched from DB", icon=":material/thumb_up:")
         if data is None:
             st.info("No weather readings yet. Is the weather collector running?")
             return
@@ -103,7 +96,6 @@ def get_weather_data(weathertoast: DeltaGenerator) -> None:
         for column in TIME_COLUMNS:
             data[column] = data[column].dt.strftime(time_format)
 
-        weathertoast.toast(body="Loading charts...", icon=":material/hourglass:")
         latest = data.iloc[-1]
         gauges = [
             ("Temperature", "temperature_c", units["temperature"],
@@ -143,10 +135,6 @@ def get_weather_data(weathertoast: DeltaGenerator) -> None:
             st.write(data)
 
     except Exception as e:
-        weathertoast.toast(
-            f"Unable to fetch weather data from DB. Possibly due to a database error. Error: {e}",
-            icon=":material/error:",
-        )
         raise ValueError(f"Error fetching weather data: {e}") from e
 
 
@@ -172,6 +160,7 @@ def update_datetime() -> None:
         st.metric(label="Time", value=current_datetime.strftime(time_format))
 
 
-update_datetime()
-weathertoast: DeltaGenerator = st.toast(body="Fetching weather data...", icon=":material/hourglass:")
-get_weather_data(weathertoast)
+def render() -> None:
+    """Draw this section (called by its tabbed page)."""
+    update_datetime()
+    get_weather_data()

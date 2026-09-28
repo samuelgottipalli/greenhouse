@@ -1,7 +1,7 @@
 """
 Helpers shared by every Streamlit page: page setup and display preferences.
 
-Display preferences are chosen on the App Settings page, saved in the
+Display preferences are chosen on Settings › Display, saved in the
 ``app_preferences`` table, and loaded into ``st.session_state`` when a browser
 session starts, under these keys:
 
@@ -15,7 +15,7 @@ session starts, under these keys:
 * ``auto_refresh``: "On" or "Off": pages reload themselves when new data arrives
 
 Streamlit's own menu (with its theme and wide-mode settings) is hidden
-(``.streamlit/config.toml``); the colour scheme is applied by writing the
+(``.streamlit/config.toml``); the colour scheme (Settings › Display) is applied by writing the
 browser setting Streamlit reads at start-up (:func:`apply_theme`).
 """
 import json
@@ -47,8 +47,7 @@ PREFERENCE_DEFAULTS: dict[str, str] = {
 THEMES: list[str] = ["Use system setting", "Light", "Dark"]
 PAGE_WIDTHS: list[str] = ["Automatic", "Wide", "Centered"]
 # URL paths of the pages (app.py). Streamlit keeps the chosen theme per path.
-PAGE_PATHS: list[str] = ["", "home", "weather", "greenhouse", "control", "appsettings", "greenhousesettings",
-                         "controllers", "about", "help"]
+PAGE_PATHS: list[str] = ["", "home", "reports", "control", "settings", "help"]
 REFRESH_EVERY = timedelta(seconds=30)
 
 
@@ -337,13 +336,28 @@ def display_zone() -> str:
     return st.session_state["timezone_name"]
 
 
-def render_markdown(filename: str, title: str) -> None:
+def render_markdown(filename: str) -> None:
     """
-    Render a markdown file from ``content/`` as a page.
+    Show a markdown file from ``content/``.
 
     Args:
         filename (str): File name inside ``content/``.
-        title (str): Browser tab title.
     """
-    page_setup(title)
     st.markdown((CONTENT_DIR / filename).read_text(encoding="utf-8"))
+
+
+def open_tabs(tabs: dict[str, str]) -> list:
+    """
+    Draw a page's tabs, opening the one named in the address (``?tab=<key>``).
+
+    Links elsewhere in the dashboard use this, e.g. ``/settings?tab=controllers``.
+
+    Args:
+        tabs (dict[str, str]): Tab key (for links) to its label, in order.
+
+    Returns:
+        list: One container per tab, for ``with`` blocks.
+    """
+    wanted = st.query_params.get("tab")
+    default = tabs.get(wanted) if wanted in tabs else None
+    return st.tabs(list(tabs.values()), default=default)

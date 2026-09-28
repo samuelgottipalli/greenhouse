@@ -6,7 +6,7 @@ from pandas import DataFrame
 
 from core.indoor_report import age_text, display_value, history_by_measure, is_stale
 from core.timeutil import utc_timestamp
-from support import SERVER_DIR
+from support import SERVER_DIR, run_section, section_app
 from streamlit.testing.v1 import AppTest
 
 NOW = datetime(2026, 9, 26, 19, 0, tzinfo=timezone.utc)
@@ -69,7 +69,7 @@ def html_bodies(at):
 def test_indoor_page_with_fresh_readings(seeded_db, db_conn):
     add_recent_readings(db_conn, minutes_ago=70, temp=21.0)
     add_recent_readings(db_conn)
-    at = run_page("views/indoor.py")
+    at = run_section("greenhouse")
     assert not at.exception
     assert not at.warning
     gauges = html_bodies(at)
@@ -84,7 +84,7 @@ def test_indoor_page_with_fresh_readings(seeded_db, db_conn):
 
 
 def test_indoor_page_warns_when_stale(seeded_db):
-    at = run_page("views/indoor.py")  # fixture readings are from 2025
+    at = run_section("greenhouse")  # fixture readings are from 2025
     assert "Automation ignores readings older" in at.warning[0].value
     assert "No readings in the last 24 hours" in at.info[0].value
 
@@ -92,7 +92,7 @@ def test_indoor_page_warns_when_stale(seeded_db):
 def test_indoor_page_without_readings(seeded_db, db_conn):
     db_conn.execute("DELETE FROM sensor_readings")
     db_conn.commit()
-    at = run_page("views/indoor.py")
+    at = run_section("greenhouse")
     assert not at.exception
     assert "No readings from the greenhouse yet" in at.info[0].value
 
@@ -141,6 +141,6 @@ def test_dim_light_keeps_a_decimal(seeded_db, db_conn):
     add_recent_readings(db_conn)
     db_conn.execute("UPDATE sensor_readings SET value = 3408 WHERE measure_id = 6")
     db_conn.commit()
-    at = run_page("views/indoor.py")
+    at = run_section("greenhouse")
     light = html_bodies(at)[2]
     assert "0.3 lux" in light and ">0 lux<" not in light

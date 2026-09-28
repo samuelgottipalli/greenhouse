@@ -112,7 +112,7 @@ flowchart LR
 | `setup.bat`, `setup.sh`, `installer/` | The installer: a step-by-step window for the server and the controller. |
 | `picoside/device/` | Everything that is copied onto the Pico. `main.py` starts at power-on, `controller.py` is the main loop, `provision.py` is the setup hotspot, `ota.py` and `boot.py` handle updates over Wi-Fi, and `lib/` holds third-party drivers. |
 | `picoside/setup_config.py` | Run on your computer to create the controller's `config.json` by hand (Wi-Fi, broker, time zone). |
-| `server/app.py` | The web dashboard. Its pages are in `server/views/` and the About/Help text is in `server/content/`. |
+| `server/app.py` | The web dashboard. Its pages are in `server/views/`, the contents of their tabs in `server/sections/`, and the Help/About text in `server/content/`. |
 | `server/services/` | Background services: `ingest.py` (stores device messages), `automation.py`, `weather_collector.py`, `firmware_server.py` (controller code for updates), and `alerts.py` (push/email alerts, every 2 min). |
 | `server/run_all.py` | Runs the whole server with one command on Windows and macOS (Linux uses systemd). |
 | `server/core/` | Shared code: database access, settings, MQTT, the weather API client, unit conversions. |
@@ -129,14 +129,13 @@ been removed. It is still in the git history.
 
 | Page | What you can do |
 |---|---|
-| **Home** | Health at a glance: controller online/offline with uptime, Wi-Fi signal and memory; how fresh the readings are; each relay's state; and whether the background services are OK. |
-| **Reports › Weather Data** | Today's outdoor weather, with small trend charts. |
-| **Reports › Greenhouse Weather** | Latest temperature, humidity and light inside the greenhouse, plus 24-hour, 7-day and 30-day history charts. |
-| **Control › Remote Control** | Switch the fan, heater, light and water on or off. |
-| **Settings › App Settings** | Choose °C or °F, date and time formats, and time zone. |
-| **Settings › Greenhouse Settings** | Set the fan, heater and watering rules; revert or restore defaults. |
-| **Settings › Controllers** | Connect a controller to Wi-Fi (setup code and QR code) and update its software. |
-| **Settings › About / Help** | Background and usage notes. |
+| **Home** | Health at a glance: controller online/offline with uptime, Wi-Fi signal and memory; how fresh the readings are; each relay's state; the background services; active alerts. |
+| **Reports** | Tabs: **Greenhouse** (gauges, charts and a table of the readings inside) and **Outdoor weather** (today's weather with gauges and charts). |
+| **Remote Control** | Switch the fan, heater, light and water on or off. |
+| **Settings** | Tabs: **Display** (units, formats, time zone, colour scheme, page width, auto-refresh), **Greenhouse rules** (fan, heater, grow light and watering) and **Controllers** (Wi-Fi setup code and QR code, software updates). |
+| **Help** | Tabs: **How to use it** and **About**. |
+
+Pages link to a tab with `?tab=`, e.g. `/settings?tab=controllers`.
 
 ### On the device
 

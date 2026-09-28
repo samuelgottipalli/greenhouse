@@ -8,17 +8,15 @@ app.py`` does.
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from support import SERVER_DIR, TEST_DB_PATH, build_db
+from support import SERVER_DIR, TEST_DB_PATH, build_db, run_section, section_app
 
 PAGES = [
     "app.py",
     "views/home.py",
-    "views/app_settings.py",
-    "views/indoor.py",
-    "views/weather.py",
+    "views/reports.py",
     "views/control.py",
-    "views/greenhouse_settings.py",
-    "views/controllers.py",
+    "views/settings.py",
+    "views/help.py",
 ]
 
 
@@ -32,20 +30,53 @@ def test_page_renders_without_exception(seeded_db, page):
     assert not at.exception, [e.message for e in at.exception]
 
 
-def _markdown_script(filename):
-    from ui import render_markdown
-
-    render_markdown(filename, "Test")
-
-
 @pytest.mark.parametrize(
-    "filename, heading",
-    [("about.md", "# About the Greenhouse"), ("help.md", "# Greenhouse Control System Help")],
+    "tab, heading",
+    [(0, "# How to use the greenhouse dashboard"), (1, "# About this greenhouse")],
 )
-def test_markdown_pages(filename, heading):
-    at = AppTest.from_function(_markdown_script, args=(filename,), default_timeout=30).run()
+def test_help_page_tabs(seeded_db, tab, heading):
+    at = run_page("views/help.py")
     assert not at.exception
-    assert at.markdown[0].value.startswith(heading)
+    assert [t.label for t in at.tabs] == ["How to use it", "About"]
+    assert at.tabs[tab].markdown[0].value.startswith(heading)
+
+
+def test_about_gives_credit():
+    about = (SERVER_DIR / "content" / "about.md").read_text(encoding="utf-8")
+    assert "Samuel Gottipalli" in about and "Claude" in about and "Anthropic" in about
+
+
+@pytest.mark.parametrize("page, labels", [
+    ("views/reports.py", ["Greenhouse", "Outdoor weather"]),
+    ("views/settings.py", ["Display", "Greenhouse rules", "Controllers"]),
+])
+def test_tabbed_pages(seeded_db, page, labels):
+    at = run_page(page)
+    assert not at.exception, [e.message for e in at.exception]
+    assert [t.label for t in at.tabs] == labels
+
+
+def test_reports_tabs_hold_their_sections(seeded_db):
+    at = run_page("views/reports.py")
+    greenhouse, outdoor = at.tabs
+    assert "Automation ignores readings older" in greenhouse.warning[0].value  # fixture readings are old
+    assert any(m.value.startswith("<svg") for m in outdoor.markdown)  # outdoor gauges drawn
+
+
+def test_a_link_can_open_a_tab(seeded_db):
+    at = AppTest.from_file(str(SERVER_DIR / "views/settings.py"), default_timeout=30)
+    at.query_params["tab"] = "controllers"
+    at.run()
+    assert not at.exception
+    # The chosen tab is the default one in the page's tab bar.
+    assert at.tabs[2].label == "Controllers"
+
+
+def test_help_mentions_every_page_and_tab():
+    text = (SERVER_DIR / "content" / "help.md").read_text(encoding="utf-8")
+    for name in ("Home", "Reports", "Greenhouse", "Outdoor weather", "Remote Control", "Settings", "Display",
+                 "Greenhouse rules", "Controllers", "About"):
+        assert name in text, name
 
 
 def gauges(at):
@@ -59,7 +90,7 @@ def gauges(at):
 
 
 def test_weather_page_shows_latest_reading(seeded_db):
-    at = run_page("views/weather.py")
+    at = run_section("weather")
     labels = [m.label for m in at.metric]
     assert {"Sunrise \U0001f305", "Sunset \U0001f307", "Precipitation", "Wind Direction"} <= set(labels)
     assert set(gauges(at)) == {"Temperature", "Humidity", "Wind speed"}
@@ -98,7 +129,7 @@ def test_control_toggle_on_publishes_and_logs(seeded_db, db_conn, published):
 
 
 def test_settings_save_round_trips_temperatures(seeded_db, db_conn):
-    at = run_page("views/greenhouse_settings.py")
+    at = run_section("rules")
     assert at.number_input(key="fan_on_temp").value == 89.6  # 32 C shown in F
     next(b for b in at.button if b.label == "Save").click().run()
     assert not at.exception
@@ -109,7 +140,7 @@ def test_settings_save_round_trips_temperatures(seeded_db, db_conn):
 
 def test_settings_buffers_convert_as_differences(seeded_db, db_conn):
     # Formerly S-08: buffers were labelled F but stored unconverted.
-    at = run_page("views/greenhouse_settings.py")
+    at = run_section("rules")
     assert at.number_input(key="fan_on_temp_buffer").value == 3.6  # 2 C difference
     at.number_input(key="heater_on_temp_buffer").set_value(2.0)
     next(b for b in at.button if b.label == "Save").click().run()
@@ -121,7 +152,7 @@ def test_settings_buffers_convert_as_differences(seeded_db, db_conn):
 
 
 def test_settings_si_units_are_stored_as_entered(seeded_db, db_conn):
-    at = AppTest.from_file(str(SERVER_DIR / "views/greenhouse_settings.py"), default_timeout=30)
+    at = section_app("rules")
     at.session_state["units"] = "SI"
     at.run()
     assert at.number_input(key="fan_on_temp").value == 32.0
@@ -134,7 +165,7 @@ def test_settings_si_units_are_stored_as_entered(seeded_db, db_conn):
 
 def test_settings_save_keeps_hh_mm_and_minutes(seeded_db, db_conn):
     # Formerly known bug S-02: times were saved as HH:MM:SS.
-    at = run_page("views/greenhouse_settings.py")
+    at = run_section("rules")
     at.number_input(key="water_run_time_2").set_value(20)
     next(b for b in at.button if b.label == "Save").click().run()
     assert db_conn.execute(
@@ -143,7 +174,7 @@ def test_settings_save_keeps_hh_mm_and_minutes(seeded_db, db_conn):
 
 
 def test_settings_revert_discards_edits(seeded_db):
-    at = run_page("views/greenhouse_settings.py")
+    at = run_section("rules")
     at.number_input(key="fan_on_humidity").set_value(80.0).run()
     next(b for b in at.button if b.label == "Revert").click().run()
     assert at.number_input(key="fan_on_humidity").value == 50.0
@@ -152,7 +183,7 @@ def test_settings_revert_discards_edits(seeded_db):
 def test_settings_restore_defaults(seeded_db, db_conn):
     db_conn.execute("UPDATE thresholds SET value = 99 WHERE profile = 'current' AND name = 'fan_on_humidity_pct'")
     db_conn.commit()
-    at = run_page("views/greenhouse_settings.py")
+    at = run_section("rules")
     assert at.number_input(key="fan_on_humidity").value == 99.0
     next(b for b in at.button if b.label == "Restore Defaults").click().run()
     assert at.number_input(key="fan_on_humidity").value == 50.0
@@ -161,7 +192,7 @@ def test_settings_restore_defaults(seeded_db, db_conn):
 def test_settings_page_without_settings_shows_error(seeded_db, db_conn):
     db_conn.execute("DELETE FROM thresholds")
     db_conn.commit()
-    at = run_page("views/greenhouse_settings.py")
+    at = run_section("rules")
     assert not at.exception
     assert "not found" in at.error[0].value
 
@@ -218,7 +249,7 @@ def test_control_page_without_relays_shows_error(seeded_db, db_conn):
 def test_weather_page_handles_no_data_today(seeded_db):
     # Formerly known bug S-04: crashed when the latest reading was not from today.
     build_db(TEST_DB_PATH, weather_days_ago=1)
-    at = run_page("views/weather.py")
+    at = run_section("weather")
     assert not at.exception
     assert "No weather readings yet today" in at.info[0].value
 
@@ -226,7 +257,7 @@ def test_weather_page_handles_no_data_today(seeded_db):
 def test_weather_page_handles_single_reading_today(seeded_db):
     # Formerly known bug S-04: deltas needed two readings.
     build_db(TEST_DB_PATH, weather_rows=1)
-    at = run_page("views/weather.py")
+    at = run_section("weather")
     assert not at.exception
     temperature = gauges(at)["Temperature"]
     assert "50 °F" in temperature  # 10 C in the default US units
@@ -236,14 +267,14 @@ def test_weather_page_handles_single_reading_today(seeded_db):
 def test_weather_page_handles_north_wind(seeded_db):
     # Formerly known bug S-05: 348.75-360 degrees gave compass index 16.
     build_db(TEST_DB_PATH, wind_direction=350)
-    at = run_page("views/weather.py")
+    at = run_section("weather")
     assert not at.exception
     assert next(m for m in at.metric if m.label == "Wind Direction").value.endswith("- N")
 
 
 def test_weather_page_us_values(seeded_db):
     # Latest fixture row: 10 C, apparent 8 C, 0.2 mm precipitation, 5 km/h.
-    at = run_page("views/weather.py")
+    at = run_section("weather")
     value = {m.label: m.value for m in at.metric}
     assert value["Precipitation"] == "0.01 in"
     found = gauges(at)
@@ -253,24 +284,24 @@ def test_weather_page_us_values(seeded_db):
 
 def test_weather_page_empty_table_says_so(seeded_db):
     build_db(TEST_DB_PATH, weather_rows=0)
-    at = run_page("views/weather.py")
+    at = run_section("weather")
     assert "No weather readings yet" in at.info[0].value
 
 
 def test_preferences_persist_across_sessions(seeded_db):
     # Formerly S-18: preferences reset with every browser session.
-    at = run_page("views/app_settings.py")
+    at = run_section("display")
     at.radio[0].set_value("SI").run()
     at.radio[2].set_value("24-hour").run()
-    fresh = run_page("views/app_settings.py")
+    fresh = run_section("display")
     assert fresh.session_state["units"] == "SI"
     assert fresh.session_state["time_format"] == "24-hour"
-    weather = run_page("views/weather.py")
+    weather = run_section("weather")
     assert "10 °C" in gauges(weather)["Temperature"]
 
 
 def test_unchanged_preferences_are_not_rewritten(seeded_db, db_conn):
-    run_page("views/app_settings.py")
+    run_section("display")
     assert db_conn.execute("SELECT count(*) FROM app_preferences").fetchone() == (0,)
 
 

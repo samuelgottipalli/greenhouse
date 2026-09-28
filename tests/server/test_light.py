@@ -4,6 +4,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from support import run_section, section_app
+
 from core import db
 from core.automation import LIGHT_MIN_SWITCH, Reading, RelayState, decide, is_daylight, light_target
 
@@ -96,7 +98,7 @@ def test_settings_page_saves_light_level(seeded_db):
     from streamlit.testing.v1 import AppTest
     from support import SERVER_DIR
 
-    at = AppTest.from_file(str(SERVER_DIR / "views/greenhouse_settings.py"), default_timeout=30).run()
+    at = run_section("rules")
     assert at.number_input(key="light_on_level").value == 15000.0
     at.number_input(key="light_on_level").set_value(12000.0)
     at.number_input(key="light_on_level_buffer").set_value(8000.0)

@@ -61,7 +61,7 @@ with controller.container(border=True):
             memory = f" · {status['mem_free'] // 1024} KB free" if status["mem_free"] is not None else ""
             st.write(f"Wi-Fi {signal}{dbm}{memory}")
         if status["firmware_version"] and status["firmware_version"] != firmware.available_version():
-            st.markdown(":material/system_update: Software update available (Settings, Controllers)")
+            st.markdown(":material/system_update: Software update available (Settings › Controllers)")
 
 with readings.container(border=True):
     st.caption("Greenhouse readings")

@@ -193,3 +193,28 @@ def build_v1_db(path: Path) -> None:
         "1346, 7, 4.7, 63, 0, 0, 0, 0, 0, 1.9, 338, '2025-10-27 14:22:00', '2025-10-28 01:03:00')"
     )
     conn.close()
+
+
+
+def section_app(name: str, device_id: int | None = None):
+    """
+    An AppTest (not yet run) that draws one tab's section (``server/sections/<name>.py``)
+    the way its tabbed page does, after the usual page setup.
+
+    Args:
+        name (str): Section module, e.g. ``"greenhouse"``.
+        device_id (int | None): Controller to select first.
+    """
+    from streamlit.testing.v1 import AppTest
+
+    script = (f"import ui\nui.page_setup('Test', 'wide')\n"
+              f"from sections import {name}\n{name}.render()\n")
+    at = AppTest.from_string(script, default_timeout=30)
+    if device_id:
+        at.session_state["device_id"] = device_id
+    return at
+
+
+def run_section(name: str, device_id: int | None = None):
+    """Run :func:`section_app` and return the result."""
+    return section_app(name, device_id).run()

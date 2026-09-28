@@ -10,7 +10,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from core import db
-from support import SERVER_DIR
+from support import SERVER_DIR, run_section, section_app
 
 
 def run_page(page):
@@ -26,14 +26,14 @@ def test_streamlit_menu_is_hidden():
 
 
 def test_new_preference_defaults(seeded_db):
-    at = run_page("views/app_settings.py")
+    at = run_section("display")
     assert at.session_state["theme"] == "Use system setting"
     assert at.session_state["page_width"] == "Automatic"
     assert at.session_state["auto_refresh"] == "On"
 
 
 def test_app_settings_saves_theme_width_and_refresh(seeded_db):
-    at = run_page("views/app_settings.py")
+    at = run_section("display")
     radios = {radio.label: radio for radio in at.radio}
     radios["Colour scheme"].set_value("Dark").run()
     {radio.label: radio for radio in at.radio}["Page width"].set_value("Wide").run()
@@ -61,7 +61,7 @@ def test_theme_script_sets_every_page():
 
     dark = ui.theme_script("Dark")
     assert json.dumps(json.dumps({"name": "Dark"}, separators=(",", ":"))) in dark  # exactly as Streamlit stores it
-    for path in ("stActiveTheme-/-v1", "stActiveTheme-/weather-v1", "stActiveTheme-/greenhouse-v1"):
+    for path in ("stActiveTheme-/-v1", "stActiveTheme-/reports-v1", "stActiveTheme-/settings-v1"):
         assert path in dark
     assert "location.reload()" in dark
     system = ui.theme_script("Use system setting")

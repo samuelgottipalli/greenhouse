@@ -115,7 +115,7 @@ night at 03:30. Logs: `journalctl -u greenhouse-ingest -f`.
 
 **Check:** all five are `active (running)`, and `systemctl list-timers greenhouse-retention.timer`
 shows the next 03:30 run. The ingest log shows `Connected to localhost:1883`
-and no `not authorised`. Within 15 minutes the Weather Data page shows today's weather.
+and no `not authorised`. Within 15 minutes Reports › Outdoor weather shows today's weather.
 
 ---
 
@@ -200,7 +200,7 @@ Do these with the dashboard open. Each maps to a sign-off line in step 9.
 | # | Do this | Expect |
 |---|---|---|
 | a | Open **Home** | Controller **Online**, readings **Fresh** |
-| b | Open **Reports › Greenhouse Weather** | Temperature, humidity and light match the LCD (±1 reading) |
+| b | Open **Reports › Greenhouse** | Temperature, humidity and light match the LCD (±1 reading) |
 | c | **Control › Remote Control**: turn the **Fan** on | Relay 2 clicks within ~2 s; LCD shows `Relay 2: fan` / `State: On`; toggle stays on |
 | d | Turn the fan off again | Relay releases; Home shows Fan Off (web) |
 | e | Press relay button **1** once on the device | Relay 1 (water) toggles after ~0.4 s; Home shows Water (device) |
@@ -211,7 +211,7 @@ Do these with the dashboard open. Each maps to a sign-off line in step 9.
 | i1 | Unplug the Pico's power for 10 min | Home shows the controller **Offline** after up to ~7.5 min and Remote Control switches are disabled; after power returns, Online again |
 | i2 | During an outage (as in i), warm or cool the sensor past the heater trigger | Relay 3 follows the heater rule on its own (local mode); after reconnecting Home shows the change as (auto) |
 | i3 | Unplug the DHT22 data wire with the heater on | Within ~5.5 min relay 3 switches off by itself, even with the network up |
-| j | **Greenhouse Settings**: set "Turn on heater at" just above the current temperature, then Save | Within ~5 s relay 3 clicks and Home shows Heater On (auto). Put the setting back afterwards. |
+| j | **Settings › Greenhouse rules**: set "Turn on heater at" just above the current temperature, then Save | Within ~5 s relay 3 clicks and Home shows Heater On (auto). Put the setting back afterwards. |
 | k | Power-cycle the Pico | Boots to the main screen without help; all relays start **off** |
 
 When all pass:
@@ -331,10 +331,10 @@ follows within 2 minutes.
 
 The grow light (relay 4) is automated in daytime only (between sunrise and sunset from the weather
 collector). It switches on when the raw light level is below **Grow light on below**, and off
-again above that level plus **Buffer** (Greenhouse Settings). The level is the LDR's raw reading,
+again above that level plus **Buffer** (Settings › Greenhouse rules). The level is the LDR's raw reading,
 0-65535, not lux, so it has to be calibrated once:
 
-1. **Check the direction.** On **Reports › Greenhouse Weather**, note the *Light (raw)* value,
+1. **Check the direction.** On **Reports › Greenhouse**, note the *Light (raw)* value,
    then cover the sensor for a minute (readings come every 60 s). It must go **down**. If it goes
    up, set `"ldr_inverted": true` in `config.json`, copy it to the Pico and reset.
 2. **Pick the on-level.** On a day that is dull enough that you'd want the lamp on, note the
@@ -348,14 +348,14 @@ again above that level plus **Buffer** (Greenhouse Settings). The level is the L
 **Lux estimate.** The dashboard shows light in lux, estimated from the raw reading with a typical
 LDR's curve (`server/core/light.py`). To make it accurate, calibrate once in daylight (not direct
 sun): put a phone light-meter app next to the sensor, note its lux and, at the same time, the
-*raw* number under the light gauge on Reports › Greenhouse Weather, then:
+*raw* number under the light gauge on Reports › Greenhouse, then:
 
 ```bash
 server$ cd ~/greenhouse/server && ../venv/bin/python -m scripts.calibrate_light <raw> <lux>
 server$ sudo systemctl restart greenhouse-web
 ```
 
-The automation still works on the raw level; Greenhouse Settings shows the lux it matches.
+The automation still works on the raw level; Settings › Greenhouse rules shows the lux it matches.
 
 Without weather data (collector not running), the light is left as it is. The controller's local
 mode does not drive the light, because it has no sunrise data.
@@ -377,7 +377,7 @@ and broker login it needs. Then:
 3. Copy the code to it as in step 7.
 
 The dashboard shows a **Controller** picker in the sidebar once there are two or more, and every
-page, the switches and Greenhouse Settings then apply to the chosen controller. The automation
+page, the switches and the greenhouse rules then apply to the chosen controller. The automation
 service handles all controllers on every pass, each with its own settings.
 
 ## Running on battery

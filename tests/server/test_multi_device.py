@@ -6,7 +6,7 @@ from streamlit.testing.v1 import AppTest
 
 from core import db
 from scripts import add_device
-from support import REPO_ROOT, SERVER_DIR
+from support import REPO_ROOT, SERVER_DIR, run_section, section_app
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ def test_control_commands_go_to_selected_device(two_devices, monkeypatch):
 
 
 def test_settings_saved_for_selected_device_only(two_devices):
-    at = run_page("views/greenhouse_settings.py", device_id=2)
+    at = run_section("rules", device_id=2)
     at.number_input(key="fan_on_humidity").set_value(77.0)
     next(b for b in at.button if b.label == "Save").click().run()
     limits = lambda d: db.read_thresholds(device_id=d).set_index("name").loc["fan_on_humidity_pct", "value"]

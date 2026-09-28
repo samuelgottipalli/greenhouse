@@ -129,7 +129,7 @@ st.title(body="Greenhouse Remote Control")
 st.header(body="Control the greenhouse devices remotely.")
 with st.expander("ℹ️ About this app", expanded=False):
     st.write("Devices are controlled via MQTT.")
-    st.write("The automation service may switch devices based on the Greenhouse Settings.")
+    st.write("The automation service may switch devices based on your greenhouse rules (Settings › Greenhouse rules).")
     st.write("Use the toggles below to turn the devices on or off manually.")
 
 status = db.device_status(device_id=current_device())
