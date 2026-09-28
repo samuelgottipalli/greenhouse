@@ -345,6 +345,18 @@ again above that level plus **Buffer** (Greenhouse Settings). The level is the L
 4. **Check.** Automation changes the light at most once every 30 minutes in daytime, and always
    switches it off at sunset. A light you switch by hand is left alone for 60 minutes.
 
+**Lux estimate.** The dashboard shows light in lux, estimated from the raw reading with a typical
+LDR's curve (`server/core/light.py`). To make it accurate, calibrate once in daylight (not direct
+sun): put a phone light-meter app next to the sensor, note its lux and, at the same time, the
+*raw* number under the light gauge on Reports › Greenhouse Weather, then:
+
+```bash
+server$ cd ~/greenhouse/server && ../venv/bin/python -m scripts.calibrate_light <raw> <lux>
+server$ sudo systemctl restart greenhouse-web
+```
+
+The automation still works on the raw level; Greenhouse Settings shows the lux it matches.
+
 Without weather data (collector not running), the light is left as it is. The controller's local
 mode does not drive the light, because it has no sunrise data.
 

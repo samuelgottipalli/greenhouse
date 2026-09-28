@@ -23,6 +23,7 @@ from core.conversions import (
     fahrenheit_delta_to_celsius,
     fahrenheit_to_celsius,
 )
+from core.light import light_level_name, raw_to_lux, round_lux
 from core.timeutil import format_time_of_day
 from ui import current_device, page_setup
 
@@ -135,7 +136,8 @@ with st.container(border=True):
     light_on_level = left.number_input(
         label="Grow light on below (raw light level)",
         help="""In daytime the grow light turns on when the light sensor reads below this
-        (0-65535, brighter is higher). The Greenhouse Weather page shows the current reading.""",
+        (0-65535, brighter is higher). The Greenhouse Weather page shows the current raw reading
+        under the light gauge; the lux shown below is an estimate.""",
         key="light_on_level",
         min_value=0.0,
         max_value=65535.0,
@@ -152,6 +154,9 @@ with st.container(border=True):
         step=500.0,
         value=initial["light_on_level_buffer"],
     )
+    on_lux = round_lux(raw_to_lux(light_on_level))
+    off_lux = round_lux(raw_to_lux(min(light_on_level + light_on_level_buffer, 65535)))
+    left.caption(f"≈ {on_lux:g} lux ({light_level_name(on_lux)}); off again above ≈ {off_lux:g} lux")
     water_slots: dict[int, tuple[str, int]] = {}
     for slot in SLOTS:
         start = left.time_input(

@@ -94,6 +94,11 @@ SMTP_PASSWORD: str | None = getenv("SMTP_PASSWORD") or None
 ALERT_EMAIL_FROM: str | None = (getenv("ALERT_EMAIL_FROM") or "").strip() or None
 ALERT_EMAIL_TO: str | None = (getenv("ALERT_EMAIL_TO") or "").strip() or None
 
+# Light sensor lux estimate (core/light.py); calibrate with python -m scripts.calibrate_light.
+LDR_FIXED_OHMS: float = float(getenv("LDR_FIXED_OHMS") or "10000")
+LDR_R10_OHMS: float = float(getenv("LDR_R10_OHMS") or "15000")
+LDR_GAMMA: float = float(getenv("LDR_GAMMA") or "0.7")
+
 WEATHER_API: str | None = getenv("WEATHER_API")
 LATITUDE: str | None = getenv("LATITUDE")
 LONGITUDE: str | None = getenv("LONGITUDE")

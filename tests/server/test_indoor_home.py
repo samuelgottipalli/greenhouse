@@ -62,14 +62,25 @@ def test_history_by_measure():
 
 # --- pages ------------------------------------------------------------------
 
+def html_bodies(at):
+    return [m.value for m in at.markdown if m.value.startswith("<svg")]
+
+
 def test_indoor_page_with_fresh_readings(seeded_db, db_conn):
+    add_recent_readings(db_conn, minutes_ago=70, temp=21.0)
     add_recent_readings(db_conn)
     at = run_page("views/indoor.py")
     assert not at.exception
-    values = {m.label: m.value for m in at.metric}
-    assert values == {"Temperature": "71.6 °F", "Humidity": "55.0 % (RH)", "Light (raw)": "30000.0"}
     assert not at.warning
-    assert [s.value for s in at.subheader] == ["Temperature (°F)", "Humidity (% (RH))", "Light (raw)"]
+    gauges = html_bodies(at)
+    assert len(gauges) == 3
+    temperature, humidity, light = gauges
+    assert "71.6 °F" in temperature and "OK" in temperature  # between the 18 °C heater and 32 °C fan triggers
+    assert "+1.8 °F in 1 h" in temperature  # 21.0 -> 22.0 °C
+    assert "55 %" in humidity and "fan zone" in humidity  # above the 50 % fan trigger
+    assert "lux" in light and "(raw)" not in light
+    assert len(at.get("arrow_vega_lite_chart")) == 3
+    assert any(caption.value.startswith("High 71.6 °F") for caption in at.caption)
 
 
 def test_indoor_page_warns_when_stale(seeded_db):
@@ -117,3 +128,19 @@ def test_home_page_empty_database(seeded_db, db_conn):
     assert ":gray-badge[:material/help: Unknown]" in markdown
     assert "No status received yet." in markdown
     assert "No relay changes logged yet." in markdown
+
+
+
+def test_display_value_light_is_lux():
+    from core.light import raw_to_lux, round_lux
+
+    assert display_value("light_raw", 30000.0, "US") == round_lux(raw_to_lux(30000.0))
+
+
+def test_dim_light_keeps_a_decimal(seeded_db, db_conn):
+    add_recent_readings(db_conn)
+    db_conn.execute("UPDATE sensor_readings SET value = 3408 WHERE measure_id = 6")
+    db_conn.commit()
+    at = run_page("views/indoor.py")
+    light = html_bodies(at)[2]
+    assert "0.3 lux" in light and ">0 lux<" not in light

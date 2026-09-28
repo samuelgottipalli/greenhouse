@@ -2,10 +2,16 @@
 Weather Data report page: today's outdoor conditions from ``weather_readings``.
 
 Shows date/time (refreshed every minute) and the latest Open-Meteo reading
-(refreshed every 15 minutes): sunrise/sunset, temperature, humidity, weather
-description, precipitation, wind speed and direction, with sparkline charts
-for the day. Honours the units, time zone and date/time formats chosen on the
-App Settings page.
+(refreshed every 15 minutes):
+
+* **Gauges** for temperature, humidity and wind speed, each with the change
+  over the last hour and a chart of the day underneath (``core/gauges.py``,
+  ``core/charts.py``).
+* Cards for sunrise/sunset, the weather description, precipitation, wind
+  direction and when the data was last updated.
+
+Honours the units, time zone and date/time formats chosen on the App
+Settings page.
 """
 import zoneinfo
 from datetime import datetime as dtt
@@ -16,6 +22,8 @@ from pandas import DataFrame, to_datetime
 from streamlit.delta_generator import DeltaGenerator
 
 from core import db
+from core.charts import time_chart
+from core.gauges import change_over, gauge_svg, humidity_zones, outdoor_temperature_zones, wind_zones
 from core.weather_codes import weather_code_descr
 from core.weather_report import to_display_units, wind_label
 from ui import display_zone, page_setup
@@ -91,30 +99,44 @@ def get_weather_data(weathertoast: DeltaGenerator) -> None:
             return
 
         data = to_display_units(data, st.session_state["units"])
+        data["time"] = data["measured_utc"].dt.tz_localize(None)  # local wall time, for charts
         for column in TIME_COLUMNS:
             data[column] = data[column].dt.strftime(time_format)
 
         weathertoast.toast(body="Loading charts...", icon=":material/hourglass:")
+        latest = data.iloc[-1]
+        gauges = [
+            ("Temperature", "temperature_c", units["temperature"],
+             outdoor_temperature_zones(st.session_state["units"]), "#ef4444"),
+            ("Humidity", "relative_humidity_pct", units["humidity"], humidity_zones(), "#3b82f6"),
+            ("Wind speed", "wind_speed_kmh", units["speed"], wind_zones(st.session_state["units"]), "#22c55e"),
+        ]
+        for column, (label, field, unit, (low, high, zones), color) in zip(st.columns(3), gauges):
+            with column.container(border=True):
+                st.markdown(f"**{label}**")
+                value = float(latest[field])
+                st.markdown(gauge_svg(value, unit, low, high, zones, change=change_over(data, field),
+                                  title=f"{label}: {value} {unit}"), unsafe_allow_html=True)
+                if len(data) > 1:
+                    st.altair_chart(time_chart(data, field, unit, 1, st.session_state["time_format"],
+                                               color=color, height=150), use_container_width=True)
+
         with st.container(border=True, horizontal=True):
             left, middle, right = st.columns(3)
-            latest = data.iloc[-1]
             left.metric(label="Sunrise 🌅", value=str(latest["sunrise_utc"]), border=True)
             middle.metric(label="Sunset 🌇", value=str(latest["sunset_utc"]), border=True)
-            metric_with_delta(left, "Temperature", data, "temperature_c", units["temperature"])
-            metric_with_delta(middle, "Humidity", data, "relative_humidity_pct", units["humidity"])
             right.metric(
                 label="Weather",
                 value=weather_code_descr.get(int(latest["weather_code"]), "Unknown"),
                 border=True,
             )
-            metric_with_delta(right, "Precipitation", data, "precipitation_mm", units["distance_short"])
-            metric_with_delta(left, "Wind Speed", data, "wind_speed_kmh", units["speed"])
-            right.metric(
+            metric_with_delta(left, "Precipitation", data, "precipitation_mm", units["distance_short"])
+            middle.metric(
                 label="Wind Direction",
                 value=wind_label(latest["wind_direction_deg"], units["direction"]),
                 border=True,
             )
-            right.metric(label="Data last updated at", value=str(latest["measured_utc"]))
+            right.metric(label="Data last updated at", value=str(latest["measured_utc"]), border=True)
 
         if st.checkbox("Show raw data"):
             st.subheader("Raw data")

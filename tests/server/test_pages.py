@@ -48,10 +48,22 @@ def test_markdown_pages(filename, heading):
     assert at.markdown[0].value.startswith(heading)
 
 
+def gauges(at):
+    """Weather gauges by title: the SVG's accessible title starts with the label."""
+    found = {}
+    for element in at.markdown:
+        body = element.value
+        if body.startswith("<svg") and "<title>" in body:
+            found[body.split("<title>")[1].split(":")[0]] = body
+    return found
+
+
 def test_weather_page_shows_latest_reading(seeded_db):
     at = run_page("views/weather.py")
     labels = [m.label for m in at.metric]
-    assert {"Sunrise \U0001f305", "Temperature", "Humidity", "Wind Speed"} <= set(labels)
+    assert {"Sunrise \U0001f305", "Sunset \U0001f307", "Precipitation", "Wind Direction"} <= set(labels)
+    assert set(gauges(at)) == {"Temperature", "Humidity", "Wind speed"}
+    assert len(at.get("arrow_vega_lite_chart")) == 3  # a chart of the day under each gauge
 
 
 @pytest.fixture
@@ -216,8 +228,9 @@ def test_weather_page_handles_single_reading_today(seeded_db):
     build_db(TEST_DB_PATH, weather_rows=1)
     at = run_page("views/weather.py")
     assert not at.exception
-    temperature = next(m for m in at.metric if m.label == "Temperature")
-    assert temperature.value == "50.0 °F"  # 10 C in the default US units
+    temperature = gauges(at)["Temperature"]
+    assert "50 °F" in temperature  # 10 C in the default US units
+    assert " in 1 h" not in temperature  # no change shown without an older reading
 
 
 def test_weather_page_handles_north_wind(seeded_db):
@@ -232,9 +245,10 @@ def test_weather_page_us_values(seeded_db):
     # Latest fixture row: 10 C, apparent 8 C, 0.2 mm precipitation, 5 km/h.
     at = run_page("views/weather.py")
     value = {m.label: m.value for m in at.metric}
-    assert value["Temperature"] == "50.0 °F"
     assert value["Precipitation"] == "0.01 in"
-    assert value["Wind Speed"] == "3.11 mph"
+    found = gauges(at)
+    assert "50 °F" in found["Temperature"] and "cool" in found["Temperature"]  # 10 C
+    assert "3.1 mph" in found["Wind speed"] and "light" in found["Wind speed"]
 
 
 def test_weather_page_empty_table_says_so(seeded_db):
@@ -252,7 +266,7 @@ def test_preferences_persist_across_sessions(seeded_db):
     assert fresh.session_state["units"] == "SI"
     assert fresh.session_state["time_format"] == "24-hour"
     weather = run_page("views/weather.py")
-    assert next(m for m in weather.metric if m.label == "Temperature").value.endswith("°C")
+    assert "10 °C" in gauges(weather)["Temperature"]
 
 
 def test_unchanged_preferences_are_not_rewritten(seeded_db, db_conn):

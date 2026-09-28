@@ -31,18 +31,24 @@ System status at a glance:
 
 ### Reports › Weather Data
 
-*   Shows today's outdoor weather: temperature, humidity, conditions, precipitation, wind,
-    sunrise and sunset.
-*   Each card shows the change since the previous reading and a small chart for the day.
+*   Gauges for temperature, humidity and wind speed: the needle shows the current value, the
+    coloured zones and the word under it say what it means (e.g. *cool*, *dry*, *breezy*), and the
+    line under that is the change over the last hour. A chart of the day is underneath.
+*   Cards for sunrise and sunset, conditions, precipitation and wind direction.
 *   Refreshes automatically every 15 minutes.
 
 ### Reports › Greenhouse Weather
 
-*   Latest temperature, humidity and light level measured inside the greenhouse. Hover over
-    the (?) on a card to see when it was measured.
+*   Gauges for the latest temperature, humidity and light inside the greenhouse, with the change
+    over the last hour. The temperature and humidity zones come from your Greenhouse Settings:
+    **heater zone** below the heater trigger, **OK**, and **fan zone** above the fan trigger.
+*   **Light** is shown in lux, *estimated* from the light sensor (dark, dim, overcast, daylight,
+    full sun). The sensor's raw reading is shown under the gauge; to make the lux accurate, see
+    *Calibrating the light sensor* in the RUNBOOK.
 *   A warning appears if the readings are more than 15 minutes old.
-*   Choose 24 hours, 7 days or 30 days to see the history charts; "Show readings as a table"
-    lists the raw values.
+*   Choose 24 hours, 7 days or 30 days for the charts (hover for exact values; the high and low
+    are listed under each). "Show readings as a table" has one row per time, one column per
+    measure (hourly averages for 7 and 30 days).
 
 ### Control › Remote Control
 
@@ -51,6 +57,12 @@ System status at a glance:
     state.
 *   A device you switch here stays as you set it for 60 minutes; after that the automation service follows your Greenhouse Settings again.
 *   If the controller is offline the switches are disabled. The controller then runs your Greenhouse Settings itself (its screen shows LOCAL), and it always switches the heater off if its temperature sensor stops responding for 5 minutes.
+
+### Staying logged in
+
+With **Keep me logged in on this device** ticked, the dashboard remembers you for 30 days, so
+refreshing the page doesn't ask for the password again. **Log out** forgets it. Changing the
+dashboard password logs every device out.
 
 ### Settings › App Settings
 

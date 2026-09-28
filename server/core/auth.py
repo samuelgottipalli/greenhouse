@@ -5,13 +5,64 @@ The password is never stored. ``server/.env`` holds ``APP_PASSWORD_HASH`` in
 the form ``pbkdf2_sha256:<iterations>:<salt hex>:<hash hex>`` (colons rather
 than ``$`` so ``.env`` variable expansion leaves it alone). Create it with
 ``python -m scripts.set_password``.
+
+"Keep me logged in" uses a signed token in a browser cookie:
+``<expiry unix time>.<HMAC-SHA256>``. The HMAC key is derived from the stored
+password hash, so changing the password signs every browser out.
 """
 import hashlib
 import hmac
 import secrets
+import time
 
 ALGORITHM = "pbkdf2_sha256"
 ITERATIONS = 200_000
+REMEMBER_DAYS = 30
+
+
+def _token_key(password_hash: str) -> bytes:
+    """Derive the cookie-signing key from the stored password hash."""
+    return hashlib.sha256(("greenhouse-login:" + password_hash).encode("utf-8")).digest()
+
+
+def make_login_token(password_hash: str, days: int = REMEMBER_DAYS, now: float | None = None) -> str:
+    """
+    Make a token that proves a successful login until it expires.
+
+    Args:
+        password_hash (str): ``APP_PASSWORD_HASH``.
+        days (int): How long it stays valid.
+        now (float | None): Unix time now (for tests).
+
+    Returns:
+        str: ``<expiry>.<signature>``.
+    """
+    expiry = str(int((time.time() if now is None else now) + days * 86400))
+    signature = hmac.new(_token_key(password_hash), expiry.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{expiry}.{signature}"
+
+
+def login_token_valid(token: str | None, password_hash: str, now: float | None = None) -> bool:
+    """
+    Check a token from :func:`make_login_token`.
+
+    Args:
+        token (str | None): Cookie value.
+        password_hash (str): ``APP_PASSWORD_HASH`` (a different one invalidates it).
+        now (float | None): Unix time now (for tests).
+
+    Returns:
+        bool: True if it is signed with this password and not expired.
+    """
+    if not token or "." not in token:
+        return False
+    expiry, _, signature = token.partition(".")
+    if not expiry.isdigit():
+        return False
+    expected = hmac.new(_token_key(password_hash), expiry.encode("ascii"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return False
+    return int(expiry) > (time.time() if now is None else now)
 
 
 def hash_password(password: str, salt: bytes | None = None, iterations: int = ITERATIONS) -> str:
