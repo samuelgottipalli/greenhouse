@@ -141,6 +141,80 @@ Cloud's free plan), with encrypted and verified connections from the server and 
 | 7.4 ✅ | **Installer: "Use a cloud MQTT service".** Address, port 8883, the server's login and controller 1's login (both created in the service's console). It checks both logins over TLS and finds which bundled root the service uses, warning if none does. | (usability) | Logic tests for the page's choices and saved settings. | 1 d |
 | 7.5 ✅ | **Dashboard and docs.** Settings › Controllers lets you type the controller's login name (cloud services choose their own) and builds the code with the cloud address. RUNBOOK gets a HiveMQ Cloud walkthrough; MQTT.md and Help are updated. Over-the-air updates still come from the server on your network. | (docs) | Docs tests; page tests for a cloud set-up. | 1 d |
 
+## Phase 8: Run it on a cloud server, reachable from the internet (about 2 weeks)
+
+Goal: someone can run their own copy on a cloud VM (a $4–6/month instance is plenty) and open the
+dashboard from anywhere, safely. Today's design assumes a home network: plain HTTP for the
+dashboard and for controller updates, one shared password, and the controllers reaching the server
+directly. Each of those changes once the server is on the internet.
+
+| Step | Work | Done when | Effort |
+|---|---|---|---|
+| 8.1 | **Packaged deployment.** One `docker compose` file: the dashboard and services, Mosquitto, and Caddy in front, which gets and renews HTTPS certificates automatically. Only ports 443 (dashboard) and 8883 (MQTT over TLS) are open. A short *Deploy to a cloud VM* guide (a domain name, DNS, `docker compose up`). | A fresh VM reaches a working dashboard over HTTPS by following the guide; CI builds the images. | 3 d |
+| 8.2 | **Broker on the internet.** Mosquitto listens with TLS only (port 8883, the certificate Caddy obtains) and never allows anonymous logins; the controller already speaks TLS (Phase 7). Per-controller logins and topic rules as today. | Tests: the generated broker settings; a controller connects to a Let's Encrypt broker (done on hardware in Phase 7). | 2 d |
+| 8.3 | **Updates over HTTPS.** Controllers download update files over HTTPS through Caddy instead of plain HTTP on port 8081 (the checksums already come over the encrypted MQTT link). Plain HTTP stays for home networks. | Tests: `https://` manifest URLs are accepted and checked; the controller update test runs over TLS. | 2 d |
+| 8.4 | **Stronger login.** Separate accounts (owner, family members, view-only), passwords stored with a slow hash (already), a pause after repeated wrong passwords, optional sign-in with Google or Microsoft (OIDC), and a list of signed-in devices that can be logged out. Home installs keep the simple single password. | Tests: roles on each page, lock-out timing, OIDC sign-in against a test identity provider. | 4 d |
+| 8.5 | **Hardening and backups.** Security headers and cookie flags behind HTTPS, the dashboard's own port closed to the outside, automatic daily database backups to object storage, and alerts when backups fail. A security checklist in the RUNBOOK. | A scan of the running VM (open ports, TLS grade, headers) passes the checklist; restoring a backup is tested. | 2 d |
+
+**Is it viable?** Yes. The pieces that matter are already in place: encrypted, verified MQTT
+from the controller (Phase 7), per-controller logins and topic rules, and a server that needs
+little memory or disk (about 2.6 MB of readings per controller per year). The controller keeps
+running its rules if the internet connection drops, so a cloud server is no less safe for the
+plants than a home one. What must change is everything listed above that assumed a trusted home
+network. Until Phase 8 is done, the safe way to reach a home server from outside is a private
+network tool such as Tailscale, or Cloudflare Access in front of the dashboard.
+
+## Phase 9: One service for many greenhouses (about 6–8 weeks)
+
+Goal: a hosted version where people sign up, add their controller with the setup code, and never
+run a server. Each account sees only its own greenhouses. This is the foundation for the free and
+premium tiers (Phase 10); the self-hosted version stays free and keeps every feature.
+
+| Step | Work | Done when | Effort |
+|---|---|---|---|
+| 9.1 | **Accounts and greenhouses.** Sign-up with email confirmation (and OIDC), accounts that own greenhouses, greenhouses that own controllers, and people invited to a greenhouse with a role. | Tests: every query is limited to the signed-in account; one account can never read or change another's data (tested for every page and service). | 2 wk |
+| 9.2 | **Database for many users.** Move from SQLite to PostgreSQL with the account on every row, row-level security as a second guard, and data retention per plan. The same code keeps SQLite for self-hosting. | Migration tested both ways; the isolation tests from 9.1 pass on both databases. | 1.5 wk |
+| 9.3 | **Adding a controller.** The dashboard creates the controller's own broker login, topic rules and setup code; the controller joins with the phone hotspot as today. Removing it revokes the login at once. A broker that manages logins through an API (Mosquitto's dynamic security plugin or EMQX). | A new account adds a real Pico by phone in under 5 minutes; a removed controller can no longer connect. | 1.5 wk |
+| 9.4 | **Running the service.** Health monitoring and alerting for the service itself, error tracking, rate limits per account, and a status page. Updates roll out to controllers gradually (a few first, then everyone), each still able to roll itself back. | A load test with 1,000 simulated controllers stays within the plan's budget; a bad update stops rolling out automatically. | 1.5 wk |
+| 9.5 | **The paperwork.** Terms of use, a privacy policy (what is stored, for how long, where; data export and account deletion), and how to contact support. | Both published; export and deletion work from the dashboard. | 0.5 wk |
+
+The dashboard runs on Streamlit today, which is fine for one household. A shared service with
+many users is likely to need a web API (e.g. FastAPI) with a separate front end; 9.1 starts by
+measuring whether Streamlit copes, and makes that call.
+
+## Phase 10: Free and premium plans (about 3 weeks)
+
+Goal: a generous free plan that covers a typical home greenhouse completely, and a fairly priced
+premium plan for bigger setups and extras that cost real money to run. Nothing to do with the
+plants' safety or the basics of running a greenhouse is ever behind a paywall.
+
+| | **Free** | **Premium** (about $3/month or $30/year) |
+|---|---|---|
+| Greenhouses and controllers | 1 greenhouse, up to 3 controllers | Up to 10 greenhouses, 25 controllers |
+| Dashboard, gauges, charts, remote control | ✓ | ✓ |
+| Automation rules, local mode, safety cut-offs | ✓ | ✓ |
+| Software updates over Wi-Fi, with roll-back | ✓ | ✓ |
+| Alerts | Email and push notifications | Also text messages (SMS) |
+| History | 1 year of readings | Unlimited, full detail |
+| Export your data (CSV) and delete your account | ✓ | ✓ |
+| People sharing a greenhouse | 2 | Unlimited, with roles (owner, helper, view-only) |
+| Weather | Local forecast | Forecast plus frost and heat warnings ahead of time |
+| Extras | | Seasonal schedules, more than one zone per greenhouse, Home Assistant and webhooks, reports by email |
+| Support | Community forum and guides | Email support |
+| Self-hosting (your own server) | Always free, every feature, open source | — |
+
+| Step | Work | Done when | Effort |
+|---|---|---|---|
+| 10.1 | **Plans in the product.** Limits enforced in one place with friendly messages (never a surprise cut-off: going over a limit warns first and keeps working for 30 days). Downgrading keeps all data; older history becomes read-only rather than deleted. | Tests for every limit, the grace period and downgrade. | 1 wk |
+| 10.2 | **Billing.** Stripe checkout and customer portal (monthly or yearly, cancel any time, receipts), the plan shown on the account page. Discounts for schools and community gardens. | End-to-end tests against Stripe's test mode, including failed payments (grace period, not a lock-out). | 1 wk |
+| 10.3 | **Premium extras**, one at a time: SMS alerts, frost warnings, seasonal schedules, zones, Home Assistant and webhooks. | Each ships with tests and a Help page. | ongoing |
+| 10.4 | **Launch.** A small beta (friends and a gardening club) on the free plan first, then premium. Measure the running cost per active controller before fixing prices. | Beta feedback addressed; cost per controller measured and prices confirmed. | 1 wk |
+
+Why these limits: a free account costs very little to run (a few MB of readings a year and a
+handful of messages a minute), so the free plan can cover a typical home greenhouse completely.
+The premium plan pays for things that cost more (text messages, unlimited storage, many
+controllers, support time) and funds development.
+
 ---
 
 ## Tracking
@@ -157,5 +231,8 @@ Cloud's free plan), with encrypted and verified connections from the server and 
 | 5 | 5.1–5.6 ✅ | Installer (`setup.bat`/`setup.sh`), setup hotspot, setup codes, updates over Wi-Fi, `run_all.py`. On-hardware checks are in the RUNBOOK sign-off |
 | 6 | 6.1–6.4 ✅ | Released as **1.1.0** (tag `v1.1.0` on `main`); schema v7 stores the controller's version name |
 | 7 | 7.1–7.5 ✅ | On `develop` as 1.2.0-dev (not deployed yet). Checked on the real Pico W against Let's Encrypt and DigiCert brokers (roots found by trying, a wrong root refused, ~30 KB RAM); found and fixed umqtt's timeouts on TLS sockets |
+| 8 | Planned | Cloud VM deployment, reachable from the internet |
+| 9 | Planned | Hosted service for many greenhouses |
+| 10 | Planned | Free and premium plans |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).
