@@ -452,7 +452,65 @@ Press **Update controller** while the controller is online:
 Controllers need to reach the server on port **8081** (and 1883 for the broker); allow both in the
 server's firewall.
 
+The page shows version names (for example *Installed 1.0.0*, *Available 1.1.0*) with the exact
+builds underneath. After an update the controller reports *Updated from 1.0.0 to 1.1.0*, and it
+shows its version on its screen while starting. What changed in each version is in
+[CHANGELOG.md](../CHANGELOG.md).
+
+## Using a cloud MQTT service
+
+Instead of running Mosquitto, the server and the controllers can meet at a hosted MQTT service.
+Connections are encrypted (TLS on port 8883) and the controller checks the service's certificate.
+Readings and switch commands then travel through the service over the internet; software updates
+still come straight from the server, so the server must be on the same network as the controllers.
+
+**HiveMQ Cloud (free plan), step by step** (other services work the same way; the console's
+wording may differ slightly):
+
+1. Sign up at <https://console.hivemq.cloud> and create a free (*Serverless*) cluster.
+2. Open the cluster. Its **Overview** shows the address, like `abc123.s1.eu.hivemq.cloud`, and the
+   TLS port **8883**.
+3. Under **Access management**, create two logins, each allowed to *publish and subscribe*:
+   one for the server (e.g. `greenhouse-server`) and one for controller 1 (e.g.
+   `greenhouse-device-1`). Use long random passwords. If the service can limit a login to some
+   topics, limit controller *N* to `greenhouse/N/#`.
+4. Run the installer and, on **Messaging**, choose **Use a cloud MQTT service**. Enter the address,
+   port 8883 and both logins. It checks both logins and which certificate the controller needs.
+5. Set up the controller as usual (USB on the next page, or the setup code from
+   **Settings › Controllers**, which now holds the service's address and *encrypted*).
+
+By hand instead of the installer, set in `server/.env`:
+
+```ini
+MQTT_HOST=abc123.s1.eu.hivemq.cloud
+MQTT_PORT=8883
+MQTT_TLS=true
+MQTT_USERNAME=greenhouse-server
+MQTT_PASSWORD=<server password>
+PUBLIC_HOST=<this computer's LAN address, for software updates>
+```
+
+and on the controller `mqtt_broker`, `mqtt_port` 8883, `mqtt_tls` true and its own login
+(`mqtt_ca` can stay empty). Add more controllers with a login each in the service's console, then
+enter it on **Settings › Controllers**.
+
+**Certificates.** The controller carries a few common root certificates in
+`picoside/device/certs/` (Let's Encrypt, Amazon, DigiCert, GlobalSign, Google, Sectigo, Microsoft).
+The first time it connects it tries them in turn and remembers the one that works (`mqtt_ca`).
+It needs the correct time for this, so it waits for NTP first. If a service's certificate chains
+to none of them, the installer and the Controllers page say so; add that root to
+`server/scripts/update_controller_certs.py`, run `python -m scripts.update_controller_certs` and
+update the controllers.
+
+On the Pico W an encrypted connection takes about 5 seconds to open and uses about 30 KB of
+memory while connected (measured 2026-09-28: 144 KB free with the controller loaded).
+
 ## Troubleshooting
+
+**Cloud service: the controller never comes online.** On its USB console it prints why:
+`waiting for the clock before an encrypted connection` (it can't reach an NTP server yet),
+`broker certificate not accepted` for every root (the service's certificate isn't covered; see
+*Certificates* above), or `MQTT connect failed` (address, port 8883 or login wrong).
 
 | Symptom | Likely cause | Fix |
 |---|---|---|

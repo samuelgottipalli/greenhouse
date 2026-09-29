@@ -8,16 +8,20 @@ For the controller chosen in the sidebar it shows:
   how the last update went, and an **Update controller** button while it is
   online and out of date (see docs/MQTT.md, "Over-the-air updates").
 * **Connect it to Wi-Fi**: how to start the controller's setup hotspot, and a
-  QR code and setup code holding this server's address and the controller's
-  broker login (``core/setup_code.py``). When the broker needs logins but the
+  QR code and setup code holding the broker's address (this server's, or a
+  cloud MQTT service's) and the controller's broker login
+  (``core/setup_code.py``). When the broker needs logins but the
   controller's password isn't stored yet (``core/device_credentials.py``), it
-  asks for it first.
+  asks for it first; for a cloud service it also asks for the login name,
+  which the service's console chose. For an encrypted broker the code also
+  names the root certificate the controller checks it with
+  (``core/broker_tls.py``).
 """
 from datetime import datetime, timezone
 
 import streamlit as st
 
-from core import db, device_credentials, firmware, settings, setup_code
+from core import broker_tls, db, device_credentials, firmware, settings, setup_code
 from core.indoor_report import age_text
 from ui import current_device
 
@@ -29,6 +33,23 @@ FIRMWARE_STATES = {
     "failed": "Last update failed; nothing was changed",
     "rolled_back": "Last update didn't start properly and was undone",
 }
+
+
+UNREACHABLE = "unreachable"
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner="Checking the broker's certificate…")
+def broker_root(host: str, port: int) -> str | None:
+    """
+    The bundled root a TLS broker needs (cached: it takes a few connections).
+
+    Returns:
+        str | None: Its name, None if no bundled root fits, or ``UNREACHABLE``.
+    """
+    try:
+        return broker_tls.find_root(host, port)
+    except OSError:
+        return UNREACHABLE
 
 
 def render() -> None:
@@ -84,23 +105,41 @@ def render() -> None:
         "restarts and appears as *online* on the Home page within a minute."
     )
 
-    host = setup_code.server_address()
+    host = setup_code.broker_address()
     login = device_credentials.get(device_id)
     needs_login = bool(settings.MQTT_USERNAME)
+    cloud = setup_code.broker_is_remote()
 
     if not host:
         st.warning("This computer's network address couldn't be found. Set `PUBLIC_HOST` in `server/.env` "
                    "to its IP address (for example 192.168.1.20) and restart the dashboard.")
     elif needs_login and login is None:
         user = device_credentials.device_user(device_id)
-        st.info(f"The broker password of **{user}** isn't stored on this server yet. The installer stores it "
-                "when it creates the login; if you created it by hand, enter it here.")
+        if cloud:
+            st.info(f"Controller {device_id} needs its own login on **{host}**. Create one in the MQTT "
+                    "service's console (see the setup guide), then enter it here.")
+        else:
+            st.info(f"The broker password of **{user}** isn't stored on this server yet. The installer stores "
+                    "it when it creates the login; if you created it by hand, enter it here.")
         with st.form("controller_login"):
-            password = st.text_input(f"Broker password for {user}", type="password")
-            if st.form_submit_button("Save password") and password:
+            if cloud:
+                user = st.text_input("Login name", value=user, key="controller_login_user").strip()
+            # A fixed key: a label that followed the login name would reset the field when the name changes.
+            password = st.text_input("Broker password" if cloud else f"Broker password for {user}",
+                                     type="password", key="controller_login_password")
+            if st.form_submit_button("Save password") and password and user:
                 device_credentials.save(device_id, user, password)
                 st.rerun()
     else:
+        root = broker_root(host, settings.MQTT_PORT) if settings.MQTT_TLS else None
+        if root == UNREACHABLE:
+            st.warning(f"The broker at {host}:{settings.MQTT_PORT} can't be reached to check its certificate. "
+                       "The code below lets the controller find the right one itself.",
+                       icon=":material/warning:")
+        elif settings.MQTT_TLS and root is None:
+            st.warning("The controller can't check this broker's certificate: it isn't signed by any of the "
+                       "root certificates the controller carries. See *Using a cloud MQTT service* in the "
+                       "setup guide.", icon=":material/warning:")
         code = setup_code.encode(
             host,
             settings.MQTT_PORT,
@@ -108,6 +147,8 @@ def render() -> None:
             login["user"] if login else None,
             login["password"] if login else None,
             settings.TIMEZONE,
+            tls=settings.MQTT_TLS,
+            ca=root if root != UNREACHABLE else None,
         )
         left, right = st.columns([1, 2], vertical_alignment="center")
         with left:
@@ -115,5 +156,6 @@ def render() -> None:
         with right:
             st.markdown("**Setup code**")
             st.code(code, language=None, wrap_lines=True)
-            st.caption(f"Server address inside the code: {host}:{settings.MQTT_PORT}. The code contains the "
-                       "controller's password, so share it only with people you trust.")
+            secure = " (encrypted)" if settings.MQTT_TLS else ""
+            st.caption(f"Broker address inside the code: {host}:{settings.MQTT_PORT}{secure}. The code contains "
+                       "the controller's password, so share it only with people you trust.")

@@ -3,3 +3,4 @@
 mpy-cross==1.29.0.post2
 pytest==9.1.1
 pytest-cov==7.1.0
+cryptography==46.0.0  # tests: throwaway certificates for TLS tests

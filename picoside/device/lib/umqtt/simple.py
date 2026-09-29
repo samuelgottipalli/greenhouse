@@ -42,13 +42,17 @@ class MQTTClient:
             user (str | None): Username, if the broker requires auth.
             password (str | None): Password, if the broker requires auth.
             keepalive (int): Keepalive interval in seconds (0 disables it).
-            ssl (bool): Wrap the socket in TLS.
+            ssl (bool | ssl.SSLContext): Wrap the socket in TLS. A context
+                (the greenhouse uses one that checks the broker's certificate,
+                see net.py) wraps it with the broker's name for SNI and the
+                name check; ``True`` uses ``ussl.wrap_socket`` (no checks).
             ssl_params (dict): Extra arguments for ``ussl.wrap_socket``.
         """
         if port == 0:
             port = 8883 if ssl else 1883
         self.client_id = client_id
         self.sock = None
+        self.raw_sock = None
         self.server = server
         self.port = port
         self.ssl = ssl
@@ -116,11 +120,16 @@ class MQTTClient:
             OSError: On network errors.
             MQTTException: If the broker refuses the connection.
         """
-        self.sock = socket.socket()
-        self.sock.settimeout(SOCKET_TIMEOUT_S)
+        # The TCP socket keeps the timeout: MicroPython's TLS sockets have no
+        # settimeout(), and reads through them wait as long as the TCP socket does.
+        self.raw_sock = socket.socket()
+        self.raw_sock.settimeout(SOCKET_TIMEOUT_S)
         addr = socket.getaddrinfo(self.server, self.port)[0][-1]
-        self.sock.connect(addr)
-        if self.ssl:
+        self.raw_sock.connect(addr)
+        self.sock = self.raw_sock
+        if hasattr(self.ssl, "wrap_socket"):
+            self.sock = self.ssl.wrap_socket(self.sock, server_hostname=self.server)
+        elif self.ssl:
             import ussl
             self.sock = ussl.wrap_socket(self.sock, **self.ssl_params)
         premsg = bytearray(b"\x10\0\0\0\0\0")
@@ -264,7 +273,7 @@ class MQTTClient:
             int | None: The packet type byte for non-PUBLISH packets, else None.
         """
         res = self.sock.read(1)
-        self.sock.settimeout(SOCKET_TIMEOUT_S)
+        self.raw_sock.settimeout(SOCKET_TIMEOUT_S)
         if res is None:
             return None
         if res == b"":

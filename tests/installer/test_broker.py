@@ -126,6 +126,9 @@ class FakeMqtt:
     def username_pw_set(self, user, password):
         self.login = (user, password)
 
+    def tls_set(self):
+        self.tls = True
+
     def connect(self, host, port, keepalive=60):
         if self.error:
             raise self.error
@@ -152,6 +155,35 @@ class Code:
 
     def __str__(self):
         return "Not authorized" if self.is_failure else "Success"
+
+
+def test_check_login_encrypted():
+    client = FakeMqtt(result=Code(False))
+    ok, message = broker.check_login("h", 8883, "u", "p", client_factory=lambda: client, tls=True)
+    assert ok and "(encrypted)" in message and client.tls
+
+
+def test_check_login_untrusted_certificate():
+    import ssl
+
+    error = ssl.SSLCertVerificationError(1, "verify failed")
+    error.verify_message = "self-signed certificate"
+    ok, message = broker.check_login("h", 8883, "u", "p", tls=True,
+                                     client_factory=lambda: FakeMqtt(error=error))
+    assert not ok and "doesn't trust" in message and "self-signed" in message
+
+
+def test_controller_root(monkeypatch):
+    from core import broker_tls
+
+    monkeypatch.setattr(broker_tls, "find_root", lambda host, port: "isrg_root_x1")
+    assert broker.controller_root("h", 8883) == "isrg_root_x1"
+
+    def unreachable(host, port):
+        raise OSError("no route")
+
+    monkeypatch.setattr(broker_tls, "find_root", unreachable)
+    assert broker.controller_root("h", 8883) is None
 
 
 def test_check_login_success():

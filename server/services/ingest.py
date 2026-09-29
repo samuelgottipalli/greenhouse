@@ -27,6 +27,7 @@ from paho.mqtt.client import CallbackAPIVersion, Client
 
 from core import db, settings
 from core.health import Heartbeat
+from core.mqtt import configure_client
 from core.timeutil import parse_utc_timestamp, utc_timestamp
 
 log = logging.getLogger(__name__)
@@ -157,8 +158,7 @@ def make_client() -> Client:
         Client: Configured, not yet connected.
     """
     client = Client(CallbackAPIVersion.VERSION2, client_id="greenhouse-ingest")
-    if settings.MQTT_USERNAME:
-        client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
+    configure_client(client)
     client.reconnect_delay_set(min_delay=1, max_delay=60)
 
     def on_connect(client, _userdata, _flags, reason_code, _properties):

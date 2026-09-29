@@ -45,6 +45,17 @@ def test_code_round_trip(provision, user, password, zone):
     assert values.get("timezone") == zone
 
 
+def test_encrypted_code_round_trip(provision):
+    from core import setup_code
+
+    code = setup_code.encode("abc.s1.eu.hivemq.cloud", 8883, 1, "gh1", "pw", "UTC", tls=True, ca="isrg_root_x1")
+    values = provision.decode_setup_code(code)
+    assert (values["mqtt_broker"], values["mqtt_port"], values["mqtt_tls"], values["mqtt_ca"]) ==         ("abc.s1.eu.hivemq.cloud", 8883, True, "isrg_root_x1")
+    plain = provision.decode_setup_code(setup_code.encode("10.0.0.2", 1883, 1))
+    assert (plain["mqtt_tls"], plain["mqtt_ca"]) == (False, "")
+    assert len(code) < 200  # still an easy QR code
+
+
 def test_code_via_setup_form(provision, monkeypatch):
     """A code from the server, pasted into the controller's form, gives a working config."""
     from core import setup_code
@@ -77,11 +88,12 @@ def test_server_address(monkeypatch):
     monkeypatch.setattr(settings, "PUBLIC_HOST", "192.168.1.5")
     assert setup_code.server_address() == "192.168.1.5"
     monkeypatch.setattr(settings, "PUBLIC_HOST", "")
-    monkeypatch.setattr(settings, "MQTT_HOST", "broker.lan")
-    assert setup_code.server_address() == "broker.lan"
-    monkeypatch.setattr(settings, "MQTT_HOST", "localhost")
     monkeypatch.setattr(setup_code, "lan_address", lambda: "10.1.2.3")
-    assert setup_code.server_address() == "10.1.2.3"
+    monkeypatch.setattr(settings, "MQTT_HOST", "broker.lan")
+    assert setup_code.server_address() == "10.1.2.3"  # updates come from this server, not the broker
+    assert setup_code.broker_address() == "broker.lan"
+    monkeypatch.setattr(settings, "MQTT_HOST", "localhost")
+    assert setup_code.broker_address() == "10.1.2.3"
 
 
 def test_lan_address_is_a_real_address_or_none():
@@ -180,3 +192,61 @@ def test_page_without_network_address(page, monkeypatch):
     at = page()
     assert not at.exception and not at.code
     assert "PUBLIC_HOST" in at.warning[0].value
+
+
+# --- a cloud MQTT service (Phase 7.5) --------------------------------------------------
+
+
+@pytest.fixture
+def cloud(page, monkeypatch):
+    from core import broker_tls, settings
+
+    monkeypatch.setattr(settings, "MQTT_HOST", "abc.s1.eu.hivemq.cloud")
+    monkeypatch.setattr(settings, "MQTT_PORT", 8883)
+    monkeypatch.setattr(settings, "MQTT_TLS", True)
+    roots = {"abc.s1.eu.hivemq.cloud": "isrg_root_x1"}
+    monkeypatch.setattr(broker_tls, "find_root", lambda host, port: roots[host])
+    return roots
+
+
+def test_cloud_page_asks_for_the_login_name(page, cloud, provision, monkeypatch):
+    at = page()
+    assert not at.exception
+    assert any("needs its own login on **abc.s1.eu.hivemq.cloud**" in i.value for i in at.info)
+    at.text_input[0].set_value("my-controller")
+    at.text_input[1].input("cloud-pw")
+    next(b for b in at.button if b.label == "Save password").click().run()
+    assert not at.exception
+    (code,) = [c.value for c in at.code]
+    values = provision.decode_setup_code(code)
+    assert (values["mqtt_broker"], values["mqtt_port"], values["mqtt_tls"], values["mqtt_ca"]) == \
+        ("abc.s1.eu.hivemq.cloud", 8883, True, "isrg_root_x1")
+    assert (values["mqtt_user"], values["mqtt_password"]) == ("my-controller", "cloud-pw")
+    assert any("(encrypted)" in c.value for c in at.caption)
+
+
+def test_cloud_page_warns_when_no_root_fits(page, cloud, monkeypatch):
+    from core import broker_tls, device_credentials, settings
+
+    monkeypatch.setattr(settings, "MQTT_HOST", "odd.example")
+    monkeypatch.setattr(broker_tls, "find_root", lambda host, port: None)
+    device_credentials.save(1, "gh1", "pw")
+    at = page()
+    assert not at.exception
+    assert "can't check this broker's certificate" in at.warning[0].value
+    assert at.code  # the code is still shown
+
+
+def test_cloud_page_when_the_service_is_unreachable(page, cloud, provision, monkeypatch):
+    from core import broker_tls, device_credentials, settings
+
+    def unreachable(host, port):
+        raise OSError("no route")
+
+    monkeypatch.setattr(settings, "MQTT_HOST", "down.example")
+    monkeypatch.setattr(broker_tls, "find_root", unreachable)
+    device_credentials.save(1, "gh1", "pw")
+    at = page()
+    assert "can't be reached" in at.warning[0].value
+    values = provision.decode_setup_code(at.code[0].value)
+    assert values["mqtt_tls"] is True and values["mqtt_ca"] == ""  # the controller finds the root itself

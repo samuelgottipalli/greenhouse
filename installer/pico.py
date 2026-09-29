@@ -336,7 +336,7 @@ def wait_for_port(timeout: float = 20.0, find=find_serial_ports, sleep=time.slee
 
 
 def wait_online(device_id: int, host: str, port: int, user: str | None, password: str | None,
-                prefix: str = "greenhouse", timeout: float = 120.0, client_factory=None) -> bool:
+                prefix: str = "greenhouse", timeout: float = 120.0, client_factory=None, tls: bool = False) -> bool:
     """
     Wait until the controller reports ``online`` to the broker.
 
@@ -349,6 +349,7 @@ def wait_online(device_id: int, host: str, port: int, user: str | None, password
         prefix (str): Topic prefix.
         timeout (float): Seconds to wait.
         client_factory (callable | None): Builds a paho client (injected in tests).
+        tls (bool): Encrypted connection.
 
     Returns:
         bool: True once it is online.
@@ -362,6 +363,8 @@ def wait_online(device_id: int, host: str, port: int, user: str | None, password
     client = client_factory()
     if user:
         client.username_pw_set(user, password)
+    if tls:
+        client.tls_set()
     online = threading.Event()
     topic = f"{prefix}/{device_id}/status"
 

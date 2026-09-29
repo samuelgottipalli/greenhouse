@@ -311,14 +311,17 @@ def decode_setup_code(code):
 
     The code is ``GH1-`` followed by URL-safe base64 of a small JSON object:
     ``h`` broker host, ``p`` port, ``u``/``w`` broker login, ``d`` device ID
-    and ``z`` time zone (optional). The server side is ``core/setup_code.py``.
+    and ``z`` time zone (optional); ``t`` = 1 for an encrypted broker and
+    ``c`` the root certificate to check it with (both optional). The server
+    side is ``core/setup_code.py``.
 
     Args:
         code (str): The code as typed or pasted (spaces are ignored).
 
     Returns:
         dict: Config keys ``mqtt_broker``, ``mqtt_port``, ``mqtt_user``,
-        ``mqtt_password``, ``device_id`` and, if present, ``timezone``.
+        ``mqtt_password``, ``mqtt_tls``, ``mqtt_ca``, ``device_id`` and, if
+        present, ``timezone``.
 
     Raises:
         ValueError: If the code is not a valid setup code.
@@ -344,11 +347,21 @@ def decode_setup_code(code):
         "mqtt_port": port,
         "mqtt_user": data.get("u") or None,
         "mqtt_password": data.get("w") or None,
+        "mqtt_tls": data.get("t") == 1,
+        "mqtt_ca": _root_name(data.get("c")) if data.get("t") == 1 else "",
         "device_id": device,
     }
     if isinstance(data.get("z"), str):
         values["timezone"] = data["z"]
     return values
+
+
+def _root_name(value):
+    """A root certificate name from a setup code, or "" (try them all) if it isn't a plain name."""
+    if isinstance(value, str) and 0 < len(value) <= 40 and \
+            all(c.isdigit() or c == "_" or "a" <= c <= "z" for c in value):
+        return value
+    return ""
 
 
 def _valid_port(value):
@@ -385,7 +398,7 @@ def form_to_settings(form, config):
 
     Args:
         form (dict[str, str]): Posted fields: ``ssid``, ``password``, ``mode``,
-            ``code``, ``broker``, ``port``, ``user``, ``mqttpw``, ``device``, ``tz``.
+            ``code``, ``broker``, ``port``, ``tls``, ``user``, ``mqttpw``, ``device``, ``tz``.
         config (dict): Current configuration.
 
     Returns:
@@ -427,11 +440,14 @@ def form_to_settings(form, config):
         if broker in PLACEHOLDER_BROKERS:
             errors.append("Enter the setup code, or the server's address.")
         if not _valid_port(port):
-            errors.append("The server port is a number from 1 to 65535 (usually 1883).")
+            errors.append("The server port is a number from 1 to 65535 (usually 1883, or 8883 encrypted).")
         if not _valid_device(device):
             errors.append("The controller number is 1 or more.")
+        tls = bool(form.get("tls"))
+        same_broker = broker == config["mqtt_broker"] and tls == bool(config["mqtt_tls"])
         new.update({"mqtt_broker": broker, "mqtt_port": port, "mqtt_user": user,
-                    "mqtt_password": mqtt_password, "device_id": device})
+                    "mqtt_password": mqtt_password, "device_id": device, "mqtt_tls": tls,
+                    "mqtt_ca": config["mqtt_ca"] if same_broker else ""})
 
     zone = zones.find(form.get("tz") or new.get("timezone") or config["timezone"])
     if zone is None:
@@ -640,7 +656,11 @@ def setup_page_parts(config, networks, reason, values=None, errors=(), rules=Non
         "Enter the server details</summary>",
         _input("Server address", "broker", values.get("broker", _shown_broker(config)),
                hint="The server computer's IP address, e.g. 192.168.1.20"),
-        _input("Server port", "port", values.get("port", config["mqtt_port"]), "number"),
+        _input("Server port", "port", values.get("port", config["mqtt_port"]), "number",
+               hint="1883, or 8883 for an encrypted (cloud) service."),
+        "<label><input type='checkbox' name='tls' value='1'" +
+        (" checked" if (values.get("tls") if values else config["mqtt_tls"]) else "") +
+        " style='width:auto'> Encrypted connection (TLS), as cloud MQTT services need</label>",
         _input("Login name", "user", values.get("user", config["mqtt_user"] or "")),
         _input("Login password", "mqttpw", "", "password",
                hint="Leave empty to keep the current one." if config["mqtt_password"] else ""),

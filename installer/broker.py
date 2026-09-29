@@ -217,7 +217,7 @@ def write_local(logins: dict[str, str], device_ids: list[int], port: int, prefix
 
 
 def check_login(host: str, port: int, user: str | None, password: str | None, timeout: float = 10.0,
-                client_factory=None) -> tuple[bool, str]:
+                client_factory=None, tls: bool = False) -> tuple[bool, str]:
     """
     Try to log in to a broker.
 
@@ -228,10 +228,12 @@ def check_login(host: str, port: int, user: str | None, password: str | None, ti
         password (str | None): Password.
         timeout (float): Seconds to wait.
         client_factory (callable | None): Builds a paho client (injected in tests).
+        tls (bool): Encrypted connection, checked against this computer's trusted roots.
 
     Returns:
         tuple[bool, str]: Success and a message for the user.
     """
+    import ssl
     import threading
 
     if client_factory is None:
@@ -241,6 +243,8 @@ def check_login(host: str, port: int, user: str | None, password: str | None, ti
     client = client_factory()
     if user:
         client.username_pw_set(user, password)
+    if tls:
+        client.tls_set()
     done = threading.Event()
     outcome = {}
 
@@ -251,6 +255,8 @@ def check_login(host: str, port: int, user: str | None, password: str | None, ti
     client.on_connect = on_connect
     try:
         client.connect(host, port, keepalive=10)
+    except ssl.SSLCertVerificationError as err:
+        return False, f"The broker at {host}:{port} has a certificate this computer doesn't trust ({err.verify_message})."
     except OSError as err:
         return False, f"Can't reach the broker at {host}:{port} ({err})."
     client.loop_start()
@@ -264,4 +270,25 @@ def check_login(host: str, port: int, user: str | None, password: str | None, ti
     failed = getattr(code, "is_failure", bool(code))
     if failed:
         return False, f"The broker refused the login ({code})."
-    return True, f"Logged in to the broker at {host}:{port}."
+    return True, f"Logged in to the broker at {host}:{port}" + (" (encrypted)." if tls else ".")
+
+
+def controller_root(host: str, port: int) -> str | None:
+    """
+    Which of the controller's root certificates an encrypted broker needs.
+
+    Args:
+        host (str): Broker address.
+        port (int): Its TLS port.
+
+    Returns:
+        str | None: The root's name, or None if none fits or the broker
+        can't be reached (the controller then tries them all itself).
+    """
+    server_import_path()
+    from core import broker_tls
+
+    try:
+        return broker_tls.find_root(host, port)
+    except OSError:
+        return None

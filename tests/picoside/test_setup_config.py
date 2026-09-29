@@ -55,7 +55,7 @@ def test_build_config_merges_and_blanks_optional_login(setup_config):
 
 
 def test_main_writes_config(setup_config, monkeypatch):
-    answers = iter(["mynet", "broker.local", "", "", "2", "Nowhere/Invalid", "America/New_York"])
+    answers = iter(["mynet", "broker.local", "", "", "2", "", "Nowhere/Invalid", "America/New_York"])
     monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
     monkeypatch.setattr(setup_config.getpass, "getpass", lambda prompt: "")
     monkeypatch.setattr(setup_config, "load_base",
@@ -64,6 +64,18 @@ def test_main_writes_config(setup_config, monkeypatch):
     written = json.loads(setup_config.CONFIG_FILE.read_text())
     assert written["wifi_ssid"] == "mynet" and written["device_id"] == 2
     assert (written["timezone"], written["utc_offset_minutes"], written["dst_rule"]) == ("America/New_York", -300, "us")
+    assert written["mqtt_tls"] is False and written["mqtt_ca"] == ""
+
+
+def test_main_for_an_encrypted_cloud_broker(setup_config, monkeypatch):
+    answers = iter(["mynet", "abc.s1.eu.hivemq.cloud", "8883", "gh1", "1", "", "UTC"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    monkeypatch.setattr(setup_config.getpass, "getpass", lambda prompt: "pw")
+    monkeypatch.setattr(setup_config, "load_base",
+                        lambda: json.loads(setup_config.EXAMPLE_FILE.read_text()))
+    assert setup_config.main() == 0
+    written = json.loads(setup_config.CONFIG_FILE.read_text())
+    assert (written["mqtt_port"], written["mqtt_tls"], written["mqtt_ca"]) == (8883, True, "")
 
 
 def test_client_id_is_unique_per_device(setup_config):

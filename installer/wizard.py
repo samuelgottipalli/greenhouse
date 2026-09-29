@@ -295,7 +295,11 @@ class GreenhousePage(QWizardPage):
 
 
 class BrokerPage(TaskPage):
-    """Set up the MQTT broker, or check an existing one."""
+    """
+    Set up the MQTT broker: Mosquitto on this computer, a broker you already
+    run, or a cloud MQTT service (encrypted; the server and controller 1 each
+    log in with an account made in the service's console).
+    """
 
     button_text = "Set up messaging"
 
@@ -306,33 +310,61 @@ class BrokerPage(TaskPage):
             "Every connection needs a login, which this step creates.")
         self.local = QRadioButton("Set it up on this computer (recommended)")
         self.existing = QRadioButton("Use a broker I already have")
+        self.cloud = QRadioButton("Use a cloud MQTT service (for example HiveMQ Cloud)")
         self.local.setChecked(True)
         group = QButtonGroup(self)
-        group.addButton(self.local)
-        group.addButton(self.existing)
-        self.host = QLineEdit()
+        for choice in (self.local, self.existing, self.cloud):
+            group.addButton(choice)
+        self.host = QLineEdit(placeholderText="e.g. abc123.s1.eu.hivemq.cloud")
         self.port = QSpinBox(minimum=1, maximum=65535, value=1883)
         self.user = QLineEdit()
         self.secret = QLineEdit(echoMode=QLineEdit.EchoMode.Password)
-        self.form.addRow(self.local)
-        self.form.addRow(self.existing)
+        self.device_user = QLineEdit(placeholderText="e.g. greenhouse-device-1")
+        self.device_secret = QLineEdit(echoMode=QLineEdit.EchoMode.Password)
+        self.cloud_note = QLabel(
+            "In the service's console, create two logins: one for this server and one for controller 1. "
+            "Connections are encrypted (port 8883). The setup guide walks through HiveMQ Cloud's free plan.")
+        self.cloud_note.setWordWrap(True)
+        for choice in (self.local, self.existing, self.cloud):
+            self.form.addRow(choice)
         for label, field in (("Address", self.host), ("Port", self.port), ("Server login", self.user),
-                             ("Password", self.secret)):
+                             ("Password", self.secret), ("Controller 1 login", self.device_user),
+                             ("Controller 1 password", self.device_secret)):
             self.form.addRow(label, field)
-        self.local.toggled.connect(self.show_fields)
+        self.form.addRow(self.cloud_note)
+        for choice in (self.local, self.existing, self.cloud):
+            choice.toggled.connect(self.show_fields)
         self.show_fields()
 
+    def mode(self) -> str:
+        """``"local"``, ``"existing"`` or ``"cloud"``."""
+        return "cloud" if self.cloud.isChecked() else "existing" if self.existing.isChecked() else "local"
+
     def show_fields(self):
-        """Enable the address fields only for an existing broker."""
+        """Enable the address fields for an existing broker or cloud service; logins for controller 1 for cloud."""
+        mode = self.mode()
         for field in (self.host, self.port, self.user, self.secret):
-            field.setEnabled(self.existing.isChecked())
+            field.setEnabled(mode != "local")
+        for field in (self.device_user, self.device_secret):
+            field.setEnabled(mode == "cloud")
+        self.cloud_note.setVisible(mode == "cloud")
+        if mode == "cloud" and self.port.value() == 1883:
+            self.port.setValue(8883)
+        elif mode == "existing" and self.port.value() == 8883:
+            self.port.setValue(1883)
 
     def before(self):
-        self.use_local = self.local.isChecked()
+        self.use_local = self.mode() == "local"
+        self.use_cloud = self.mode() == "cloud"
         self.values = (self.host.text().strip(), self.port.value(), self.user.text().strip() or None,
                        self.secret.text() or None)
+        self.device_login = (self.device_user.text().strip(), self.device_secret.text())
         if not self.use_local and not self.values[0]:
             return "Enter the broker's address."
+        if self.use_cloud and not (self.values[2] and self.values[3]):
+            return "Enter the server's login and password from the MQTT service."
+        if self.use_cloud and not all(self.device_login):
+            return "Enter controller 1's login and password from the MQTT service."
         return None
 
     def task(self, log):
@@ -341,13 +373,17 @@ class BrokerPage(TaskPage):
 
         env = steps.read_env()
         public = env.get("PUBLIC_HOST") or setup_code.lan_address() or ""
+        if self.use_cloud:
+            return self.cloud_task(log, public)
         if not self.use_local:
+            from core.settings import tls_enabled
+
             host, port, user, secret = self.values
-            ok, message = broker.check_login(host, port, user, secret)
+            ok, message = broker.check_login(host, port, user, secret, tls=tls_enabled("auto", port))
             if not ok:
                 raise RuntimeError(message)
             steps.update_env({"MQTT_HOST": host, "MQTT_PORT": str(port), "MQTT_USERNAME": user or "",
-                              "MQTT_PASSWORD": secret or "", "PUBLIC_HOST": public})
+                              "MQTT_PASSWORD": secret or "", "MQTT_TLS": "auto", "PUBLIC_HOST": public})
             return message + " Controllers need their own logins on that broker (see docs/RUNBOOK.md)."
 
         stored = device_credentials.load()
@@ -390,8 +426,32 @@ class BrokerPage(TaskPage):
         if not ok:
             raise RuntimeError(message)
         steps.update_env({"MQTT_HOST": "localhost", "MQTT_PORT": str(port), "MQTT_USERNAME": broker.SERVER_USER,
-                          "MQTT_PASSWORD": logins[broker.SERVER_USER], "PUBLIC_HOST": public})
+                          "MQTT_PASSWORD": logins[broker.SERVER_USER], "MQTT_TLS": "auto", "PUBLIC_HOST": public})
         return f"Messaging is ready on port {port}. Controllers will reach it at {public or 'this computer'}."
+
+    def cloud_task(self, log, public: str) -> str:
+        """Check both logins on the cloud service, find the controller's root certificate, save the settings."""
+        from core import device_credentials
+
+        host, port, user, secret = self.values
+        device_user, device_secret = self.device_login
+        log(f"Logging in to {host}:{port} as {user}…")
+        ok, message = broker.check_login(host, port, user, secret, tls=True)
+        if not ok:
+            raise RuntimeError(message)
+        log(f"Logging in as {device_user} (controller 1)…")
+        ok, device_message = broker.check_login(host, port, device_user, device_secret, tls=True)
+        if not ok:
+            raise RuntimeError("Controller 1's login didn't work: " + device_message)
+        log("Checking which certificate the controller needs…")
+        root = broker.controller_root(host, port)
+        device_credentials.save(1, device_user, device_secret)
+        steps.update_env({"MQTT_HOST": host, "MQTT_PORT": str(port), "MQTT_USERNAME": user,
+                          "MQTT_PASSWORD": secret, "MQTT_TLS": "true", "PUBLIC_HOST": public})
+        if root:
+            return f"{message} Controllers will check its certificate with {root}."
+        return (f"{message} Warning: none of the controller's root certificates fits this service, so "
+                "controllers won't be able to connect. See the setup guide (Using a cloud MQTT service).")
 
 
 class ServicesPage(TaskPage):
@@ -508,9 +568,14 @@ class ControllerPage(TaskPage):
         if env.get("MQTT_USERNAME") and login is None:
             return (f"There's no broker login for controller {device_id}. Set up messaging on this computer "
                     "(previous page), or add its login on the dashboard.")
-        host = env.get("PUBLIC_HOST") or setup_code.lan_address()
+        from core.settings import tls_enabled
+
+        public = env.get("PUBLIC_HOST") or setup_code.lan_address()
+        remote = env.get("MQTT_HOST") not in setup_code.LOCAL_NAMES + (None,)
+        host = env["MQTT_HOST"] if remote else public
         if not host:
             return "This computer's network address couldn't be found."
+        tls = tls_enabled(env.get("MQTT_TLS", "auto"), int(env.get("MQTT_PORT") or 1883))
         if not self.ssid.text().strip():
             return "Enter the Wi-Fi network name."
         self.plan = {
@@ -519,11 +584,13 @@ class ControllerPage(TaskPage):
                 "wifi_ssid": self.ssid.text().strip(), "wifi_password": self.wifi_password.text(),
                 "mqtt_broker": host, "mqtt_port": int(env.get("MQTT_PORT") or 1883),
                 "mqtt_user": login["user"] if login else "", "mqtt_password": login["password"] if login else "",
+                "mqtt_tls": tls, "mqtt_ca": "",  # the controller finds its root certificate itself
                 "device_id": device_id, "timezone": env.get("TIMEZONE") or "UTC",
             },
             "server": ("localhost" if env.get("MQTT_HOST") in (None, "", "localhost") else env["MQTT_HOST"],
                        int(env.get("MQTT_PORT") or 1883), env.get("MQTT_USERNAME") or None,
                        env.get("MQTT_PASSWORD") or None),
+            "tls": tls,
         }
         return None
 
@@ -580,7 +647,7 @@ def set_up_controller(plan, log, wait=pico.wait_for_port, sleep=time.sleep):
     answers = plan["answers"]
     log(f"Waiting for controller {answers['device_id']} to join {answers['wifi_ssid']} and come online…")
     host, port_number, user, secret = plan["server"]
-    if not pico.wait_online(answers["device_id"], host, port_number, user, secret):
+    if not pico.wait_online(answers["device_id"], host, port_number, user, secret, tls=plan.get("tls", False)):
         raise RuntimeError("The controller didn't come online within 2 minutes. Check the Wi-Fi password; "
                            "if it's wrong, the controller starts its setup hotspot so you can fix it from a phone.")
     return f"Controller {answers['device_id']} is online."

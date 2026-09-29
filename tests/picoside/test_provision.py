@@ -236,7 +236,20 @@ def test_scan_failure_gives_empty_list(pico):
 def test_decode_setup_code(pico):
     values = pico.provision.decode_setup_code(make_code(CODE_DATA))
     assert values == {"mqtt_broker": "192.168.1.20", "mqtt_port": 1883, "mqtt_user": "greenhouse-device-2",
-                      "mqtt_password": "s3cret-pass", "device_id": 2, "timezone": "Europe/Paris"}
+                      "mqtt_password": "s3cret-pass", "mqtt_tls": False, "mqtt_ca": "", "device_id": 2,
+                      "timezone": "Europe/Paris"}
+
+
+@pytest.mark.parametrize("extra, tls, ca", [
+    ({"t": 1, "c": "isrg_root_x1"}, True, "isrg_root_x1"),
+    ({"t": 1}, True, ""),                             # no root named: try them all
+    ({"t": 1, "c": "../../config"}, True, ""),        # not a plain name: ignored
+    ({"t": 1, "c": 5}, True, ""),
+    ({"c": "isrg_root_x1"}, False, ""),               # a root without t means nothing
+])
+def test_decode_setup_code_for_an_encrypted_broker(pico, extra, tls, ca):
+    values = pico.provision.decode_setup_code(make_code(dict(CODE_DATA, p=8883, **extra)))
+    assert (values["mqtt_tls"], values["mqtt_ca"], values["mqtt_port"]) == (tls, ca, 8883)
 
 
 def test_decode_setup_code_tolerates_spaces_and_case(pico):
@@ -298,6 +311,35 @@ def test_form_keeps_current_passwords_when_left_blank(pico, config):
     # A different network with no password is an open network.
     changes, _ = pico.provision.form_to_settings(form(ssid="cafe", password=""), config)
     assert changes["wifi_password"] == ""
+
+
+def test_form_with_manual_encrypted_broker(pico, blank):
+    fields = form(code="", broker="abc.s1.eu.hivemq.cloud", port="8883", tls="1", user="gh1", mqttpw="pw",
+                  device="1")
+    changes, errors = pico.provision.form_to_settings(fields, blank)
+    assert errors == []
+    assert (changes["mqtt_tls"], changes["mqtt_ca"], changes["mqtt_port"]) == (True, "", 8883)
+
+
+def test_form_keeps_the_found_root_for_the_same_broker(pico, config):
+    config.update({"mqtt_broker": "abc.s1.eu.hivemq.cloud", "mqtt_tls": True, "mqtt_ca": "isrg_root_x1"})
+    fields = form(code="", broker="abc.s1.eu.hivemq.cloud", port="8883", tls="1", user="u", mqttpw="p", device="1")
+    changes, _ = pico.provision.form_to_settings(fields, config)
+    assert changes["mqtt_ca"] == "isrg_root_x1"
+    changes, _ = pico.provision.form_to_settings(dict(fields, broker="other.example"), config)
+    assert changes["mqtt_ca"] == ""  # a different broker: find its root again
+    changes, _ = pico.provision.form_to_settings(dict(fields, tls=""), config)
+    assert changes["mqtt_tls"] is False and changes["mqtt_ca"] == ""
+
+
+def test_setup_page_has_the_encryption_box(pico, config):
+    html = pico.provision.render_setup_page(config, [], "button")
+    assert "name='tls'" in html and "name='tls' value='1' checked" not in html
+    config["mqtt_tls"] = True
+    assert "name='tls' value='1' checked" in pico.provision.render_setup_page(config, [], "button")
+    # After a form error, the page shows what was posted (the box was left unticked).
+    html = pico.provision.render_setup_page(config, [], "button", values={"ssid": "x"}, errors=["e"])
+    assert "name='tls' value='1' checked" not in html
 
 
 @pytest.mark.parametrize("fields, message", [

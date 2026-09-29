@@ -127,11 +127,16 @@ def main() -> int:
         "wifi_ssid": ask("Wi-Fi network name", base.get("wifi_ssid")),
         "wifi_password": ask("Wi-Fi password", base.get("wifi_password"), secret=True),
         "mqtt_broker": ask("MQTT broker host or IP", base.get("mqtt_broker")),
-        "mqtt_port": int(ask("MQTT broker port", base.get("mqtt_port", 1883))),
+        "mqtt_port": int(ask("MQTT broker port (8883 for an encrypted cloud service)", base.get("mqtt_port", 1883))),
         "mqtt_user": ask("MQTT username (e.g. greenhouse-device-1; blank for none)", base.get("mqtt_user")),
         "mqtt_password": ask("MQTT password (blank for none)", base.get("mqtt_password"), secret=True),
         "device_id": int(ask("Device ID (matches the server database)", base.get("device_id", 1))),
     }
+    tls_default = "yes" if base.get("mqtt_tls") or answers["mqtt_port"] == 8883 else "no"
+    answers["mqtt_tls"] = ask("Encrypted connection (TLS)? yes/no", tls_default).lower().startswith("y")
+    same_broker = answers["mqtt_broker"] == base.get("mqtt_broker") and answers["mqtt_tls"] == bool(base.get("mqtt_tls"))
+    # The controller finds (and remembers) which root certificate the broker needs.
+    answers["mqtt_ca"] = base.get("mqtt_ca", "") if same_broker else ""
     while True:
         name = ask("Time zone (IANA name, e.g. America/Los_Angeles)", base.get("timezone", "UTC"))
         if name in available_timezones():

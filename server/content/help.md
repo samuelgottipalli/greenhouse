@@ -100,6 +100,9 @@ These choices apply to everyone who uses the dashboard.
     3.  Scan the QR code on this page with the phone's camera.
     4.  Pick your Wi-Fi, type its password and tap **Save and connect**.
 *   The setup code contains the controller's password, so only share it with people you trust.
+*   **Using a cloud MQTT service?** Each controller needs its own login, made in the service's
+    website. If this page asks for it, type the login name and password there; the setup code then
+    tells the controller to connect to the service, encrypted.
 
 ## The controller in the greenhouse
 

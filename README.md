@@ -51,6 +51,10 @@ own, without a server**, set the fan, heater and watering rules there, and optio
 shows `LOCAL` on its screen. Hold the screen button at power-on to change the rules, or to
 connect it to a server later.
 
+**Rather not run the messaging service yourself?** On the installer's **Messaging** page choose
+**Use a cloud MQTT service** (for example HiveMQ Cloud's free plan). Everything is encrypted; the
+setup guide's *Using a cloud MQTT service* walks through it.
+
 **Updates.** Run the installer again and choose **Update** (for a `git clone`). When the
 controller's code has changed, **Settings › Controllers** shows *Update available*; one button
 updates the controller over Wi-Fi, and it goes back to the old version by itself if the new one

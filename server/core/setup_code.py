@@ -8,7 +8,9 @@ number and time zone, so nobody has to type an IP address on a phone.
 
 A code is ``GH1-`` followed by URL-safe base64 (no padding) of compact JSON:
 ``h`` broker host, ``p`` port, ``u``/``w`` broker login (left out when the
-broker has no logins), ``d`` device ID and ``z`` time zone.
+broker has no logins), ``d`` device ID and ``z`` time zone; for an encrypted
+broker (e.g. a cloud MQTT service) also ``t`` = 1 and ``c``, the name of the
+root certificate the controller checks it with (``core/broker_tls.py``).
 """
 import base64
 import json
@@ -22,7 +24,8 @@ LOCAL_NAMES = ("localhost", "127.0.0.1", "::1", "")
 
 
 def encode(host: str, port: int, device_id: int, user: str | None = None,
-           password: str | None = None, zone: str | None = None) -> str:
+           password: str | None = None, zone: str | None = None, tls: bool = False,
+           ca: str | None = None) -> str:
     """
     Build a setup code.
 
@@ -33,6 +36,9 @@ def encode(host: str, port: int, device_id: int, user: str | None = None,
         user (str | None): Broker login name.
         password (str | None): Broker password.
         zone (str | None): IANA time zone to suggest.
+        tls (bool): The broker needs an encrypted connection.
+        ca (str | None): Root certificate name for ``tls`` (None: the
+            controller tries its roots until one fits).
 
     Returns:
         str: e.g. ``"GH1-eyJoIjoi..."``.
@@ -43,6 +49,10 @@ def encode(host: str, port: int, device_id: int, user: str | None = None,
         data["w"] = password or ""
     if zone:
         data["z"] = zone
+    if tls:
+        data["t"] = 1
+        if ca:
+            data["c"] = ca
     body = json.dumps(data, separators=(",", ":")).encode("utf-8")
     return PREFIX + base64.urlsafe_b64encode(body).decode("ascii").rstrip("=")
 
@@ -70,19 +80,29 @@ def lan_address() -> str | None:
 
 def server_address() -> str | None:
     """
-    The address controllers use to reach this server.
-
-    ``PUBLIC_HOST`` if set; otherwise ``MQTT_HOST`` unless it only means
-    "this computer"; otherwise the detected LAN address.
+    The address controllers use to reach this server (for software updates).
 
     Returns:
-        str | None: Host name or IP, or None if it can't be worked out.
+        str | None: ``PUBLIC_HOST`` if set, otherwise the detected LAN
+        address; None if it can't be worked out.
     """
-    if settings.PUBLIC_HOST:
-        return settings.PUBLIC_HOST
-    if settings.MQTT_HOST not in LOCAL_NAMES and not settings.MQTT_HOST.startswith("127."):
-        return settings.MQTT_HOST
-    return lan_address()
+    return settings.PUBLIC_HOST or lan_address()
+
+
+def broker_is_remote() -> bool:
+    """Tell whether ``MQTT_HOST`` is another machine (e.g. a cloud MQTT service)."""
+    return settings.MQTT_HOST not in LOCAL_NAMES and not settings.MQTT_HOST.startswith("127.")
+
+
+def broker_address() -> str | None:
+    """
+    The broker address controllers use (what the setup code holds).
+
+    Returns:
+        str | None: ``MQTT_HOST`` when the broker is another machine (a cloud
+        service, say); otherwise this server's address (:func:`server_address`).
+    """
+    return settings.MQTT_HOST if broker_is_remote() else server_address()
 
 
 def setup_link(code: str) -> str:

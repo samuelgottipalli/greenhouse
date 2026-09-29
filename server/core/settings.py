@@ -70,6 +70,28 @@ MQTT_PORT: int = int(getenv("MQTT_PORT", "1883"))
 MQTT_USERNAME: str | None = (getenv("MQTT_USERNAME") or "").strip() or None
 MQTT_PASSWORD: str | None = (getenv("MQTT_PASSWORD") or "").strip() or None
 MQTT_TOPIC_PREFIX: str = getenv("MQTT_TOPIC_PREFIX", "greenhouse")
+# Encrypted connections (TLS), as cloud MQTT services require: "auto" (on for
+# port 8883), "true" or "false". MQTT_CA_FILE is only needed for a broker whose
+# certificate isn't signed by a root this computer already trusts.
+
+
+def tls_enabled(value: str, port: int) -> bool:
+    """
+    Read the ``MQTT_TLS`` setting.
+
+    Args:
+        value (str): ``"auto"`` (or blank), ``"true"``/``"yes"``/``"on"``/``"1"`` or anything else for off.
+        port (int): The broker port; ``auto`` means on for 8883, the standard TLS port.
+
+    Returns:
+        bool: True for encrypted connections.
+    """
+    value = (value or "auto").strip().lower()
+    return port == 8883 if value == "auto" else value in ("1", "true", "yes", "on")
+
+
+MQTT_TLS: bool = tls_enabled(getenv("MQTT_TLS", "auto"), MQTT_PORT)
+MQTT_CA_FILE: str | None = (getenv("MQTT_CA_FILE") or "").strip() or None
 
 # Address controllers use to reach this computer (broker and firmware updates);
 # blank = MQTT_HOST if it names another machine, else the detected LAN address.

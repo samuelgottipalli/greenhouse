@@ -3,8 +3,10 @@ MQTT messages from the server to the greenhouse controller.
 
 Topics and payloads are described in ``docs/MQTT.md``. Relay commands go to
 ``<prefix>/<device_id>/relay/set`` as ``{"relay": n, "state": 0|1, "source": ...}``.
-Broker settings (host, port, optional username/password, topic prefix) come
-from ``core.settings``.
+Broker settings (host, port, optional username/password, TLS, topic prefix)
+come from ``core.settings``; :func:`connection` and :func:`configure_client`
+apply them, so every connection the server makes (here, ``core/firmware.py``,
+``services/ingest.py``) logs in and encrypts the same way.
 """
 import json
 import logging
@@ -14,6 +16,47 @@ from paho.mqtt.publish import single
 from core import settings
 
 log = logging.getLogger(__name__)
+
+
+def auth() -> dict | None:
+    """The broker login for paho's ``single()``, or None when the broker has no logins."""
+    if settings.MQTT_USERNAME:
+        return {"username": settings.MQTT_USERNAME, "password": settings.MQTT_PASSWORD}
+    return None
+
+
+def tls() -> dict | None:
+    """
+    TLS settings for paho, or None for a plain connection.
+
+    Returns:
+        dict | None: ``{"ca_certs": MQTT_CA_FILE}``; None (the default)
+        means the system's trusted roots, which cover the hosted services.
+    """
+    return {"ca_certs": settings.MQTT_CA_FILE} if settings.MQTT_TLS else None
+
+
+def connection() -> dict:
+    """
+    Keyword arguments for paho's ``single()``: address, login and TLS.
+
+    Returns:
+        dict: ``hostname``, ``port``, ``auth`` and ``tls``.
+    """
+    return {"hostname": settings.MQTT_HOST, "port": settings.MQTT_PORT, "auth": auth(), "tls": tls()}
+
+
+def configure_client(client) -> None:
+    """
+    Give a long-lived paho client the broker login and TLS settings.
+
+    Args:
+        client (paho.mqtt.client.Client): Not yet connected.
+    """
+    if settings.MQTT_USERNAME:
+        client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
+    if settings.MQTT_TLS:
+        client.tls_set(ca_certs=settings.MQTT_CA_FILE)
 
 
 def device_topic(device_id: int, suffix: str) -> str:
@@ -44,18 +87,13 @@ def publish_device_settings(settings_payload: dict, device_id: int = settings.DE
     Returns:
         bool: True if the broker accepted the message.
     """
-    auth = None
-    if settings.MQTT_USERNAME:
-        auth = {"username": settings.MQTT_USERNAME, "password": settings.MQTT_PASSWORD}
     try:
         single(
             topic=device_topic(device_id, "settings"),
             payload=json.dumps(settings_payload, sort_keys=True),
             qos=1,
             retain=True,
-            hostname=settings.MQTT_HOST,
-            port=settings.MQTT_PORT,
-            auth=auth,
+            **connection(),
         )
     except (OSError, ValueError) as err:
         log.error("Could not publish device settings: %s", err)
@@ -83,18 +121,13 @@ def publish_relay_command(
         bool: True if the broker accepted the message, False if it could not be
         sent (broker unreachable, bad credentials, ...).
     """
-    auth = None
-    if settings.MQTT_USERNAME:
-        auth = {"username": settings.MQTT_USERNAME, "password": settings.MQTT_PASSWORD}
     payload = json.dumps({"relay": int(relay_id), "state": int(state), "source": source})
     try:
         single(
             topic=device_topic(device_id, "relay/set"),
             payload=payload,
             qos=1,
-            hostname=settings.MQTT_HOST,
-            port=settings.MQTT_PORT,
-            auth=auth,
+            **connection(),
         )
     except (OSError, ValueError) as err:
         log.error("Could not publish relay command: %s", err)

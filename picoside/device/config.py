@@ -30,6 +30,8 @@ DEFAULTS = {
     "mqtt_port": 1883,
     "mqtt_user": None,
     "mqtt_password": None,
+    "mqtt_tls": False,
+    "mqtt_ca": "",
     "mqtt_client_id": "greenhouse_pico",
     "mqtt_topic_prefix": "greenhouse",
     "mqtt_keepalive_s": 300,

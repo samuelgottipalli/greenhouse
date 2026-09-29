@@ -20,7 +20,7 @@ from pathlib import Path
 from paho.mqtt.publish import single
 
 from core import settings, setup_code
-from core.mqtt import device_topic
+from core.mqtt import connection, device_topic
 
 log = logging.getLogger(__name__)
 
@@ -208,17 +208,12 @@ def publish_update(device_id: int, update: dict | None = None) -> bool:
     Returns:
         bool: True if the broker accepted the message.
     """
-    auth = None
-    if settings.MQTT_USERNAME:
-        auth = {"username": settings.MQTT_USERNAME, "password": settings.MQTT_PASSWORD}
     try:
         single(
             topic=device_topic(device_id, "firmware/update"),
             payload=json.dumps(update or manifest()),
             qos=1,
-            hostname=settings.MQTT_HOST,
-            port=settings.MQTT_PORT,
-            auth=auth,
+            **connection(),
         )
     except (OSError, ValueError) as err:
         log.error("Could not publish the update: %s", err)

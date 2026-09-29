@@ -5,14 +5,22 @@ controller (the Pico W). Versions read *major.minor.patch*: *major* goes up for 
 need care when upgrading, *minor* for new features and *patch* for fixes only. A version ending in
 `-dev` is still being built.
 
-## Server 1.1.0-dev · Controller 1.1.0-dev (in progress)
+## Server 1.2.0-dev · Controller 1.2.0-dev (in progress)
 
 Being built on the `develop` branch.
 
-- **Version numbers you can read.** The dashboard, the controller's screen and the installer show
-  versions like 1.1.0, and updates say which version they came from.
-- **Cloud MQTT services.** Use a hosted MQTT service (for example HiveMQ Cloud) instead of running
-  Mosquitto yourself, with encrypted, verified connections from the server and the controllers.
+- **Cloud MQTT services.** Use a hosted MQTT service (for example HiveMQ Cloud's free plan)
+  instead of running Mosquitto yourself: a new choice in the installer, encrypted connections
+  (TLS) from the server and the controllers, and the controller checks the service's certificate.
+  The setup code and the controller's setup page know about encrypted services.
+
+## Server 1.1.0 · Controller 1.1.0 (2026-09-28)
+
+- **Version numbers you can read.** The dashboard (menu, Help › About, Settings › Controllers),
+  the controller's screen and the installer show versions like 1.1.0, and updates say which
+  version they came from ("Updated from 1.0.0 to 1.1.0").
+- **Updates from 1.0.0** work over Wi-Fi as before; a controller set up by hand is compared by
+  version name.
 
 ## Server 1.0.0 · Controller 1.0.0 (2026-09-28)
 

@@ -170,6 +170,13 @@ def test_wait_online():
                                 client_factory=lambda: FakeMqtt(error=OSError("unreachable")))
 
 
+def test_wait_online_encrypted():
+    client = FakeMqtt(result="Success")
+    client.messages = [b"online"]
+    assert pico.wait_online(1, "abc.s1.eu.hivemq.cloud", 8883, "u", "p", client_factory=lambda: client, tls=True)
+    assert client.tls
+
+
 def test_staging_folder_is_removed():
     folder = pico.staging_folder()
     (folder / "config.json").write_text("{}")

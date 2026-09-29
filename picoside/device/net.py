@@ -18,6 +18,12 @@ Topics (``<prefix>/<device_id>/...``, see docs/MQTT.md):
 * ``settings``: automation settings for local mode (subscribed, retained).
 * ``firmware/update``: an over-the-air update manifest (subscribed).
 * ``firmware``: installed version and update progress (published, retained).
+
+Encrypted brokers (``mqtt_tls``, e.g. a cloud MQTT service on port 8883) are
+checked against one of the root certificates in ``certs/`` (``mqtt_ca``
+names it). With no name, each root is tried in turn and the one that works
+is saved to ``config.json``. Certificates have dates, so TLS waits until the
+clock has been set (NTP).
 """
 import json
 import time
@@ -26,6 +32,81 @@ OUTBOX_MAX = 48
 BACKOFF_START_MS = 2000
 BACKOFF_MAX_MS = 300000
 WIFI_POLL_MS = 250
+CERT_DIR = "certs"
+# Tried first; the others follow by name. Same order as server/core/broker_tls.py.
+PREFERRED_ROOTS = ('isrg_root_x1', 'amazon_root_ca_1', 'digicert_global_root_g2')
+CLOCK_SET_YEAR = 2025  # an earlier date means the clock hasn't been set yet
+
+
+def root_names(folder=CERT_DIR):
+    """
+    The root certificates carried in ``certs/``, in the order to try them.
+
+    Args:
+        folder (str): Certificate folder.
+
+    Returns:
+        list[str]: Names (file names without ``.py``).
+    """
+    import os
+
+    try:
+        found = sorted(name[:-3] for name in os.listdir(folder) if name.endswith(".py"))
+    except OSError:
+        return []
+    return [name for name in PREFERRED_ROOTS if name in found] + \
+        [name for name in found if name not in PREFERRED_ROOTS]
+
+
+def read_root(name, folder=CERT_DIR):
+    """
+    Load one root certificate (``certs/<name>.py`` holds it as PEM text).
+
+    Args:
+        name (str): Root name.
+        folder (str): Certificate folder.
+
+    Returns:
+        bytes: The certificate in DER form.
+
+    Raises:
+        OSError: If there is no such root.
+        ValueError: If the file holds no certificate.
+    """
+    import binascii
+
+    with open("{}/{}.py".format(folder, name)) as f:
+        text = f.read()
+    start = text.find("-----BEGIN CERTIFICATE-----")
+    end = text.find("-----END CERTIFICATE-----")
+    if start < 0 or end < start:
+        raise ValueError("no certificate in " + name)
+    body = text[start + 27:end].replace("\n", "").replace("\r", "").replace(" ", "")
+    return binascii.a2b_base64(body)
+
+
+def tls_context(name, folder=CERT_DIR):
+    """
+    An SSL context that trusts one root and checks the broker's name.
+
+    Args:
+        name (str): Root name.
+        folder (str): Certificate folder.
+
+    Returns:
+        ssl.SSLContext: For ``MQTTClient(ssl=...)``.
+    """
+    import ssl
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.load_verify_locations(cadata=read_root(name, folder))
+    return context
+
+
+def clock_is_set():
+    """bool: True once the clock shows a real date (certificates can then be checked)."""
+    return time.gmtime()[0] >= CLOCK_SET_YEAR
 
 
 class Network:
@@ -66,6 +147,11 @@ class Network:
         self.on_settings = None
         self.on_firmware = None
         self.feed = None
+        self.tls_error = None  # why the last encrypted connection failed, for the screen
+        self._tls_context = tls_context
+        self._clock_is_set = clock_is_set
+        self._root_names = root_names
+        self._save_config = None  # default: config.save_config (see _remember_root)
         # Without a server (standalone, or no broker set) MQTT is never tried.
         self.server = not config.get("standalone") and config["mqtt_broker"] not in ("", "YOUR_MQTT_BROKER")
         self._base = "{}/{}".format(config["mqtt_topic_prefix"], config["device_id"])
@@ -189,6 +275,62 @@ class Network:
         if not self.server:
             return False
         self._feed()
+        if not self.config.get("mqtt_tls"):
+            return self._open_session(None)
+        if not self._clock_is_set():
+            self.tls_error = "clock not set"
+            print("MQTT: waiting for the clock before an encrypted connection")
+            return False
+        chosen = self.config.get("mqtt_ca") or ""
+        for name in [chosen] if chosen else self._root_names():
+            self._feed()
+            try:
+                context = self._tls_context(name)
+            except (OSError, ValueError) as err:
+                print("MQTT: root certificate", name, "unusable:", err)
+                continue
+            outcome = self._open_session(context)
+            if outcome:
+                self.tls_error = None
+                if not chosen:
+                    self._remember_root(name)
+                return True
+            if outcome is None and not chosen:
+                continue  # this root doesn't fit the broker's certificate: try the next
+            if outcome is None:
+                # The saved root no longer fits (the service changed its certificate
+                # authority?): try them all on the next attempt.
+                self.tls_error = "certificate not trusted"
+                self.config["mqtt_ca"] = ""
+            return False
+        self.tls_error = "certificate not trusted"
+        return False
+
+    def _remember_root(self, name):
+        """Keep the root that worked, so the next start tries it straight away."""
+        self.config["mqtt_ca"] = name
+        try:
+            if self._save_config is None:
+                from config import save_config as save
+            else:
+                save = self._save_config
+            save(self.config)
+        except Exception as err:  # the connection works either way
+            print("Could not save mqtt_ca:", err)
+
+    def _open_session(self, ssl_context):
+        """
+        Connect, subscribe and announce ``online``.
+
+        Args:
+            ssl_context: None for a plain connection.
+
+        Returns:
+            bool | None: True if connected; None if the broker's certificate
+            doesn't chain to this root; False for any other failure.
+        """
+        extra = {} if ssl_context is None else {"ssl": ssl_context}
+        client = None
         try:
             client = self._client_factory(
                 self.config["mqtt_client_id"],
@@ -197,6 +339,7 @@ class Network:
                 user=self.config["mqtt_user"],
                 password=self.config["mqtt_password"],
                 keepalive=self.config["mqtt_keepalive_s"],
+                **extra
             )
             client.set_callback(self._on_message)
             client.set_last_will(self.topic("status"), "offline", retain=True)
@@ -205,6 +348,15 @@ class Network:
             client.subscribe(self.topic("settings"))
             client.subscribe(self.topic("firmware/update"))
             client.publish(self.topic("status"), "online", retain=True)
+        except ValueError as err:  # MicroPython and CPython both report a bad certificate this way
+            print("MQTT: broker certificate not accepted:", err)
+            sock = getattr(client, "sock", None)
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+            return None if ssl_context is not None else False
         except Exception as err:  # OSError, MQTTException, bad broker name, ...
             print("MQTT connect failed:", err)
             return False

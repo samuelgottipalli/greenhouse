@@ -135,11 +135,11 @@ Cloud's free plan), with encrypted and verified connections from the server and 
 
 | Step | Work | Fixes | Done when | Effort |
 |---|---|---|---|---|
-| 7.1 | **Encrypted connections from the server.** New settings `MQTT_TLS` (on automatically for port 8883) and `MQTT_CA_FILE` (optional). Every server connection (ingest, relay commands, settings, updates, installer checks) goes through one helper. | (feature) | Tests: each connection gets the login and TLS settings; a real TLS login to a public test broker in a network test (skipped offline). | 0.5 d |
-| 7.2 | **Encrypted connections from the controller.** A small set of root certificates (Let's Encrypt, Amazon, DigiCert, GlobalSign, Google, Sectigo) ships in `picoside/device/certs/` as `.py` text files, so 1.0.0 controllers can still update to it. New config `mqtt_tls` and `mqtt_ca` (a root's name; empty = find the one that works and remember it). TLS waits for the clock (certificates have dates). | (feature) | Tests: context set-up, root discovery, a certificate that doesn't match is refused, clock-not-set handling. On the real Pico: verified connection to a Let's Encrypt broker, memory measured. | 1 d |
-| 7.3 | **Setup codes and the setup page** carry *encrypted* and the root's name (`t`, `c`); the setup page's manual section gets an *Encrypted connection (TLS)* box. | (feature) | Round-trip tests of the new keys; old codes still decode. | 0.5 d |
-| 7.4 | **Installer: "Use a cloud MQTT service".** Address, port 8883, the server's login and controller 1's login (both created in the service's console). It checks both logins over TLS and finds which bundled root the service uses, warning if none does. | (usability) | Logic tests for the page's choices and saved settings. | 1 d |
-| 7.5 | **Dashboard and docs.** Settings › Controllers lets you type the controller's login name (cloud services choose their own) and builds the code with the cloud address. RUNBOOK gets a HiveMQ Cloud walkthrough; MQTT.md and Help are updated. Over-the-air updates still come from the server on your network. | (docs) | Docs tests; page tests for a cloud set-up. | 1 d |
+| 7.1 ✅ | **Encrypted connections from the server.** New settings `MQTT_TLS` (on automatically for port 8883) and `MQTT_CA_FILE` (optional). Every server connection (ingest, relay commands, settings, updates, installer checks) goes through one helper. | (feature) | Tests: each connection gets the login and TLS settings; a real TLS login to a public test broker in a network test (skipped offline). | 0.5 d |
+| 7.2 ✅ | **Encrypted connections from the controller.** A small set of root certificates (Let's Encrypt, Amazon, DigiCert, GlobalSign, Google, Sectigo) ships in `picoside/device/certs/` as `.py` text files, so 1.0.0 controllers can still update to it. New config `mqtt_tls` and `mqtt_ca` (a root's name; empty = find the one that works and remember it). TLS waits for the clock (certificates have dates). | (feature) | Tests: context set-up, root discovery, a certificate that doesn't match is refused, clock-not-set handling. On the real Pico: verified connection to a Let's Encrypt broker, memory measured. | 1 d |
+| 7.3 ✅ | **Setup codes and the setup page** carry *encrypted* and the root's name (`t`, `c`); the setup page's manual section gets an *Encrypted connection (TLS)* box. | (feature) | Round-trip tests of the new keys; old codes still decode. | 0.5 d |
+| 7.4 ✅ | **Installer: "Use a cloud MQTT service".** Address, port 8883, the server's login and controller 1's login (both created in the service's console). It checks both logins over TLS and finds which bundled root the service uses, warning if none does. | (usability) | Logic tests for the page's choices and saved settings. | 1 d |
+| 7.5 ✅ | **Dashboard and docs.** Settings › Controllers lets you type the controller's login name (cloud services choose their own) and builds the code with the cloud address. RUNBOOK gets a HiveMQ Cloud walkthrough; MQTT.md and Help are updated. Over-the-air updates still come from the server on your network. | (docs) | Docs tests; page tests for a cloud set-up. | 1 d |
 
 ---
 
@@ -155,7 +155,7 @@ Cloud's free plan), with encrypted and verified connections from the server and 
 | 3 | 3.1–3.4 ✅ | 3.2: 7-day soak simulated in tests; the on-hardware run is in the RUNBOOK sign-off. 3.3: heartbeats + systemd watchdog. 3.4: 2.6 MB/device/year measured |
 | 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
 | 5 | 5.1–5.6 ✅ | Installer (`setup.bat`/`setup.sh`), setup hotspot, setup codes, updates over Wi-Fi, `run_all.py`. On-hardware checks are in the RUNBOOK sign-off |
-| 6 | 6.1–6.4 ✅ | On `develop`. Versions 1.1.0-dev; schema v7 stores the controller's version name |
-| 7 | Planned | On the `develop` branch |
+| 6 | 6.1–6.4 ✅ | Released as **1.1.0** (tag `v1.1.0` on `main`); schema v7 stores the controller's version name |
+| 7 | 7.1–7.5 ✅ | On `develop` as 1.2.0-dev (not deployed yet). Checked on the real Pico W against Let's Encrypt and DigiCert brokers (roots found by trying, a wrong root refused, ~30 KB RAM); found and fixed umqtt's timeouts on TLS sockets |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

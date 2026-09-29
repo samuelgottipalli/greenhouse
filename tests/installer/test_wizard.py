@@ -201,9 +201,91 @@ def test_controller_page_builds_the_plan(window, monkeypatch):
     assert controller.before() is None
     assert controller.plan["answers"] == {
         "wifi_ssid": "Home", "wifi_password": "", "mqtt_broker": "192.168.1.20", "mqtt_port": 1884,
-        "mqtt_user": "greenhouse-device-1", "mqtt_password": "d", "device_id": 1, "timezone": "Europe/Paris"}
+        "mqtt_user": "greenhouse-device-1", "mqtt_password": "d", "mqtt_tls": False, "mqtt_ca": "",
+        "device_id": 1, "timezone": "Europe/Paris"}
     assert controller.plan["server"] == ("localhost", 1884, "greenhouse-server", "s")
+    assert controller.plan["tls"] is False
     controller.cleanupPage()
+
+
+def test_controller_page_with_a_cloud_broker(window, monkeypatch):
+    """The controller logs in to the cloud service, encrypted; the installer watches it there too."""
+    from core import device_credentials, setup_code
+
+    monkeypatch.setattr(pico, "find_serial_ports", lambda: ["COM5"])
+    monkeypatch.setattr(setup_code, "lan_address", lambda: "192.168.1.20")
+    steps.update_env({"MQTT_USERNAME": "server", "MQTT_PASSWORD": "s", "MQTT_PORT": "8883", "MQTT_TLS": "true",
+                      "MQTT_HOST": "abc.s1.eu.hivemq.cloud", "TIMEZONE": "UTC", "PUBLIC_HOST": ""})
+    device_credentials.save(1, "gh1", "d")
+    controller = page(window, wizard.ControllerPage)
+    controller.initializePage()
+    assert controller.before() is None
+    answers = controller.plan["answers"]
+    assert (answers["mqtt_broker"], answers["mqtt_port"], answers["mqtt_tls"], answers["mqtt_user"]) == \
+        ("abc.s1.eu.hivemq.cloud", 8883, True, "gh1")
+    assert controller.plan["server"][0] == "abc.s1.eu.hivemq.cloud" and controller.plan["tls"] is True
+    controller.cleanupPage()
+
+
+def cloud_page(window):
+    messaging = page(window, wizard.BrokerPage)
+    messaging.cloud.setChecked(True)
+    messaging.host.setText("abc.s1.eu.hivemq.cloud")
+    messaging.user.setText("server")
+    messaging.secret.setText("server-pw")
+    messaging.device_user.setText("gh1")
+    messaging.device_secret.setText("device-pw")
+    return messaging
+
+
+def test_broker_page_cloud_choice(window, monkeypatch):
+    from core import device_credentials, setup_code
+
+    monkeypatch.setattr(setup_code, "lan_address", lambda: "192.168.1.20")
+    logins = []
+    monkeypatch.setattr(broker, "check_login", lambda host, port, user, secret, tls=False:
+                        logins.append((host, port, user, tls)) or (True, "Logged in (encrypted)."))
+    monkeypatch.setattr(broker, "controller_root", lambda host, port: "isrg_root_x1")
+    messaging = cloud_page(window)
+    assert messaging.port.value() == 8883  # switched from 1883 with the choice
+    assert messaging.cloud_note.isVisibleTo(messaging) and messaging.device_user.isEnabled()
+    messaging.start()
+    assert messaging.isComplete(), messaging.status.text()
+    assert logins == [("abc.s1.eu.hivemq.cloud", 8883, "server", True), ("abc.s1.eu.hivemq.cloud", 8883, "gh1", True)]
+    env = steps.read_env()
+    assert (env["MQTT_HOST"], env["MQTT_PORT"], env["MQTT_TLS"], env["MQTT_USERNAME"]) == \
+        ("abc.s1.eu.hivemq.cloud", "8883", "true", "server")
+    assert env["PUBLIC_HOST"] == "192.168.1.20"  # controllers still fetch updates from this computer
+    assert device_credentials.get(1) == {"user": "gh1", "password": "device-pw"}
+    assert "isrg_root_x1" in messaging.status.text()
+
+
+def test_broker_page_cloud_needs_both_logins(window):
+    messaging = cloud_page(window)
+    messaging.device_secret.setText("")
+    assert "controller 1" in messaging.before()
+    messaging.secret.setText("")
+    assert "server's login" in messaging.before()
+
+
+def test_broker_page_cloud_reports_a_bad_controller_login(window, monkeypatch):
+    from core import device_credentials
+
+    monkeypatch.setattr(broker, "check_login", lambda host, port, user, secret, tls=False:
+                        (user == "server", "The broker refused the login (Not authorized)."))
+    messaging = cloud_page(window)
+    messaging.start()
+    assert not messaging.isComplete()
+    assert "Controller 1's login didn't work" in messaging.status.text()
+    assert device_credentials.get(1) is None
+
+
+def test_broker_page_cloud_warns_without_a_root(window, monkeypatch):
+    monkeypatch.setattr(broker, "check_login", lambda *a, **k: (True, "Logged in."))
+    monkeypatch.setattr(broker, "controller_root", lambda host, port: None)
+    messaging = cloud_page(window)
+    messaging.start()
+    assert "Warning" in messaging.status.text()
 
 
 PLAN = {"bootsel": None,

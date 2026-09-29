@@ -6,6 +6,11 @@ is set by `mqtt_topic_prefix` on the device and `MQTT_TOPIC_PREFIX` on the
 server. `device_id` is an integer that matches `devices.device_id` in the
 database.
 
+The broker can be Mosquitto on the server or a cloud MQTT service. With a cloud service both
+sides connect with TLS on port 8883 (`MQTT_TLS` on the server, `mqtt_tls` on the device) and the
+device checks the broker's certificate against a root in `picoside/device/certs/` (`mqtt_ca`);
+the topics and payloads are the same.
+
 All payloads are JSON. Timestamps are UTC strings in the form
 `YYYY-MM-DD HH:MM:SS`. The `ts_utc` field is `null` when the device clock has
 not been set yet (NTP has not succeeded since boot); the server should then use
