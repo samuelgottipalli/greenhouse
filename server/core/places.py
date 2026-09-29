@@ -8,8 +8,13 @@ It is chosen on Settings › Location (or by the installer) and stored in the
 collector reads it before every fetch, so a change applies from the next
 reading without restarting anything.
 
-Places are looked up by name with Open-Meteo's free geocoding service
-(:func:`search`, standard library only so the installer can use it too).
+Places are looked up with Open-Meteo's free geocoding service, which also
+gives each place's time zone. It matches a place name or postcode ("Sparks",
+"89431"); :func:`search` also understands a state or country after it
+("Sparks, NV", "Paris France", with common abbreviations), and falls back to
+OpenStreetMap's Nominatim service (through ``geopy``) for anything else, such
+as a street address. Standard library only apart from that optional
+fallback, so the installer can use it too.
 """
 import json
 import urllib.parse
@@ -23,38 +28,121 @@ LOCATION_KEYS = {"name": "location_name", "latitude": "location_latitude",
 SAME_PLACE_DEGREES = 0.25
 
 
-def search(name: str, fetch=None, count: int = 8) -> list[dict]:
-    """
-    Find places by name (Open-Meteo geocoding, no account needed).
+# Abbreviations people type after a town, matched against Open-Meteo's state and country.
+US_STATES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado",
+    "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
+    "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana",
+    "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
+    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", "NC": "North Carolina",
+    "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania",
+    "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas",
+    "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia",
+    "WI": "Wisconsin", "WY": "Wyoming", "DC": "District of Columbia",
+}
+COUNTRY_WORDS = {"USA": "US", "UK": "GB", "UAE": "AE"}
+NOMINATIM_AGENT = "greenhouse-dashboard (https://github.com/samuelgottipalli/greenhouse)"
 
-    Args:
-        name (str): Town or city, e.g. ``"Reno"``.
-        fetch (callable | None): ``fetch(url) -> bytes`` (injected in tests).
-        count (int): Most places to return.
 
-    Returns:
-        list[dict]: Places with ``name`` (e.g. ``"Sparks, Nevada, United
-        States"``), ``latitude``, ``longitude`` and ``timezone``; empty if
-        none, or when offline.
-    """
-    if not name.strip():
-        return []
-    fetch = fetch or (lambda url: urllib.request.urlopen(url, timeout=10).read())
-    url = GEOCODE_URL + "?" + urllib.parse.urlencode({"name": name.strip(), "count": count, "language": "en"})
+def _open_meteo(name: str, fetch, count: int) -> list[dict]:
+    """Raw Open-Meteo matches for a name or postcode (towns and regions only)."""
+    url = GEOCODE_URL + "?" + urllib.parse.urlencode({"name": name, "count": count, "language": "en"})
     try:
         data = json.loads(fetch(url))
     except (OSError, ValueError):
         return []
+    items = data.get("results") or []
+    # Populated places and regions; not airports, hospitals, mountains, ...
+    return [item for item in items if str(item.get("feature_code", "PPL")).startswith(("PPL", "ADM"))]
+
+
+def _place(item: dict) -> dict | None:
+    """An Open-Meteo match as a place, or None if it has no usable position."""
+    try:
+        latitude, longitude = round(float(item["latitude"]), 4), round(float(item["longitude"]), 4)
+    except (KeyError, TypeError, ValueError):
+        return None
+    parts = [item.get("name"), item.get("admin1"), item.get("country")]
+    return {"name": ", ".join(p for p in parts if p), "latitude": latitude, "longitude": longitude,
+            "timezone": item.get("timezone") or "UTC"}
+
+
+def _matches(item: dict, qualifiers: list[str]) -> bool:
+    """Tell whether every word after the town ("NV", "Nevada", "USA") fits a match."""
+    fields = {str(item.get(key, "")).lower() for key in ("admin1", "admin2", "admin3", "country", "country_code")}
+    for word in qualifiers:
+        upper = word.upper()
+        wanted = {word.lower(), US_STATES.get(upper, "").lower(), COUNTRY_WORDS.get(upper, "").lower()} - {""}
+        if not wanted & fields:
+            return False
+    return True
+
+
+def _split(query: str) -> tuple[str, list[str]] | None:
+    """Split "Sparks, NV" or "Sparks NV" into the town and what follows; None for one word."""
+    if "," in query:
+        town, *rest = [part.strip() for part in query.split(",")]
+        return (town, [part for part in rest if part]) if town and rest else None
+    words = query.split()
+    return (" ".join(words[:-1]), words[-1:]) if len(words) > 1 else None
+
+
+def _nominatim(query: str, count: int, geocoder=None) -> list[dict]:
+    """
+    OpenStreetMap's Nominatim, through geopy, for queries Open-Meteo can't
+    place (addresses, unusual spellings). No time zone comes with these.
+    """
+    try:
+        if geocoder is None:
+            from geopy.geocoders import Nominatim
+
+            geocoder = Nominatim(user_agent=NOMINATIM_AGENT, timeout=10)
+        found = geocoder.geocode(query, exactly_one=False, limit=count, addressdetails=True, language="en")
+    except Exception:  # geopy missing, offline, rate-limited, ...
+        return []
     places = []
-    for item in data.get("results") or []:
-        try:
-            latitude, longitude = round(float(item["latitude"]), 4), round(float(item["longitude"]), 4)
-        except (KeyError, TypeError, ValueError):
-            continue
-        parts = [item.get("name"), item.get("admin1"), item.get("country")]
-        places.append({"name": ", ".join(p for p in parts if p), "latitude": latitude,
-                       "longitude": longitude, "timezone": item.get("timezone") or "UTC"})
+    for location in found or []:
+        address = (getattr(location, "raw", None) or {}).get("address", {})
+        town = address.get("city") or address.get("town") or address.get("village") or address.get("hamlet")
+        parts = [town, address.get("state"), address.get("country")]
+        name = ", ".join(p for p in parts if p) or location.address
+        places.append({"name": name, "latitude": round(location.latitude, 4),
+                       "longitude": round(location.longitude, 4), "timezone": None})
     return places
+
+
+def search(query: str, fetch=None, count: int = 8, geocoder=None) -> list[dict]:
+    """
+    Find places by name, postcode or address.
+
+    1. Open-Meteo with the query as typed ("Sparks", "Sparks, Nevada", "89431").
+    2. With nothing found: the town alone, keeping matches whose state or
+       country fits the rest ("Sparks, NV", "Paris France", "Leeds UK").
+    3. Still nothing: OpenStreetMap's Nominatim (addresses and the like).
+
+    Args:
+        query (str): What was typed.
+        fetch (callable | None): ``fetch(url) -> bytes`` for Open-Meteo (injected in tests).
+        count (int): Most places to return.
+        geocoder: A geopy geocoder for step 3 (injected in tests).
+
+    Returns:
+        list[dict]: Places with ``name`` (e.g. ``"Sparks, Nevada, United
+        States"``), ``latitude``, ``longitude`` and ``timezone`` (None from
+        step 3); empty if none, or when offline.
+    """
+    query = " ".join(query.split())
+    if not query:
+        return []
+    fetch = fetch or (lambda url: urllib.request.urlopen(url, timeout=10).read())
+    items = _open_meteo(query, fetch, count)
+    split = None if items else _split(query)
+    if split:
+        town, qualifiers = split
+        items = [item for item in _open_meteo(town, fetch, 50) if _matches(item, qualifiers)][:count]
+    places = [place for place in map(_place, items) if place]
+    return places or _nominatim(query, count, geocoder)
 
 
 def valid(latitude, longitude) -> bool:
