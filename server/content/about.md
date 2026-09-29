@@ -14,7 +14,8 @@ set. You can check on things and switch equipment from any phone or computer on 
     its temperature sensor stops answering.
 *   **Tells you when something is wrong.** Too hot, too cold, no readings, or the controller
     offline: it shows on the Home page and, if set up, on your phone or by email.
-*   **Keeps a record.** Charts of the last day, week or month, next to the weather outside.
+*   **Keeps a record.** Charts of any day, week or month in the last six months, next to the
+    weather outside, and a month-by-month comparison with last year.
 
 ## How it fits together
 

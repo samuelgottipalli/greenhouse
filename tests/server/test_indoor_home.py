@@ -86,7 +86,7 @@ def test_indoor_page_with_fresh_readings(seeded_db, db_conn):
 def test_indoor_page_warns_when_stale(seeded_db):
     at = run_section("greenhouse")  # fixture readings are from 2025
     assert "Automation ignores readings older" in at.warning[0].value
-    assert "No readings in the last 24 hours" in at.info[0].value
+    assert "No readings for last 24 hours" in at.info[0].value
 
 
 def test_indoor_page_without_readings(seeded_db, db_conn):

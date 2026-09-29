@@ -220,7 +220,7 @@ def make_v6(path):
 
 def test_upgrade_v6_to_v7_adds_the_version_name(db_file):
     make_v6(db_file)
-    assert "from version 6 to 7" in migrations.upgrade(db_file)
+    assert f"from version 6 to {migrations.SCHEMA_VERSION}" in migrations.upgrade(db_file)
     assert query(db_file, "SELECT firmware_version, firmware_name FROM device_status") == [("3f9a0c1b2d4e", None)]
 
 
@@ -295,3 +295,19 @@ def test_backup_db_script(seeded_db, tmp_path, capsys):
     assert backup_db.main([str(target)]) == 0
     assert query(target, "SELECT count(*) FROM relay_events") == query(seeded_db, "SELECT count(*) FROM relay_events")
     assert "Backed up" in capsys.readouterr().out
+
+
+def test_upgrade_v7_to_v8_adds_monthly_stats(db_file):
+    migrations.upgrade(db_file)
+    conn = sqlite3.connect(db_file)
+    conn.execute("DROP TABLE monthly_stats")
+    conn.execute("PRAGMA user_version = 7")
+    conn.commit()
+    conn.close()
+    assert "from version 7 to 8" in migrations.upgrade(db_file)
+    assert query(db_file, "SELECT count(*) FROM monthly_stats") == [(0,)]
+    conn = sqlite3.connect(db_file)
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO monthly_stats VALUES ('greenhouse', 1, 'temperature', '2026-9', 1, 1, 1, 1, 1, 1, "
+                     "1, 1, 1, NULL, 'x')")
+    conn.close()

@@ -8,7 +8,7 @@ measure, snowfall in cm or inches, wind in km/h or mph. The precipitation
 gauge shows a rain rate (mm/h or in/h) and the day's total (mm or inches),
 the usual units for rain.
 """
-from pandas import DataFrame, Series
+from pandas import DataFrame, Series, to_datetime
 
 from core.conversions import (
     celsius_to_fahrenheit,
@@ -100,3 +100,40 @@ def rain_total(precipitation_mm: Series, units: str) -> float:
 def rain_units(units: str) -> tuple[str, str]:
     """Unit labels for a rain rate and a rain total: ``("mm/h", "mm")`` or ``("in/h", "in")``."""
     return ("in/h", "in") if units == "US" else ("mm/h", "mm")
+
+
+HISTORY_MEASURES = ("temperature_c", "relative_humidity_pct", "wind_speed_kmh")
+
+
+def history_frames(data: DataFrame, units: str, zone: str, detail: str, rain_step: str) -> tuple[DataFrame, DataFrame]:
+    """
+    Turn ``db.weather_history`` rows into what the history charts show.
+
+    Args:
+        data (DataFrame): ``measured_utc`` and the weather columns (raw or hourly).
+        units (str): ``"SI"`` or ``"US"``.
+        zone (str): Display zone.
+        detail (str): ``"raw"``, ``"hour"`` or ``"day"`` (``Period.detail``): the
+            rows as given, or daily averages for ``"day"``.
+        rain_step (str): ``"hour"`` or ``"day"``: rain totals per hour or per day.
+
+    Returns:
+        tuple[DataFrame, DataFrame]: Measures (naive local ``time`` plus
+        ``HISTORY_MEASURES`` in display units) and rain (``time`` and
+        ``rain``: mm or inches per step).
+    """
+    frame = data.copy()
+    frame["time"] = to_datetime(frame["measured_utc"]).dt.tz_localize("UTC").dt.tz_convert(zone).dt.tz_localize(None)
+    rain = frame[["time", "precipitation_mm"]].copy()
+    rain["time"] = rain["time"].dt.floor("h") if rain_step == "hour" else rain["time"].dt.normalize()
+    rain = rain.groupby("time", as_index=False)["precipitation_mm"].sum()
+    rain["rain"] = rain["precipitation_mm"].map(
+        (lambda mm: mm_to_inches(mm, 3)) if units == "US" else (lambda mm: round(mm, 2)))
+    measures = frame[["time", *HISTORY_MEASURES]].copy()
+    if detail == "day":
+        measures["time"] = measures["time"].dt.normalize()
+        measures = measures.groupby("time", as_index=False).mean().round(2)
+    if units == "US":
+        measures["temperature_c"] = measures["temperature_c"].map(celsius_to_fahrenheit)
+        measures["wind_speed_kmh"] = measures["wind_speed_kmh"].map(kmph_to_mph)
+    return measures, rain[["time", "rain"]]

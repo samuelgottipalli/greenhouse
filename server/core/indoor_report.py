@@ -131,6 +131,23 @@ def local_frame(history: DataFrame, units: str, zone: str) -> DataFrame:
     return frame[["measure", "time", "value"]]
 
 
+def daily_means(frame: DataFrame, group: str = "measure") -> DataFrame:
+    """
+    Average each measure per local day (for periods longer than ``periods.HOURLY_DAYS``).
+
+    Args:
+        frame (DataFrame): ``measure``, naive local ``time`` and ``value`` (``local_frame``).
+        group (str): The measure column.
+
+    Returns:
+        DataFrame: Same columns, one row per measure per day, ``time`` at midnight.
+    """
+    if frame.empty:
+        return frame
+    days = frame.assign(time=frame["time"].dt.normalize())
+    return days.groupby([group, "time"], as_index=False)["value"].mean().round({"value": 2})
+
+
 def high_low(frame: DataFrame) -> tuple[tuple[float, datetime], tuple[float, datetime]] | None:
     """
     The highest and lowest value in a series, with when they happened.

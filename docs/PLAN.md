@@ -141,6 +141,19 @@ Cloud's free plan), with encrypted and verified connections from the server and 
 | 7.4 | **Installer: "Use a cloud MQTT service".** Address, port 8883, the server's login and controller 1's login (both created in the service's console). It checks both logins over TLS and finds which bundled root the service uses, warning if none does. | (usability) | Logic tests for the page's choices and saved settings. | 1 d |
 | 7.5 | **Dashboard and docs.** Settings › Controllers lets you type the controller's login name (cloud services choose their own) and builds the code with the cloud address. RUNBOOK gets a HiveMQ Cloud walkthrough; MQTT.md and Help are updated. Over-the-air updates still come from the server on your network. | (docs) | Docs tests; page tests for a cloud set-up. | 1 d |
 
+## Phase 11: History and analysis (about 4 days)
+
+(Phases 7–10 are on the `develop` branch.) Goal: look back over any period of the last six months,
+compare each month with the same month last year, and keep the database small by summarising
+old months instead of keeping every reading.
+
+| Step | Work | Done when | Effort |
+|---|---|---|---|
+| 11.1 ✅ | **Periods and date ranges.** Both Reports tabs get 24 hours / 7 days / 30 days / **Date range** (any days in the last 6 months, local calendar days). Charts show every reading up to 2 days, hourly averages up to 45 days and daily averages beyond; rain as totals per hour or per day. Outdoor weather gains the History section the Greenhouse tab had. | Tests for periods, the queries (end dates, hourly rain totals, one place only), and both tabs with a date range. | 1.5 d |
+| 11.2 ✅ | **Monthly summaries** (schema v8, `monthly_stats`): per controller and measure (temperature, humidity, light in lux) and for the weather (temperature, humidity, wind, rain as daily totals): samples, mean, median, 25th/75th and 2.5th/97.5th percentiles, min, max, and rain's monthly total. | Tests for the statistics, local month boundaries (daylight saving), lux and daily rain. | 0.5 d |
+| 11.3 ✅ | **The monthly job** (`scripts.retention`, replacing the nightly hourly roll-up): summarise every finished month not yet summarised, back up the database, then delete readings older than 6 whole months, only once their months are summarised. It only does what is missing. Runs on the 1st at 03:30, at the next start if that was missed (`Persistent=true`), and 10 minutes after every start (`OnBootSec`); `run_all.py` runs it at start-up and daily. | Tests: summarise-then-trim, a second run does nothing, a missed 1st caught up, nothing deleted if a summary fails, backups rotate. On a year of synthetic data: 2.6 s, database 21 MB → 9.6 MB. | 1 d |
+| 11.4 ✅ | **Analysis page**: Greenhouse and Outdoor weather tabs, a box plot per measure for the last 12 months plus this month so far (live), this month highlighted against the same month last year with a comparison sentence and the numbers underneath. | Page and chart tests; checked in Chrome on a year of synthetic data. | 1 d |
+
 ---
 
 ## Tracking
@@ -156,6 +169,7 @@ Cloud's free plan), with encrypted and verified connections from the server and 
 | 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
 | 5 | 5.1–5.6 ✅ | Installer (`setup.bat`/`setup.sh`), setup hotspot, setup codes, updates over Wi-Fi, `run_all.py`. On-hardware checks are in the RUNBOOK sign-off |
 | 6 | 6.1–6.4 ✅ | Released as **1.1.0** (tag `v1.1.0`), with the location setting (Settings › Location); schema v7 stores the controller's version name |
+| 11 | 11.1–11.4 ✅ | Reports periods and date ranges, monthly summaries and clean-up, Analysis page (schema v8) |
 | 7 | Planned | On the `develop` branch |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

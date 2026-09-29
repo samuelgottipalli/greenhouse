@@ -1,78 +1,23 @@
 """
-Roll old sensor readings up into hourly averages (nightly job).
+The monthly job: summarise finished months for the Analysis page, then
+delete raw readings older than 6 whole months (``core/history.py``).
 
 Usage (from the ``server/`` folder)::
 
-    python -m scripts.retention                # keep 90 days raw, then VACUUM
-    python -m scripts.retention --days 30 --no-vacuum
-    python -m scripts.retention --measure      # size check on synthetic data
+    python -m scripts.retention                   # what the schedule runs
+    python -m scripts.retention --keep-months 12
 
-Installed as ``greenhouse-retention.timer`` (daily at 03:30) by
-``deploy/install_services.py``. ``--measure`` builds throwaway databases with
-one and two years of synthetic readings, applies retention, and prints the
-yearly growth per device (target, PLAN 3.4: 5 MB or less).
+Scheduled by ``greenhouse-retention.timer`` on the 1st of each month and a few
+minutes after every start (which catches up a missed 1st), and by
+``run_all.py`` on Windows and macOS. It only does what is missing, so running
+it again, or by hand, is safe. The database is copied to
+``server/data/backups/`` before anything is deleted.
 """
 import argparse
 import logging
 import sys
-import tempfile
-from pathlib import Path
 
-from core import db, retention, settings
-
-TARGET_MB_PER_YEAR = 5.0
-
-
-def run(keep_days: int, do_vacuum: bool) -> int:
-    """
-    Apply retention to the configured database.
-
-    Returns:
-        int: Process exit code.
-    """
-    cutoff = retention.cutoff_for(keep_days)
-    result = retention.roll_up(cutoff)
-    if result is None:
-        return 1
-    print(f"Readings before {cutoff}: {result['removed']} raw rows -> {result['added']} hourly rows; "
-          f"{result['weather_removed']} weather snapshots thinned")
-    if do_vacuum and (result["removed"] or result["weather_removed"]) and not retention.vacuum():
-        return 1
-    return 0
-
-
-def measure(keep_days: int = retention.KEEP_RAW_DAYS) -> float:
-    """
-    Measure yearly database growth per device with retention applied.
-
-    Builds one-year and two-year synthetic databases, applies retention and
-    VACUUM to each, and returns the size difference.
-
-    Returns:
-        float: Megabytes added per year.
-    """
-    from scripts import bench
-
-    sizes = []
-    original_url = settings.DB_URL
-    try:
-        with tempfile.TemporaryDirectory() as folder:
-            for years in (1, 2):
-                path = Path(folder) / f"{years}y.db"
-                bench.fill(path, 365 * years)
-                settings.DB_URL = f"sqlite:///{path.as_posix()}"
-                db.get_engine.cache_clear()
-                retention.roll_up(retention.cutoff_for(keep_days))
-                retention.vacuum()
-                db.get_engine().dispose()
-                sizes.append(path.stat().st_size / 1_000_000)
-                print(f"{years} year(s) of data after retention: {sizes[-1]:.1f} MB")
-    finally:
-        settings.DB_URL = original_url
-        db.get_engine.cache_clear()
-    growth = sizes[1] - sizes[0]
-    print(f"Growth: {growth:.2f} MB per year per device (target {TARGET_MB_PER_YEAR} MB)")
-    return growth
+from core import history
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,17 +25,22 @@ def main(argv: list[str] | None = None) -> int:
     Command-line entry point.
 
     Returns:
-        int: Process exit code.
+        int: 0 on success, 1 if something failed (see the log).
     """
-    parser = argparse.ArgumentParser(description="Roll old readings into hourly averages.")
-    parser.add_argument("--days", type=int, default=retention.KEEP_RAW_DAYS, help="days of raw readings to keep")
-    parser.add_argument("--no-vacuum", action="store_true", help="skip VACUUM afterwards")
-    parser.add_argument("--measure", action="store_true", help="measure yearly growth on synthetic data")
+    parser = argparse.ArgumentParser(description="Monthly summaries and clean-up of old readings.")
+    parser.add_argument("--keep-months", type=int, default=history.KEEP_RAW_MONTHS,
+                        help="whole months of raw readings to keep (default %(default)s)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if args.measure:
-        return 0 if measure(args.days) <= TARGET_MB_PER_YEAR else 1
-    return run(args.days, not args.no_vacuum)
+    report = history.run_monthly(keep_months=args.keep_months)
+    summarised = report["summarised"]
+    print(f"Summarised {len(summarised)} month(s)" + (f": {', '.join(summarised)}" if summarised else ""))
+    if report["deleted"]:
+        print(f"Deleted readings before {report['cutoff_utc']} UTC: {report['deleted']['sensor_rows']} greenhouse, "
+              f"{report['deleted']['weather_rows']} weather (backup: {report['backup']})")
+    else:
+        print(f"Nothing older than {report['cutoff_utc']} UTC to delete")
+    return 0 if report["ok"] else 1
 
 
 if __name__ == "__main__":

@@ -19,7 +19,8 @@ tests/.tmp/
 .pytest_cache/
 !requirements*.txt
 
-# database backups written by scripts.upgrade_db
+# database backups written by scripts.upgrade_db and the monthly job
+server/data/backups/
 *.v[0-9]-backup-*.db
 
 # device config holds Wi-Fi credentials; generate it with picoside/setup_config.py

@@ -153,6 +153,21 @@ def test_interval_job(tmp_path):
     assert job.runs == 2
 
 
+def test_job_at_start_then_daily(tmp_path):
+    """The monthly job runs as soon as the server starts (catching up a missed 1st), then daily."""
+    job = run_all.Job("retention", ["retention"], daily_at="03:30", at_start=True)
+    h = Harness(tmp_path, [], [job])
+    h.local = datetime(2026, 10, 1, 1, 0)  # started before 03:30
+    h.step()
+    assert job.runs == 1
+    h.started[-1].code = 0
+    h.step()
+    assert job.runs == 1  # once
+    h.local = datetime(2026, 10, 1, 3, 30)
+    h.step()
+    assert job.runs == 2  # that day's 03:30 run still happens
+
+
 def test_daily_job(tmp_path):
     job = run_all.Job("retention", ["retention"], daily_at="03:30")
     h = Harness(tmp_path, [], [job])
@@ -199,6 +214,7 @@ def test_build_has_services_and_jobs(tmp_path):
     assert [c.name for c in supervisor.children] == ["web", "ingest", "automation", "weather", "firmware"]
     assert {j.name: (j.every_s, j.daily_at) for j in supervisor.jobs} == {
         "alerts": (120, None), "retention": (None, "03:30")}
+    assert [j.name for j in supervisor.jobs if j.start_pending] == ["retention"]  # also once at start
 
 
 @pytest.mark.parametrize("name", ["ingest", "automation", "weather_collector", "firmware_server", "alerts"])

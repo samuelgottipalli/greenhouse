@@ -29,7 +29,7 @@ from core.timeutil import duration_to_minutes, format_time_of_day
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION: int = 7
+SCHEMA_VERSION: int = 8
 SCHEMA_FILE: Path = Path(__file__).with_name("schema.sql")
 MIN_SQLITE: tuple[int, int, int] = (3, 37, 0)  # STRICT tables
 
@@ -458,7 +458,37 @@ def migrate_v6(conn: sqlite3.Connection) -> None:
     _step(conn, V7_DDL, 7)
 
 
-STEPS = {2: migrate_v2, 3: migrate_v3, 4: migrate_v4, 5: migrate_v5, 6: migrate_v6}
+V8_DDL: tuple[str, ...] = ("""CREATE TABLE IF NOT EXISTS monthly_stats (
+    source       TEXT    NOT NULL CHECK (source IN ('greenhouse', 'weather')),
+    device_id    INTEGER NOT NULL,  -- the controller; 0 for outdoor weather
+    measure      TEXT    NOT NULL,
+    month        TEXT    NOT NULL CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'),
+    samples      INTEGER NOT NULL,
+    mean         REAL    NOT NULL,
+    median       REAL    NOT NULL,
+    p2_5         REAL    NOT NULL,
+    p25          REAL    NOT NULL,
+    p75          REAL    NOT NULL,
+    p97_5        REAL    NOT NULL,
+    minimum      REAL    NOT NULL,
+    maximum      REAL    NOT NULL,
+    total        REAL,              -- rain: the month's total
+    computed_utc TEXT    NOT NULL,
+    PRIMARY KEY (source, device_id, measure, month)
+) STRICT""",)
+
+
+def migrate_v7(conn: sqlite3.Connection) -> None:
+    """
+    Upgrade version 7 to 8: monthly summaries for the Analysis page.
+
+    Args:
+        conn (sqlite3.Connection): Connection to a version 7 database.
+    """
+    _step(conn, V8_DDL, 8)
+
+
+STEPS = {2: migrate_v2, 3: migrate_v3, 4: migrate_v4, 5: migrate_v5, 6: migrate_v6, 7: migrate_v7}
 
 
 def backup_to(conn: sqlite3.Connection, target: Path) -> None:

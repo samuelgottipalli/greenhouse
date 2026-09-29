@@ -7,7 +7,8 @@ The menu on the left has five pages. The bigger ones are split into tabs along t
 | Page | What it's for |
 |---|---|
 | **Home** | Everything at a glance: is the controller online, are the readings fresh, what's switched on, any problems. |
-| **Reports** | **Greenhouse**: what it's like inside now and over time. **Outdoor weather**: today's weather outside. |
+| **Reports** | **Greenhouse**: what it's like inside now and over time. **Outdoor weather**: the weather outside, today and over time. |
+| **Analysis** | Each month of the last year side by side, and how this month compares with the same month last year. |
 | **Remote Control** | Switch the fan, heater, grow light and watering on or off yourself. |
 | **Settings** | **Display**: how things look. **Location**: where the greenhouse is, for the weather. **Greenhouse rules**: when the equipment runs. **Controllers**: connect a controller to Wi-Fi and update it. |
 | **Help** | This guide, and **About** the system. |
@@ -45,8 +46,9 @@ The date and time are at the top of the page, and each tab says when its data wa
 *   **Light** is shown in lux, estimated from the sensor, with a word for it: dark, dim,
     overcast, daylight or full sun. (The number becomes accurate once the light sensor is
     calibrated with a phone light-meter app; see the setup guide.)
-*   **Charts** for the last 24 hours, 7 days or 30 days. Hover over a line for the exact time and
-    value; the highest and lowest are listed underneath.
+*   **Charts** for the last 24 hours, 7 days or 30 days, or pick **Date range** and choose any
+    days in the last 6 months. Hover over a line for the exact time and value; the highest and
+    lowest are listed underneath. Longer periods show hourly, then daily, averages.
 *   **Show readings as a table** lists the readings, one row per time.
 
 ## Reports › Outdoor weather
@@ -56,6 +58,23 @@ humidity, rain and wind outside, each with a chart of the day. The rain gauge sh
 raining right now (per hour), with today's total underneath; the wind card says which way it is
 blowing from. It comes from the free Open-Meteo forecast for your location and updates every 15
 minutes.
+
+**History** underneath works like the greenhouse charts: 24 hours, 7 days, 30 days or a date
+range, for temperature, humidity, rain (totals per hour, or per day for longer periods) and wind.
+
+## Analysis
+
+One chart per measure, with a box for each month of the last year:
+
+*   The **whiskers** span the middle 95 % of the readings, so a few odd readings don't stretch them.
+*   The **box** holds the middle half, the **line** across it is the median (the middle reading)
+    and the **diamond** is the average.
+*   **This month so far** is orange and the **same month last year** blue; the sentence underneath
+    compares them. **Numbers** shows the figures behind each box.
+
+Readings are kept in full for 6 months. On the 1st of each month (or when the server next starts,
+if it was off) each finished month is summarised, and readings older than 6 months are then
+deleted; their months stay here as summaries, so the Analysis page keeps a full year and more.
 
 ## Remote Control
 
