@@ -139,6 +139,19 @@ def test_first_tick_reads_and_publishes(ctl):
     }
 
 
+def test_free_memory_is_measured_after_a_collection(ctl, pico, monkeypatch):
+    """Found on the Pico: without gc.collect() the dashboard showed ~47 KB free instead of ~140 KB."""
+    calls = []
+    fake_gc = type("FakeGC", (), {
+        "collect": staticmethod(lambda: calls.append("collect")),
+        "mem_free": staticmethod(lambda: calls.append("mem_free") or 143984),
+    })
+    monkeypatch.setattr(pico.controller, "gc", fake_gc)
+    ctl.tick()
+    (telemetry,) = ctl.net.of("telemetry")
+    assert telemetry["mem_free"] == 143984 and calls == ["collect", "mem_free"]
+
+
 def test_intervals(ctl, ticks):
     ctl.tick()
     run_for(ctl, ticks, 59_950)

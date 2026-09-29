@@ -5,6 +5,11 @@ controller (the Pico W). Versions read *major.minor.patch*: *major* goes up for 
 need care when upgrading, *minor* for new features and *patch* for fixes only. A version ending in
 `-dev` is still being built.
 
+## Server 1.1.1 · Controller 1.1.1 (2026-09-28)
+
+- **Free memory is reported correctly.** The controller clears out unused memory before measuring,
+  so the Home page shows the real figure (about 140 KB) instead of a low, jumpy one.
+
 ## Server 1.1.0 · Controller 1.1.0 (2026-09-28)
 
 - **Version numbers you can read.** The dashboard (menu, Help › About, Settings › Controllers),

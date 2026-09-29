@@ -312,7 +312,9 @@ def test_real_background_runner(app):
 
 
 def test_window_title_shows_the_version(window):
-    from version import VERSION
+    import re
 
-    assert window.windowTitle() == f"Greenhouse setup {VERSION}"
-    assert steps.server_version() == VERSION
+    text = (steps.SERVER_DIR / "version.py").read_text(encoding="utf-8")
+    server_version = re.search(r'^VERSION = "([^"]+)"', text, re.M).group(1)
+    assert window.windowTitle() == f"Greenhouse setup {server_version}"
+    assert steps.server_version() == server_version
