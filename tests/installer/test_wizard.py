@@ -80,7 +80,8 @@ def test_packages_page(window, monkeypatch):
 
 
 def test_greenhouse_page_saves_settings(window, monkeypatch, env_files):
-    monkeypatch.setattr(steps, "run", lambda command, cwd, log: 0)
+    commands = []
+    monkeypatch.setattr(steps, "run", lambda command, cwd, log: commands.append(command[2:]) or 0)
     monkeypatch.setattr(steps, "geocode", lambda name: [
         {"label": "Reno, Nevada", "latitude": 39.5296, "longitude": -119.8138, "timezone": "America/Los_Angeles"}])
     home = page(window, wizard.GreenhousePage)
@@ -97,11 +98,17 @@ def test_greenhouse_page_saves_settings(window, monkeypatch, env_files):
     env = steps.read_env()
     assert env["TIMEZONE"] == "America/Los_Angeles" and env["LATITUDE"] == "39.5296"
     assert env["APP_PASSWORD_HASH"].startswith("pbkdf2_sha256:")
+    # The location is stored in the database too (where Settings › Location keeps it).
+    assert commands[-2] == ["scripts.upgrade_db"]
+    assert commands[-1] == ["scripts.set_location", "--latitude", "39.5296", "--longitude", "-119.8138",
+                            "--name", "Reno, Nevada", "--timezone", "America/Los_Angeles"]
     # Running it again with an empty password keeps the old one.
     old = env["APP_PASSWORD_HASH"]
     home.password.setText("")
     home.again.setText("")
     assert home.validatePage() is True and steps.read_env()["APP_PASSWORD_HASH"] == old
+    home.latitude.setValue(40.0)  # typed by hand: no place name
+    assert home.validatePage() is True and "--name" not in commands[-1]
 
 
 def test_greenhouse_page_rejects_unknown_zone_and_failed_database(window, monkeypatch):

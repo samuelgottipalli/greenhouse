@@ -6,4 +6,4 @@ It is shown on the screen at start-up and reported to the server, next to
 the exact build (a hash of the files) that over-the-air updates use.
 """
 
-VERSION = "1.1.0-dev"
+VERSION = "1.1.0"

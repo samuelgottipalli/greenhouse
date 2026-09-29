@@ -43,6 +43,7 @@ server$ python3 -m venv venv
 server$ venv/bin/pip install -r server/requirements.txt
 server$ cp server/.env.example server/.env
 server$ nano server/.env          # TIMEZONE, LATITUDE, LONGITUDE; MQTT_* are filled in step 3
+#   (the location can be changed later on the dashboard: Settings › Location, which takes precedence)
 server$ cd server
 server$ ../venv/bin/python -m scripts.upgrade_db
 server$ ../venv/bin/python -m scripts.set_password

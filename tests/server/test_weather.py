@@ -99,7 +99,7 @@ def test_fetch_weather_network_error(configured, monkeypatch):
 def test_collect_once_stores_a_row(seeded_db, monkeypatch):
     monkeypatch.setattr(weather_collector, "fetch_weather", lambda: SAMPLE_RESPONSE)
     assert weather_collector.collect_once() is True
-    assert weather_collector.collect_once() is False  # duplicate time slot
+    assert weather_collector.collect_once() is True  # the same slot again replaces it
 
 
 def test_collect_once_without_data(seeded_db, monkeypatch):

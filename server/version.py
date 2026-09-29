@@ -9,4 +9,4 @@ tagged ``v<version>`` on ``main``. The controller has its own version in
 ``picoside/device/version.py``.
 """
 
-VERSION = "1.1.0-dev"
+VERSION = "1.1.0"

@@ -9,7 +9,7 @@ The menu on the left has five pages. The bigger ones are split into tabs along t
 | **Home** | Everything at a glance: is the controller online, are the readings fresh, what's switched on, any problems. |
 | **Reports** | **Greenhouse**: what it's like inside now and over time. **Outdoor weather**: today's weather outside. |
 | **Remote Control** | Switch the fan, heater, grow light and watering on or off yourself. |
-| **Settings** | **Display**: how things look. **Greenhouse rules**: when the equipment runs. **Controllers**: connect a controller to Wi-Fi and update it. |
+| **Settings** | **Display**: how things look. **Location**: where the greenhouse is, for the weather. **Greenhouse rules**: when the equipment runs. **Controllers**: connect a controller to Wi-Fi and update it. |
 | **Help** | This guide, and **About** the system. |
 
 Pages update by themselves when new readings arrive (you can turn this off in Settings › Display).
@@ -64,6 +64,17 @@ minutes.
     over again.
 *   The switches are greyed out while the controller is offline. It keeps following your rules by
     itself in the meantime (its screen shows **LOCAL**).
+
+## Settings › Location
+
+Where the greenhouse is. It decides which outdoor weather you see and the sunrise and sunset times
+(the grow light only runs between them).
+
+*   Type your town and press **Find**, pick the right one from the list and press
+    **Use this location**. The weather for the new place appears straight away.
+*   If the new place is in another time zone, you can have the dashboard show its times there too.
+*   No match, or somewhere remote? Open **Enter the latitude and longitude instead** (your phone's
+    map app shows them).
 
 ## Settings › Display
 

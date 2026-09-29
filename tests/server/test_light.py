@@ -75,7 +75,7 @@ def test_service_turns_light_on_when_dim_in_daytime(seeded_db, db_conn, monkeypa
                         [(1, at, 20.0), (8, at, 50.0), (6, at, 5000.0)])
     db_conn.execute("DELETE FROM weather_readings")
     db_conn.execute(
-        "INSERT INTO weather_readings (measured_utc, latitude, longitude, sunrise_utc, sunset_utc) VALUES (?, 1, 2, ?, ?)",
+        "INSERT INTO weather_readings (measured_utc, latitude, longitude, sunrise_utc, sunset_utc) VALUES (?, 39.53, -119.75, ?, ?)",
         (at, (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"), (now + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")),
     )
     db_conn.commit()

@@ -393,7 +393,7 @@ def log_relay_event(
 # --- Weather ----------------------------------------------------------------
 
 
-def sun_windows(since_utc: str) -> list[tuple[str, str]]:
+def sun_windows(since_utc: str, place: dict | None = None) -> list[tuple[str, str]]:
     """
     Return the distinct sunrise/sunset pairs of recent weather readings.
 
@@ -402,15 +402,24 @@ def sun_windows(since_utc: str) -> list[tuple[str, str]]:
 
     Args:
         since_utc (str): Only readings measured since this time.
+        place (dict | None): Only readings for this location
+            (``core.places.current()``), so an old location's sunrise and
+            sunset don't linger after a change. None: every reading.
 
     Returns:
         list[tuple[str, str]]: ``(sunrise_utc, sunset_utc)`` pairs; empty on
         error or if there are none.
     """
+    from core.places import SAME_PLACE_DEGREES
+
+    where, params = "", {"since": since_utc}
+    if place is not None:
+        where = " AND abs(latitude - :lat) <= :d AND abs(longitude - :lon) <= :d"
+        params.update(lat=place["latitude"], lon=place["longitude"], d=SAME_PLACE_DEGREES)
     data = _read(
         "SELECT DISTINCT sunrise_utc, sunset_utc FROM weather_readings "
-        "WHERE measured_utc >= :since AND sunrise_utc IS NOT NULL AND sunset_utc IS NOT NULL",
-        {"since": since_utc},
+        "WHERE measured_utc >= :since AND sunrise_utc IS NOT NULL AND sunset_utc IS NOT NULL" + where,
+        params,
     )
     return [] if data is None else list(zip(data["sunrise_utc"], data["sunset_utc"]))
 
@@ -440,15 +449,19 @@ def insert_weather(row: dict[str, str | int | float | None] | None) -> bool:
         row (dict | None): Column name to value, as built by
             ``weather_api.clean_data``.
 
+    A reading for a time that is already stored replaces it, so a new
+    location (Settings › Location) takes over the current 15-minute slot.
+
     Returns:
-        bool: True if inserted; False if ``row`` is empty or the insert failed
-        (e.g. a reading for that time already exists).
+        bool: True if stored; False if ``row`` is empty or the write failed.
     """
     if not row:
         return False
     columns = ", ".join(row)
     values = ", ".join(f":{name}" for name in row)
-    return _write([(f"INSERT INTO weather_readings ({columns}) VALUES ({values})", row)])
+    updates = ", ".join(f"{name} = excluded.{name}" for name in row if name != "measured_utc")
+    return _write([(f"INSERT INTO weather_readings ({columns}) VALUES ({values}) "
+                    f"ON CONFLICT (measured_utc) DO UPDATE SET {updates}", row)])
 
 
 # --- Device telemetry (written by services/ingest.py) ----------------------

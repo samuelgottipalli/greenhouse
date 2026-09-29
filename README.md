@@ -132,7 +132,7 @@ been removed. It is still in the git history.
 | **Home** | Health at a glance: controller online/offline with uptime, Wi-Fi signal and memory; how fresh the readings are; each relay's state; the background services; active alerts. |
 | **Reports** | Tabs: **Greenhouse** (gauges, charts and a table of the readings inside) and **Outdoor weather** (today's weather with gauges and charts). |
 | **Remote Control** | Switch the fan, heater, light and water on or off. |
-| **Settings** | Tabs: **Display** (units, formats, time zone, colour scheme, page width, auto-refresh), **Greenhouse rules** (fan, heater, grow light and watering) and **Controllers** (Wi-Fi setup code and QR code, software updates). |
+| **Settings** | Tabs: **Display** (units, formats, time zone, colour scheme, page width, auto-refresh), **Location** (the town the weather and sunrise/sunset are for; changes apply at once), **Greenhouse rules** (fan, heater, grow light and watering) and **Controllers** (Wi-Fi setup code and QR code, software updates). |
 | **Help** | Tabs: **How to use it** and **About**. |
 
 Pages link to a tab with `?tab=`, e.g. `/settings?tab=controllers`.

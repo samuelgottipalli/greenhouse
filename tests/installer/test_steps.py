@@ -67,6 +67,10 @@ def test_geocode_offline_or_nothing():
 def test_commands():
     assert steps.pip_install_command("py")[-2:] == ["-r", str(steps.REQUIREMENTS)]
     assert steps.upgrade_db_command("py") == ["py", "-m", "scripts.upgrade_db"]
+    assert steps.set_location_command(39.5, -119.75, "Sparks", "America/Los_Angeles", "py") == [
+        "py", "-m", "scripts.set_location", "--latitude", "39.5000", "--longitude", "-119.7500",
+        "--name", "Sparks", "--timezone", "America/Los_Angeles"]
+    assert steps.set_location_command(1, 2, python="py")[-4:] == ["--latitude", "1.0000", "--longitude", "2.0000"]
     pull, packages, database = steps.update_commands("py")
     assert pull == (["git", "pull", "--ff-only"], steps.REPO_DIR)
     assert packages[0][0] == "py" and database[1] == steps.SERVER_DIR

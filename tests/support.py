@@ -33,7 +33,9 @@ os.environ["TIMEZONE"] = APP_DEFAULT_ZONE
 os.environ["DEVICE_ID"] = "1"
 os.environ["MQTT_HOST"] = "localhost"
 os.environ["MQTT_PORT"] = "1883"
-for _name in ("MQTT_USERNAME", "MQTT_PASSWORD", "WEATHER_API", "LATITUDE", "LONGITUDE", "APP_PASSWORD_HASH",
+os.environ["LATITUDE"] = "39.5349"  # the fixture's weather readings are for this place
+os.environ["LONGITUDE"] = "-119.7527"
+for _name in ("MQTT_USERNAME", "MQTT_PASSWORD", "WEATHER_API", "APP_PASSWORD_HASH",
               "NTFY_URL", "NTFY_TOKEN", "PUBLIC_HOST", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "ALERT_EMAIL_FROM", "ALERT_EMAIL_TO"):
     os.environ[_name] = ""
 

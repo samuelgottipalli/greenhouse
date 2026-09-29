@@ -242,6 +242,7 @@ class GreenhousePage(QWizardPage):
         self.note.setWordWrap(True)
         form.addRow(self.note)
         self.results = []
+        self.place = None  # the place picked from the list, if any
 
     def initializePage(self):  # noqa: N802
         env = steps.read_env()
@@ -266,6 +267,7 @@ class GreenhousePage(QWizardPage):
         """Fill in the chosen place's position and time zone."""
         if 0 <= index < len(self.results):
             place = self.results[index]
+            self.place = place
             self.latitude.setValue(place["latitude"])
             self.longitude.setValue(place["longitude"])
             self.zone.setCurrentText(place["timezone"])
@@ -291,6 +293,14 @@ class GreenhousePage(QWizardPage):
         if steps.run(steps.upgrade_db_command(), steps.SERVER_DIR, lines.append) != 0:
             self.note.setText("The database couldn't be created:\n" + "\n".join(lines[-5:]))
             return False
+        latitude, longitude = self.latitude.value(), self.longitude.value()
+        picked = self.place and (round(self.place["latitude"], 4), round(self.place["longitude"], 4)) == \
+            (round(latitude, 4), round(longitude, 4))
+        name = self.place["label"] if picked else ""
+        if steps.run(steps.set_location_command(latitude, longitude, name, zone), steps.SERVER_DIR,
+                     lines.append) != 0:
+            self.note.setText("The location couldn't be saved; set it later on the dashboard's "
+                              "Settings, Location page.")
         return True
 
 

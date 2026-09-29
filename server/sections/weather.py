@@ -20,7 +20,7 @@ from datetime import datetime as dtt
 import streamlit as st
 from pandas import DataFrame, to_datetime
 
-from core import db
+from core import db, places
 from core.charts import time_chart
 from core.conversions import degrees_to_compass_index
 from core.gauges import (
@@ -110,9 +110,18 @@ def render() -> None:
     labels = db.unit_labels(units)
     time_format = time_pattern(st.session_state["time_format"])
 
+    place = places.current()
+    if place is None:
+        st.info("Choose the greenhouse's location first: [Settings › Location](/settings?tab=location).",
+                icon=":material/location_on:")
+        return
     data = db.recent_weather(limit=216)
-    if data is None:
-        st.info("No weather readings yet. Is the weather collector running?")
+    if data is not None:
+        # Only this location's readings (earlier ones may be for a place chosen before).
+        data = data[[places.near(lat, lon, place) for lat, lon in zip(data["latitude"], data["longitude"])]]
+    if data is None or data.empty:
+        st.info(f"No weather readings for {place['name']} yet. The first one arrives within 15 minutes "
+                "(is the weather collector running?).")
         return
     newest_utc = str(data["measured_utc"].max())
     for column in TIME_COLUMNS:
@@ -126,7 +135,7 @@ def render() -> None:
         )
         return
 
-    last_updated(newest_utc, "from Open-Meteo")
+    last_updated(newest_utc, f"{place['name']} · from Open-Meteo")
     rate_unit, total_unit = rain_units(units)
     total = rain_total(data["precipitation_mm"], units)
     data["rain_rate"] = data["precipitation_mm"].map(lambda mm: rain_rate(mm, units))

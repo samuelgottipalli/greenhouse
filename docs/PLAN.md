@@ -155,7 +155,7 @@ Cloud's free plan), with encrypted and verified connections from the server and 
 | 3 | 3.1–3.4 ✅ | 3.2: 7-day soak simulated in tests; the on-hardware run is in the RUNBOOK sign-off. 3.3: heartbeats + systemd watchdog. 3.4: 2.6 MB/device/year measured |
 | 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
 | 5 | 5.1–5.6 ✅ | Installer (`setup.bat`/`setup.sh`), setup hotspot, setup codes, updates over Wi-Fi, `run_all.py`. On-hardware checks are in the RUNBOOK sign-off |
-| 6 | 6.1–6.4 ✅ | On `develop`. Versions 1.1.0-dev; schema v7 stores the controller's version name |
+| 6 | 6.1–6.4 ✅ | Released as **1.1.0** (tag `v1.1.0`), with the location setting (Settings › Location); schema v7 stores the controller's version name |
 | 7 | Planned | On the `develop` branch |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).
