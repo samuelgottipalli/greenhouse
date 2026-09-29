@@ -297,6 +297,22 @@ class Controller:
         local_rules.save_settings(payload)
         return True
 
+    @staticmethod
+    def memory_free():
+        """
+        Free memory in bytes, after clearing out unused objects.
+
+        Without the collection the number counts garbage the Pico reclaims
+        whenever it needs to, so it looks alarmingly low and jumps about.
+
+        Returns:
+            int | None: None where ``gc.mem_free`` doesn't exist (CPython tests).
+        """
+        if not hasattr(gc, "mem_free"):
+            return None
+        gc.collect()
+        return gc.mem_free()
+
     def publish_telemetry(self):
         """Publish (or queue) a sensor and relay snapshot."""
         self.net.publish("telemetry", {
@@ -307,7 +323,7 @@ class Controller:
             "light_raw": self.light,
             "relays": self.relays.states(),
             "uptime_s": self.uptime_ms // 1000,
-            "mem_free": gc.mem_free() if hasattr(gc, "mem_free") else None,
+            "mem_free": self.memory_free(),
             "rssi_dbm": self.net.rssi(),
         })
 

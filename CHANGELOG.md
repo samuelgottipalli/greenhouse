@@ -14,6 +14,11 @@ Being built on the `develop` branch.
   (TLS) from the server and the controllers, and the controller checks the service's certificate.
   The setup code and the controller's setup page know about encrypted services.
 
+## Server 1.1.1 · Controller 1.1.1 (2026-09-28)
+
+- **Free memory is reported correctly.** The controller clears out unused memory before measuring,
+  so the Home page shows the real figure (about 140 KB) instead of a low, jumpy one.
+
 ## Server 1.1.0 · Controller 1.1.0 (2026-09-28)
 
 - **Version numbers you can read.** The dashboard (menu, Help › About, Settings › Controllers),
