@@ -5,7 +5,7 @@ controller (the Pico W). Versions read *major.minor.patch*: *major* goes up for 
 need care when upgrading, *minor* for new features and *patch* for fixes only. A version ending in
 `-dev` is still being built.
 
-## Server 1.2.0-dev · Controller 1.2.0-dev (in progress)
+## Server 1.3.0-dev · Controller 1.3.0-dev (in progress)
 
 Being built on the `develop` branch.
 
@@ -13,6 +13,21 @@ Being built on the `develop` branch.
   instead of running Mosquitto yourself: a new choice in the installer, encrypted connections
   (TLS) from the server and the controllers, and the controller checks the service's certificate.
   The setup code and the controller's setup page know about encrypted services.
+
+## Server 1.2.0 · Controller 1.1.1 (2026-09-29)
+
+The controller is unchanged; only the server is updated.
+
+- **Any period in the reports.** Both Reports tabs offer 24 hours, 7 days, 30 days or a date range
+  within the last 6 months; long periods show hourly or daily averages.
+- **Outdoor weather history**: temperature, humidity, rain and wind over the chosen period, with
+  highs, lows and a table.
+- **Analysis page**: each month of the last year as a box plot (middle 95 %, middle half, median,
+  average), with this month so far next to the same month last year.
+- **Monthly summaries and clean-up.** Readings are kept in full for 6 months. On the 1st (or at
+  the next start, if the server was off) each finished month is summarised for the Analysis page,
+  the database is backed up, and readings older than 6 months are deleted. This replaces the
+  nightly hourly averaging.
 
 ## Server 1.1.1 · Controller 1.1.1 (2026-09-28)
 
