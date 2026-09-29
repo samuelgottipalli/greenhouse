@@ -69,7 +69,7 @@ def render() -> None:
 
     st.markdown("#### Change the location")
     with st.form("find_place", border=False):
-        query = st.text_input("Town or city", placeholder="e.g. Sparks")
+        query = st.text_input("Town, postcode or address", placeholder="e.g. Sparks, NV · 89431 · Leeds, UK")
         if st.form_submit_button("Find", icon=":material/search:"):
             st.session_state[RESULTS_KEY] = places.search(query)
             if not st.session_state[RESULTS_KEY]:

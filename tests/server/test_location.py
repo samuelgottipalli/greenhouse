@@ -36,8 +36,9 @@ def test_search_offline_or_empty():
     def offline(url):
         raise OSError("no network")
 
-    assert places.search("Sparks", fetch=offline) == []
-    assert places.search("Nowhere", fetch=lambda url: b"{}") == []
+    quiet = FakeGeocoder()  # never the real OpenStreetMap service in tests
+    assert places.search("Sparks", fetch=offline, geocoder=quiet) == []
+    assert places.search("Nowhere", fetch=lambda url: b"{}", geocoder=quiet) == []
     assert places.search("  ", fetch=lambda url: pytest.fail("no request for an empty name")) == []
 
 
@@ -188,3 +189,85 @@ def test_set_location_script(seeded_db, capsys):
     assert set_location.main(["--latitude", "39.7392", "--longitude", "-104.9847", "--name", "Denver"]) == 0
     assert places.current()["name"] == "Denver" and "Location set to Denver" in capsys.readouterr().out
     assert set_location.main(["--latitude", "123", "--longitude", "0"]) == 2
+
+
+# --- smarter search -------------------------------------------------------------------------
+
+
+OM_SPARKS = [
+    {"name": "Sparks", "admin1": "Nevada", "country": "United States", "country_code": "US", "feature_code": "PPL",
+     "latitude": 39.5349, "longitude": -119.7527, "timezone": "America/Los_Angeles"},
+    {"name": "Sparks", "admin1": "Georgia", "country": "United States", "country_code": "US", "feature_code": "PPL",
+     "latitude": 31.19, "longitude": -83.44, "timezone": "America/New_York"},
+    {"name": "Sparks Heliport", "admin1": "Nevada", "country": "United States", "country_code": "US",
+     "feature_code": "AIRH", "latitude": 39.5, "longitude": -119.7, "timezone": "America/Los_Angeles"},
+]
+
+
+def open_meteo(answers):
+    """A fake Open-Meteo: answers by the 'name' asked for; records the names."""
+    import urllib.parse
+
+    asked = []
+
+    def fetch(url):
+        name = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["name"][0]
+        asked.append(name)
+        found = {key.lower(): value for key, value in answers.items()}.get(name.lower(), [])  # case-insensitive
+        return json.dumps({"results": found}).encode()
+
+    fetch.asked = asked
+    return fetch
+
+
+class FakeGeocoder:
+    def __init__(self, found=(), error=None):
+        self.found, self.error, self.queries = list(found), error, []
+
+    def geocode(self, query, **kwargs):
+        self.queries.append(query)
+        if self.error:
+            raise self.error
+        return self.found
+
+
+class FakeLocation:
+    def __init__(self, lat, lon, address):
+        self.latitude, self.longitude, self.address = lat, lon, "full address"
+        self.raw = {"address": address}
+
+
+def test_search_skips_places_that_are_not_towns():
+    fetch = open_meteo({"Sparks": OM_SPARKS})
+    names = [p["name"] for p in places.search("Sparks", fetch=fetch, geocoder=FakeGeocoder())]
+    assert names == ["Sparks, Nevada, United States", "Sparks, Georgia, United States"]
+
+
+@pytest.mark.parametrize("query", ["Sparks NV", "Sparks, NV", "sparks, nevada, usa", "Sparks, US"])
+def test_search_with_a_state_or_country(query):
+    fetch = open_meteo({"Sparks": OM_SPARKS})
+    found = places.search(query, fetch=fetch, geocoder=FakeGeocoder())
+    if query == "Sparks, US":
+        assert len(found) == 2  # both US places
+    else:
+        assert [p["name"] for p in found] == ["Sparks, Nevada, United States"]
+    assert fetch.asked[-1].lower() == "sparks"  # the town alone, after the full query found nothing
+
+
+def test_search_falls_back_to_openstreetmap():
+    geocoder = FakeGeocoder([FakeLocation(38.8977, -77.0365, {"city": "Washington", "state": "District of Columbia",
+                                                              "country": "United States"})])
+    found = places.search("1600 Pennsylvania Ave NW, Washington DC", fetch=open_meteo({}), geocoder=geocoder)
+    assert found == [{"name": "Washington, District of Columbia, United States", "latitude": 38.8977,
+                      "longitude": -77.0365, "timezone": None}]
+    assert geocoder.queries == ["1600 Pennsylvania Ave NW, Washington DC"]
+
+
+def test_search_fallback_failure_is_quiet():
+    assert places.search("Nowhere at all", fetch=open_meteo({}), geocoder=FakeGeocoder(error=OSError("offline"))) == []
+
+
+def test_openstreetmap_is_not_asked_when_open_meteo_finds_it():
+    geocoder = FakeGeocoder()
+    places.search("Sparks", fetch=open_meteo({"Sparks": OM_SPARKS}), geocoder=geocoder)
+    assert geocoder.queries == []

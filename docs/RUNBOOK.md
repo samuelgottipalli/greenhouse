@@ -168,6 +168,9 @@ Instead of this step you can let the controller set itself up from a phone: copy
 ```bash
 pc$ cd picoside/device
 pc$ mpremote cp -r . :
+pc$ mpremote rm -r :__pycache__ + rm -r :lib/umqtt/__pycache__ + rm :config.example.json
+#   (removes copies the Pico doesn't need; "No such file" for any of them is fine.
+#    The installer and over-the-air updates only ever copy what's needed.)
 pc$ mpremote ls :            # boot.py, main.py, controller.py, ..., config.json, lib/
 pc$ mpremote reset
 pc$ mpremote repl            # watch the console; Ctrl+] to leave
@@ -176,7 +179,7 @@ pc$ mpremote repl            # watch the console; Ctrl+] to leave
 **Check (LCD):** in order,
 
 1. `Initializing.. This may take a moment...`
-2. `Connecting to WiFi...`
+2. `Greenhouse v1.1.0. Connecting to WiFi...` (the controller's version)
 3. `WiFi connected. Syncing clock...`
 4. `Connecting to MQTT...`
 5. The main screen: local date and time, `Temp: 21.5C`, `Hum:  45.0%`, `Up   5s OK`.
