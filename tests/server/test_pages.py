@@ -48,7 +48,7 @@ def test_about_gives_credit():
 
 @pytest.mark.parametrize("page, labels", [
     ("views/reports.py", ["Greenhouse", "Outdoor weather"]),
-    ("views/settings.py", ["Display", "Greenhouse rules", "Controllers"]),
+    ("views/settings.py", ["Display", "Location", "Greenhouse rules", "Controllers"]),
 ])
 def test_tabbed_pages(seeded_db, page, labels):
     at = run_page(page)
@@ -69,12 +69,12 @@ def test_a_link_can_open_a_tab(seeded_db):
     at.run()
     assert not at.exception
     # The chosen tab is the default one in the page's tab bar.
-    assert at.tabs[2].label == "Controllers"
+    assert at.tabs[3].label == "Controllers"
 
 
 def test_help_mentions_every_page_and_tab():
     text = (SERVER_DIR / "content" / "help.md").read_text(encoding="utf-8")
-    for name in ("Home", "Reports", "Greenhouse", "Outdoor weather", "Remote Control", "Settings", "Display",
+    for name in ("Home", "Reports", "Greenhouse", "Outdoor weather", "Remote Control", "Settings", "Display", "Location",
                  "Greenhouse rules", "Controllers", "About"):
         assert name in text, name
 
@@ -99,7 +99,7 @@ def test_weather_page_shows_latest_reading(seeded_db):
     assert set(gauges(at)) == {"Temperature", "Humidity", "Precipitation", "Wind speed"}
     assert len(at.get("arrow_vega_lite_chart")) == 4  # a chart of the day under each gauge
     captions = [c.value for c in at.caption]
-    assert captions[0] == ":material/update: Data last updated at **12:00 PM** · from Open-Meteo"
+    assert captions[0] == ":material/update: Data last updated at **12:00 PM** · 39.5349, -119.7527 · from Open-Meteo"
     assert "Today's total 0.03 in" in captions  # 4 x 0.2 mm, fixture units are US
     assert "From the south-southwest" in captions
     assert "Feels like 46.4 °F" in captions and "Today 50–53 %" in captions
@@ -317,7 +317,28 @@ def test_weather_page_us_values(seeded_db):
 def test_weather_page_empty_table_says_so(seeded_db):
     build_db(TEST_DB_PATH, weather_rows=0)
     at = run_section("weather")
-    assert "No weather readings yet" in at.info[0].value
+    assert "No weather readings for 39.5349, -119.7527 yet" in at.info[0].value
+
+
+def test_weather_page_shows_only_the_chosen_location(seeded_db):
+    from core import places
+
+    places.save({"name": "London, England, United Kingdom", "latitude": 51.5085, "longitude": -0.1257,
+                 "timezone": "Europe/London"})
+    at = run_section("weather")
+    assert not at.exception
+    assert "No weather readings for London, England, United Kingdom yet" in at.info[0].value  # Sparks rows hidden
+    places.save({"name": "Sparks, Nevada, United States", "latitude": 39.5349, "longitude": -119.7527})
+    at = run_section("weather")
+    assert at.caption[0].value.endswith("· Sparks, Nevada, United States · from Open-Meteo")
+
+
+def test_weather_page_without_any_location(seeded_db, monkeypatch):
+    from core import settings
+
+    monkeypatch.setattr(settings, "LATITUDE", "")
+    at = run_section("weather")
+    assert "Settings › Location" in at.info[0].value
 
 
 def test_preferences_persist_across_sessions(seeded_db):

@@ -4,13 +4,15 @@ Open-Meteo client: fetch current conditions and turn them into a
 
 ``WEATHER_API`` in ``.env`` is a URL template with ``{LATITUDE}`` and
 ``{LONGITUDE}`` placeholders. It must not request a ``timezone``, so that the
-API returns UTC times.
+API returns UTC times. The position comes from ``core.places.current()``,
+read on every call, so a location chosen on Settings › Location applies from
+the next reading.
 """
 import logging
 
 from requests import get
 
-from core import settings
+from core import places, settings
 from core.timeutil import from_open_meteo
 
 log = logging.getLogger(__name__)
@@ -20,18 +22,29 @@ REQUEST_TIMEOUT_S = 10
 WeatherResponse = dict[str, str | int | float | dict[str, str | int | float | list[str]]]
 
 
-def fetch_weather() -> WeatherResponse | None:
+def _coordinate(value: float) -> str:
+    """A coordinate for the URL: up to 4 decimals (about 10 m), no trailing zeros."""
+    return f"{float(value):.4f}".rstrip("0").rstrip(".")
+
+
+def fetch_weather(place: dict | None = None) -> WeatherResponse | None:
     """
-    Call the Open-Meteo API for the configured location.
+    Call the Open-Meteo API for the greenhouse's location.
+
+    Args:
+        place (dict | None): ``latitude`` and ``longitude`` (default:
+            ``places.current()``, read now).
 
     Returns:
         dict | None: Decoded JSON response, or None if configuration is missing
         or the request fails.
     """
-    if not settings.WEATHER_API or not settings.LATITUDE or not settings.LONGITUDE:
-        log.error("WEATHER_API, LATITUDE and LONGITUDE must be set in .env")
+    place = place or places.current()
+    if not settings.WEATHER_API or place is None:
+        log.error("Set WEATHER_API in .env and choose a location (Settings, Location)")
         return None
-    url = settings.WEATHER_API.format(LATITUDE=settings.LATITUDE, LONGITUDE=settings.LONGITUDE)
+    url = settings.WEATHER_API.format(LATITUDE=_coordinate(place["latitude"]),
+                                      LONGITUDE=_coordinate(place["longitude"]))
     try:
         response = get(url, timeout=REQUEST_TIMEOUT_S)
         response.raise_for_status()

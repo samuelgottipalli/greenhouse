@@ -21,6 +21,9 @@ Being built on the `develop` branch.
   version they came from ("Updated from 1.0.0 to 1.1.0").
 - **Updates from 1.0.0** work over Wi-Fi as before; a controller set up by hand is compared by
   version name.
+- **Choose the location on the dashboard** (Settings › Location): find a town or type the
+  latitude and longitude. The outdoor weather and the sunrise and sunset times (for the grow
+  light) switch to it straight away, without restarting anything.
 
 ## Server 1.0.0 · Controller 1.0.0 (2026-09-28)
 

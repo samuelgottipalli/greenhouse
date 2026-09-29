@@ -89,6 +89,24 @@ def upgrade_db_command(python: str = sys.executable) -> list[str]:
     return [python, "-m", "scripts.upgrade_db"]
 
 
+def set_location_command(latitude: float, longitude: float, name: str = "", zone: str = "",
+                         python: str = sys.executable) -> list[str]:
+    """
+    Command that stores the greenhouse's location in the database (run in ``server/``).
+
+    The dashboard's Settings › Location stores it there too, and that copy
+    wins over ``LATITUDE``/``LONGITUDE`` in ``.env``; so running the installer
+    again changes it as expected.
+    """
+    command = [python, "-m", "scripts.set_location", "--latitude", f"{latitude:.4f}",
+               "--longitude", f"{longitude:.4f}"]
+    if name:
+        command += ["--name", name]
+    if zone:
+        command += ["--timezone", zone]
+    return command
+
+
 def update_commands(python: str = sys.executable) -> list[tuple[list[str], Path]]:
     """
     Commands that update this installation to the newest version.

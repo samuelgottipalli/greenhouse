@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from time import sleep
 from zoneinfo import ZoneInfo
 
-from core import db, settings
+from core import db, places, settings
 from core.automation import Reading, RelayState, decide, device_settings, is_daylight
 from core.health import Heartbeat
 from core.mqtt import publish_device_settings, publish_relay_command
@@ -67,7 +67,7 @@ def daylight_at(now: datetime) -> bool | None:
     """
     windows = [
         (parse_utc_timestamp(sunrise), parse_utc_timestamp(sunset))
-        for sunrise, sunset in db.sun_windows(utc_timestamp(now - timedelta(days=2)))
+        for sunrise, sunset in db.sun_windows(utc_timestamp(now - timedelta(days=2)), places.current())
     ]
     return is_daylight(windows, now)
 

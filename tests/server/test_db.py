@@ -139,10 +139,15 @@ def test_recent_weather_newest_first(seeded_db):
     assert data.iloc[0]["measured_utc"] > data.iloc[1]["measured_utc"]
 
 
-def test_insert_weather_rejects_empty_and_duplicates(seeded_db):
+def test_insert_weather_rejects_empty_and_replaces_the_same_time(seeded_db):
     row = db.recent_weather(limit=1).iloc[0].to_dict()
     assert db.insert_weather(None) is False
-    assert db.insert_weather(row) is False  # same measured_utc already stored
+    count = len(db.recent_weather(limit=500))
+    # A reading for a time already stored replaces it (a new location takes over the slot).
+    assert db.insert_weather(dict(row, latitude=51.5, longitude=-0.12, temperature_c=3.0)) is True
+    latest = db.recent_weather(limit=1).iloc[0]
+    assert (latest["latitude"], latest["temperature_c"]) == (51.5, 3.0)
+    assert len(db.recent_weather(limit=500)) == count
 
 
 def test_sensor_history_raw_and_hourly(seeded_db, db_conn):
