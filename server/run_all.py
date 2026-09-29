@@ -13,7 +13,10 @@ or let the installer start it when you log in. It starts and watches:
   after 5 s, backing off to 60 s if it keeps failing;
 * the MQTT broker, when the installer set one up here
   (``data/mosquitto/mosquitto.conf``) and Mosquitto is installed;
-* the scheduled jobs: alerts every 2 minutes, retention nightly at 03:30.
+* the scheduled jobs: alerts every 2 minutes, and the monthly job (summaries
+  for the Analysis page, then clean-up of readings older than 6 months) at
+  start-up and daily at 03:30; it only does what is missing, so on most days
+  it finds nothing to do.
 
 Each program's output goes to ``data/logs/<name>.log``. Ctrl+C (or logging
 out) stops everything.
@@ -144,12 +147,13 @@ class Child:
 class Job:
     """
     A short program run on a schedule: every ``every_s`` seconds, or daily at
-    ``daily_at`` (``"HH:MM"``, local time). A run is skipped while the last
-    one is still going.
+    ``daily_at`` (``"HH:MM"``, local time), and optionally once as soon as the
+    supervisor starts (``at_start``). A run is skipped while the last one is
+    still going.
     """
 
     def __init__(self, name: str, command: list[str], every_s: int | None = None,
-                 daily_at: str | None = None, started: float = 0.0):
+                 daily_at: str | None = None, started: float = 0.0, at_start: bool = False):
         self.name = name
         self.command = command
         self.every_s = every_s
@@ -158,6 +162,7 @@ class Job:
         self.last_start = started
         self.last_day = None
         self.runs = 0
+        self.start_pending = at_start
 
     def due(self, now: float, today: datetime) -> bool:
         """
@@ -172,6 +177,8 @@ class Job:
         """
         if self.process is not None and self.process.poll() is None:
             return False
+        if self.start_pending:
+            return True
         if self.every_s is not None:
             return now - self.last_start >= self.every_s
         return today.strftime("%H:%M") >= self.daily_at and self.last_day != today.date()
@@ -179,9 +186,11 @@ class Job:
     def check(self, now: float, today: datetime, launch) -> None:
         """Start the job if it is due."""
         if self.due(now, today):
+            at_start, self.start_pending = self.start_pending, False
             self.process = launch(self.name, self.command)
             self.last_start = now
-            self.last_day = today.date()
+            if not at_start or today.strftime("%H:%M") >= (self.daily_at or ""):
+                self.last_day = today.date()
             self.runs += 1
 
 
@@ -276,7 +285,7 @@ def build(broker_config: Path = BROKER_CONFIG, started: float | None = None) -> 
     children = [Child(name, command) for name, command in programs(broker_config).items()]
     jobs = [
         Job("alerts", python_command("-m", "services.alerts"), every_s=120, started=started),
-        Job("retention", python_command("-m", "scripts.retention"), daily_at="03:30"),
+        Job("retention", python_command("-m", "scripts.retention"), daily_at="03:30", at_start=True),
     ]
     return Supervisor(children, jobs)
 

@@ -80,8 +80,11 @@ def test_web_has_no_watchdog(installed):
 
 def test_retention_timer(installed):
     timer = installed["greenhouse-retention.timer"]
-    assert timer["Timer"]["OnCalendar"] == "*-*-* 03:30:00"
+    # The 1st of each month; a missed 1st runs at the next start (Persistent), and every
+    # start runs it again a few minutes later in case an earlier run failed (OnBootSec).
+    assert timer["Timer"]["OnCalendar"] == "*-*-01 03:30:00"
     assert timer["Timer"]["Persistent"] == "true"
+    assert timer["Timer"]["OnBootSec"] == "10min"
     assert timer["Install"]["WantedBy"] == "timers.target"
     service = installed["greenhouse-retention.service"]["Service"]
     assert service["Type"] == "oneshot"

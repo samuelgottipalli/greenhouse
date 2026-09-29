@@ -34,3 +34,11 @@ def no_real_mqtt(monkeypatch):
         raise ConnectionRefusedError("tests never talk to a real broker")
 
     monkeypatch.setattr(mqtt, "single", refuse)
+
+
+@pytest.fixture(autouse=True)
+def backups_in_tmp(monkeypatch, tmp_path):
+    """The monthly job's backups go to a temporary folder, never server/data/backups."""
+    from core import history
+
+    monkeypatch.setattr(history, "BACKUP_DIR", tmp_path / "backups")

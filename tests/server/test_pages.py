@@ -14,6 +14,7 @@ PAGES = [
     "app.py",
     "views/home.py",
     "views/reports.py",
+    "views/analysis.py",
     "views/control.py",
     "views/settings.py",
     "views/help.py",
@@ -74,7 +75,7 @@ def test_a_link_can_open_a_tab(seeded_db):
 
 def test_help_mentions_every_page_and_tab():
     text = (SERVER_DIR / "content" / "help.md").read_text(encoding="utf-8")
-    for name in ("Home", "Reports", "Greenhouse", "Outdoor weather", "Remote Control", "Settings", "Display", "Location",
+    for name in ("Home", "Reports", "Greenhouse", "Outdoor weather", "Remote Control", "Settings", "Analysis", "Display", "Location",
                  "Greenhouse rules", "Controllers", "About"):
         assert name in text, name
 

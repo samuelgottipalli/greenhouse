@@ -49,7 +49,7 @@ PREFERENCE_DEFAULTS: dict[str, str] = {
 THEMES: list[str] = ["Use system setting", "Light", "Dark"]
 PAGE_WIDTHS: list[str] = ["Automatic", "Wide", "Centered"]
 # URL paths of the pages (app.py). Streamlit keeps the chosen theme per path.
-PAGE_PATHS: list[str] = ["", "home", "reports", "control", "settings", "help"]
+PAGE_PATHS: list[str] = ["", "home", "reports", "analysis", "control", "settings", "help"]
 REFRESH_EVERY = timedelta(seconds=30)
 DATE_FORMATS: dict[str, str] = {"DD/MM/YYYY": "%d/%m/%Y", "MM/DD/YYYY": "%m/%d/%Y", "YYYY/MM/DD": "%Y/%m/%d"}
 
@@ -390,6 +390,44 @@ def last_updated(moment_utc: str, source: str = "") -> None:
     text = moment_text(moment, datetime.now(zone).date(), st.session_state["date_format"],
                        st.session_state["time_format"])
     st.caption(f":material/update: Data last updated at **{text}**" + (f" · {source}" if source else ""))
+
+
+# st.date_input's display formats for the date preference (others fall back to the first).
+DATE_INPUT_FORMATS: dict[str, str] = {"MM/DD/YYYY": "MM/DD/YYYY", "DD/MM/YYYY": "DD/MM/YYYY", "YYYY/MM/DD": "YYYY/MM/DD"}
+
+
+def period_picker(key: str, first_utc: str | None = None):
+    """
+    Choose a report period: 24 hours, 7 days, 30 days, or a date range.
+
+    Args:
+        key (str): Distinguishes pickers on one page (e.g. ``"greenhouse"``).
+        first_utc (str | None): The oldest reading (``db.first_reading_utc``);
+            the date range can't start before it.
+
+    Returns:
+        core.periods.Period: The chosen period.
+    """
+    from dataclasses import replace
+
+    from core import periods
+
+    choice = st.segmented_control("Period", list(periods.PRESETS) + [periods.DATE_RANGE], default="24 hours",
+                                  key=f"{key}_period") or "24 hours"
+    if choice != periods.DATE_RANGE:
+        return replace(periods.preset(choice), label=f"last {choice}")
+    zone = display_zone()
+    today = datetime.now(ZoneInfo(zone)).date()
+    earliest = today - timedelta(days=31 * 6)
+    if first_utc:
+        earliest = min(parse_utc_timestamp(first_utc).astimezone(ZoneInfo(zone)).date(), today)
+    picked = st.date_input("From – to", value=(max(earliest, today - timedelta(days=6)), today),
+                           min_value=earliest, max_value=today, key=f"{key}_range",
+                           format=DATE_INPUT_FORMATS.get(st.session_state.get("date_format"), "MM/DD/YYYY"))
+    days = list(picked) if isinstance(picked, (list, tuple)) else [picked]
+    start, end = (days + [days[-1]])[:2] if days else (today, today)  # one date picked so far: that day
+    st.caption("Readings go back 6 months; older months are summarised on the Analysis page.")
+    return periods.date_range(start, end, zone)
 
 
 def render_markdown(filename: str) -> None:

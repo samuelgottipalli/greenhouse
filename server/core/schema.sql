@@ -143,4 +143,25 @@ CREATE TABLE alerts (
         CHECK (last_sent_utc IS NULL OR last_sent_utc GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]')
 ) STRICT;
 
-PRAGMA user_version = 7;
+-- Monthly summaries for the Analysis page (core/history.py): kept after the raw
+-- readings they were made from are deleted (older than 6 months).
+CREATE TABLE monthly_stats (
+    source       TEXT    NOT NULL CHECK (source IN ('greenhouse', 'weather')),
+    device_id    INTEGER NOT NULL,  -- the controller; 0 for outdoor weather
+    measure      TEXT    NOT NULL,
+    month        TEXT    NOT NULL CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'),
+    samples      INTEGER NOT NULL,
+    mean         REAL    NOT NULL,
+    median       REAL    NOT NULL,
+    p2_5         REAL    NOT NULL,
+    p25          REAL    NOT NULL,
+    p75          REAL    NOT NULL,
+    p97_5        REAL    NOT NULL,
+    minimum      REAL    NOT NULL,
+    maximum      REAL    NOT NULL,
+    total        REAL,              -- rain: the month's total
+    computed_utc TEXT    NOT NULL,
+    PRIMARY KEY (source, device_id, measure, month)
+) STRICT;
+
+PRAGMA user_version = 8;

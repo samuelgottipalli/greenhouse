@@ -111,11 +111,14 @@ server$ systemctl status 'greenhouse-*'
 This installs and starts `greenhouse-ingest`, `greenhouse-automation`, `greenhouse-weather`,
 `greenhouse-firmware` (controller updates, port 8081) and `greenhouse-web`. Each restarts 5 s after a crash and starts at boot. It also enables two timers:
 `greenhouse-alerts.timer` (alert check every 2 minutes, see [Alerts](#alerts)) and
-`greenhouse-retention.timer`, which rolls readings older than 90 days into hourly averages every
-night at 03:30. Logs: `journalctl -u greenhouse-ingest -f`.
+`greenhouse-retention.timer`, the monthly job: on the 1st at 03:30 (or at the next start if the
+server was off then, and again 10 minutes after every start) it summarises each finished month for
+the Analysis page, copies the database to `server/data/backups/`, and deletes readings older than
+6 whole months. It only does what is missing, so extra runs change nothing. Logs:
+`journalctl -u greenhouse-ingest -f`, `journalctl -u greenhouse-retention`.
 
 **Check:** all five are `active (running)`, and `systemctl list-timers greenhouse-retention.timer`
-shows the next 03:30 run. The ingest log shows `Connected to localhost:1883`
+shows the next run (the 1st, 03:30). The ingest log shows `Connected to localhost:1883`
 and no `not authorised`. Within 15 minutes Reports › Outdoor weather shows today's weather.
 
 ---
@@ -249,7 +252,8 @@ Copy this into an issue or note and tick it off. Items marked ⏳ need time to p
 - [ ] ⏳ LCD clock still correct 48 h after boot, including across midnight (P-02, PLAN 1.7)
 - [ ] ⏳ 24 h: at least 285 of 288 expected telemetry rows stored (PLAN 2.3)
 - [ ] ⏳ 7 days: no hang or reboot loop, with at least one Wi-Fi outage; `telemetry_report --hours 168` at 99 % or more (PLAN 3.2; simulated in `tests/picoside/test_soak.py`)
-- [ ] ⏳ Next morning: `journalctl -u greenhouse-retention` shows a successful 03:30 run (PLAN 3.4)
+- [ ] ⏳ After the next start or the 1st: `journalctl -u greenhouse-retention` shows the monthly job
+  ran ("Summarised ... month(s)"), and Analysis shows "Monthly summaries made through ..."
 - [ ] Alerts: test alert received on phone/email and resolved (PLAN 4.6)
 - [ ] Installer: a fresh computer set up with `setup.bat` / `setup.sh` only; controller online (PLAN 5.5)
 - [ ] Setup hotspot: Wi-Fi changed from a phone; a wrong password brings the hotspot back (PLAN 5.1)

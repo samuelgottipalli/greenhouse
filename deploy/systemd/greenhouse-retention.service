@@ -1,5 +1,5 @@
 [Unit]
-Description=Greenhouse data retention (roll old readings into hourly averages)
+Description=Greenhouse monthly summaries and clean-up of readings older than 6 months
 After=network-online.target
 
 [Service]

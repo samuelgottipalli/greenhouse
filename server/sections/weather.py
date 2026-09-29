@@ -10,6 +10,9 @@ reloads itself when a new reading arrives, see ``ui.auto_refresh``):
   wind speed, each with the change over the last hour, one short line
   (feels-like, today's range, today's rain, wind direction) and a chart of the day
   underneath (``core/gauges.py``, ``core/charts.py``).
+* **History**: the same four measures for 24 hours, 7 days, 30 days or a date
+  range (``ui.period_picker``): every reading, hourly or daily averages by
+  length, rain as totals per hour or per day, with highs, lows and a table.
 
 The date and time are shown above the tabs by ``views/reports.py``. Honours
 the units, time zone and date/time formats chosen on Settings › Display.
@@ -33,8 +36,9 @@ from core.gauges import (
     wind_zones,
 )
 from core.weather_codes import weather_code_descr, weather_icon, wind_direction_descr
-from core.weather_report import rain_rate, rain_total, rain_units, to_display_units
-from ui import display_zone, last_updated, time_pattern
+from core.indoor_report import high_low
+from core.weather_report import history_frames, rain_rate, rain_total, rain_units, to_display_units
+from ui import display_zone, last_updated, period_picker, time_pattern
 
 
 TIME_COLUMNS = ["measured_utc", "sunrise_utc", "sunset_utc"]
@@ -96,13 +100,100 @@ def gauge_card(column, label: str, data: DataFrame, field: str, unit: str, dial:
 
 
 def render() -> None:
-    """
-    Draw this section (called by its tabbed page).
+    """Draw this section (called by its tabbed page): today, then the history."""
+    place = places.current()
+    if place is None:
+        st.info("Choose the greenhouse's location first: [Settings › Location](/settings?tab=location).",
+                icon=":material/location_on:")
+        return
+    show_today(place)
+    show_history(place)
 
-    Reads the most recent 216 rows (about 2 days at 15-minute intervals),
-    converts times from UTC to the chosen zone, keeps today's rows and
-    converts units. With no readings for today it says so and shows when the
-    last reading was taken.
+
+HISTORY_CHARTS = [
+    # (title, column, colour, decimals)
+    ("Temperature", "temperature_c", "#ef4444", 1),
+    ("Humidity", "relative_humidity_pct", "#3b82f6", 0),
+    ("Rain", "rain", "#06b6d4", 2),
+    ("Wind speed", "wind_speed_kmh", "#22c55e", 1),
+]
+
+
+def show_history(place: dict) -> None:
+    """
+    The weather over a chosen period, for the chosen location only.
+
+    Args:
+        place (dict): From ``places.current()``.
+    """
+    zone = display_zone()
+    units = st.session_state["units"]
+    labels = db.unit_labels(units)
+    time_format = st.session_state["time_format"]
+    st.markdown("#### History")
+    period = period_picker("weather", db.first_reading_utc("weather"))
+    data = db.weather_history(period.since_utc, period.until_utc, hourly=period.detail != "raw", place=place)
+    if data is None or data.empty:
+        st.info(f"No weather readings for {period.label}.")
+        return
+    measures, rain = history_frames(data, units, zone, period.detail, period.rain_step)
+    _, rain_unit = rain_units(units)
+    per = "hour" if period.rain_step == "hour" else "day"
+    units_for = {"temperature_c": labels["temperature"], "relative_humidity_pct": labels["humidity"],
+                 "rain": f"{rain_unit} per {per}", "wind_speed_kmh": labels["speed"]}
+    day_only = period.detail == "day"
+
+    clock = "%I:%M %p" if time_format != "24-hour" else "%H:%M"
+
+    def when(moment) -> str:
+        """A time for the high/low line."""
+        return moment.strftime("%a %b %d" if day_only else "%a %b %d, " + clock).replace(" 0", " ")
+
+    for column, (title, field, color, decimals) in zip(st.columns(len(HISTORY_CHARTS)), HISTORY_CHARTS):
+        frame = rain if field == "rain" else measures
+        unit = units_for[field]
+        with column.container(border=True):
+            st.markdown(f"**{title}** · {period.label}")
+            series = frame[["time", field]].dropna()
+            if series.empty:
+                st.caption("No readings in this period.")
+                continue
+            st.altair_chart(time_chart(series, field, unit, period.days, time_format, color=color,
+                                       decimals=decimals if units == "SI" or field != "rain" else 3, height=220),
+                            use_container_width=True)
+            if field == "rain":
+                st.caption(f"Total {format_number(float(series['rain'].sum()), 2)} {rain_unit}")
+                continue
+            extremes = high_low(series.set_index("time").rename(columns={field: "value"}))
+            if extremes:
+                (top, top_at), (bottom, bottom_at) = extremes
+                st.caption(f"High {format_number(top, decimals)} {unit} at {when(top_at)} · "
+                           f"Low {format_number(bottom, decimals)} {unit} at {when(bottom_at)}")
+
+    with st.expander("Show readings as a table"):
+        table = measures.merge(rain, on="time", how="outer").sort_values("time", ascending=False)
+        table.insert(0, "Time", [t.strftime("%a %b %d, %Y" if day_only else "%a %b %d, " + clock)
+                                 for t in table["time"]])
+        table = table.drop(columns="time").rename(columns={
+            "temperature_c": f"Temperature ({units_for['temperature_c']})",
+            "relative_humidity_pct": f"Humidity ({units_for['relative_humidity_pct']})",
+            "wind_speed_kmh": f"Wind ({units_for['wind_speed_kmh']})", "rain": f"Rain ({units_for['rain']})"})
+        st.dataframe(table, hide_index=True)
+        st.caption({"raw": "Every reading (every 15 minutes).", "hour": "Hourly averages; rain is per hour.",
+                    "day": "Daily averages; rain is per day."}[period.detail])
+
+
+def show_today(place: dict) -> None:
+    """
+    Today's conditions: the cards and gauges.
+
+    Reads the most recent 216 rows (about 2 days at 15-minute intervals) for
+    the chosen location, converts times from UTC to the chosen zone, keeps
+    today's rows and converts units. With no readings for today it says so
+    and shows when the last reading was taken.
+
+    Args:
+        place (dict): From ``places.current()``.
     """
     zone = display_zone()
     current_date = dtt.now(tz=zoneinfo.ZoneInfo(zone)).date()
@@ -110,11 +201,6 @@ def render() -> None:
     labels = db.unit_labels(units)
     time_format = time_pattern(st.session_state["time_format"])
 
-    place = places.current()
-    if place is None:
-        st.info("Choose the greenhouse's location first: [Settings › Location](/settings?tab=location).",
-                icon=":material/location_on:")
-        return
     data = db.recent_weather(limit=216)
     if data is not None:
         # Only this location's readings (earlier ones may be for a place chosen before).
@@ -159,6 +245,3 @@ def render() -> None:
     gauge_card(columns[3], "Wind speed", data, "wind_speed_kmh", labels["speed"], wind_zones(units),
                "#22c55e", f"From the {compass['long'].lower()}")
 
-    if st.checkbox("Show raw data"):
-        st.subheader("Raw data")
-        st.write(data)

@@ -10,7 +10,7 @@ the Python interpreter running this script (use the project venv) and the
 given user, writes them to ``/etc/systemd/system`` (or ``--dest``), and with
 ``--enable`` reloads systemd and starts them. Every long-running unit restarts
 5 s after a crash (``Restart=always``); ``greenhouse-retention.timer`` runs the
-retention job nightly at 03:30. Logs go to the journal::
+monthly job (summaries, then clean-up) on the 1st and after every start. Logs go to the journal::
 
     journalctl -u greenhouse-ingest -f
 """

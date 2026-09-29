@@ -5,8 +5,9 @@ Reports › Greenhouse tab: conditions inside the greenhouse.
   last hour. The temperature and humidity dials are coloured by the
   automation triggers (heater zone, OK, fan zone) from Settings › Greenhouse rules;
   light is shown as estimated lux (``core/light.py``) on a logarithmic dial.
-* **Charts** side by side for the chosen period, with readable time labels,
-  hover details, and the period's high and low.
+* **Charts** side by side for the chosen period (24 hours, 7 days, 30 days
+  or a date range within the last 6 months; ``core/periods.py``), with
+  readable time labels, hover details, and the period's high and low.
 * **Table** of readings, one row per time with a column per measure.
 
 Readings are stored by ``services/ingest.py``. The tab says when they were
@@ -22,8 +23,8 @@ from core.gauges import change_over, gauge_svg, greenhouse_temperature_zones, hu
 from core.indoor_report import (
     LABELS,
     MEASURE_ORDER,
-    PERIODS,
     age_text,
+    daily_means,
     display_units,
     display_value,
     high_low,
@@ -32,7 +33,7 @@ from core.indoor_report import (
     readings_table,
 )
 from core.timeutil import utc_timestamp
-from ui import current_device, display_zone, last_updated
+from ui import current_device, display_zone, last_updated, period_picker
 
 
 CHART_COLORS = {"temperature": "#ef4444", "humidity": "#3b82f6", "light_raw": "#eab308"}
@@ -96,35 +97,38 @@ def render() -> None:
             raw = f" · raw {rows.loc[measure, 'value']:.0f}" if measure == "light_raw" else ""
             st.caption(f"Measured {age_text(rows.loc[measure, 'reading_utc'], now)}{raw}")
 
-    period = st.segmented_control("Period", list(PERIODS), default="24 hours") or "24 hours"
-    days = PERIODS[period]
-    since = utc_timestamp(now - timedelta(days=days))
-    history = db.sensor_history(since, device_id=device, bucket=None if days == 1 else "hour")
+    period = period_picker("greenhouse", db.first_reading_utc("greenhouse", device))
+    history = db.sensor_history(period.since_utc, device_id=device,
+                                bucket=None if period.detail == "raw" else "hour", until_utc=period.until_utc)
     if history is None:
-        st.info(f"No readings in the last {period}.")
+        st.info(f"No readings for {period.label}.")
         return
 
     frame = local_frame(history, units, zone)
+    if period.detail == "day":
+        frame = daily_means(frame)
     clock = "%-I:%M %p" if time_format != "24-hour" else "%H:%M"
-    when_format = clock if span(days) == "day" else "%a %b %-d, " + clock
-
+    if period.detail == "day":
+        when_format = "%a %b %-d"
+    else:
+        when_format = clock if span(period.days) == "day" else "%a %b %-d, " + clock
 
     def when(moment) -> str:
         """A time for the high/low line (portable: no platform-specific %-codes)."""
         return moment.strftime(when_format.replace("%-", "%")).replace(" 0", " ").lstrip("0")
 
-
     for column, measure in zip(st.columns(len(MEASURE_ORDER)), MEASURE_ORDER):
         series = frame[frame["measure"] == measure]
         unit = unit_labels.get(measure, "")
         with column.container(border=True):
-            st.markdown(f"**{LABELS[measure]}** · last {period}")
+            st.markdown(f"**{LABELS[measure]}** · {period.label}")
             if series.empty:
                 st.caption("No readings in this period.")
                 continue
             decimals = 0 if measure == "light_raw" else 1
-            st.altair_chart(time_chart(series, "value", unit, days, time_format, color=CHART_COLORS[measure],
-                                       log=measure == "light_raw", decimals=decimals, height=220),
+            st.altair_chart(time_chart(series, "value", unit, period.days, time_format,
+                                       color=CHART_COLORS[measure], log=measure == "light_raw", decimals=decimals,
+                                       height=220),
                             use_container_width=True)
             extremes = high_low(series.set_index("time"))
             if extremes:
@@ -132,6 +136,14 @@ def render() -> None:
                 st.caption(f"High {top:g} {unit} at {when(top_at)} · Low {bottom:g} {unit} at {when(bottom_at)}")
 
     with st.expander("Show readings as a table"):
-        st.dataframe(readings_table(history, units, zone, unit_labels, time_format), hide_index=True)
-        if days > 1:
-            st.caption("Hourly averages.")
+        if period.detail == "day":
+            table = frame.pivot_table(index="time", columns="measure", values="value").sort_index(ascending=False)
+            table = table[[m for m in MEASURE_ORDER if m in table.columns]]
+            table.columns = [f"{LABELS[m]} ({unit_labels.get(m, '')})".replace(" ()", "") for m in table.columns]
+            table.insert(0, "Day", [t.strftime("%a %b %d, %Y") for t in table.index])
+            st.dataframe(table.reset_index(drop=True), hide_index=True)
+            st.caption("Daily averages.")
+        else:
+            st.dataframe(readings_table(history, units, zone, unit_labels, time_format), hide_index=True)
+            if period.detail == "hour":
+                st.caption("Hourly averages.")

@@ -10,6 +10,7 @@ the larger ones split into tabs (``ui.open_tabs``; the tabs' contents are in
 
 * **Home**: everything at a glance.
 * **Reports**: Greenhouse | Outdoor weather.
+* **Analysis**: month by month over the last year (Greenhouse | Outdoor weather).
 * **Remote Control**: switch the equipment by hand.
 * **Settings**: Display | Greenhouse rules | Controllers.
 * **Help**: How to use it | About.
@@ -22,6 +23,7 @@ from version import VERSION
 pages = [
     st.Page("views/home.py", title="Home", icon=":material/home:", url_path="home", default=True),
     st.Page("views/reports.py", title="Reports", icon=":material/monitoring:", url_path="reports"),
+    st.Page("views/analysis.py", title="Analysis", icon=":material/analytics:", url_path="analysis"),
     st.Page("views/control.py", title="Remote Control", icon=":material/toggle_on:", url_path="control"),
     st.Page("views/settings.py", title="Settings", icon=":material/settings:", url_path="settings"),
     st.Page("views/help.py", title="Help", icon=":material/help:", url_path="help"),

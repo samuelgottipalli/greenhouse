@@ -303,9 +303,10 @@ def sensor_history(
     since_utc: str,
     device_id: int = settings.DEVICE_ID,
     bucket: str | None = None,
+    until_utc: str | None = None,
 ) -> DataFrame | None:
     """
-    Read a device's sensor readings since a moment, oldest first.
+    Read a device's sensor readings in a period, oldest first.
 
     Args:
         since_utc (str): ``YYYY-MM-DD HH:MM:SS`` UTC (inclusive).
@@ -313,6 +314,7 @@ def sensor_history(
         bucket (str | None): ``"hour"`` to return hourly averages (one point
             per measure per hour, timestamped at the start of the hour), which
             keeps week- and month-long charts light; None for every reading.
+        until_utc (str | None): End (exclusive); None for up to now.
 
     Returns:
         DataFrame | None: Columns ``measure``, ``reading_utc`` and ``value``;
@@ -327,9 +329,68 @@ def sensor_history(
         f"SELECT m.name AS measure, {time_expr} AS reading_utc, {value_expr} AS value "
         "FROM measures m JOIN sensor_readings r "
         "  ON r.measure_id = m.measure_id AND r.device_id = :device_id AND r.reading_utc >= :since "
+        "  AND r.reading_utc < :until "
         f"{group}ORDER BY 2",
-        {"device_id": device_id, "since": since_utc},
+        {"device_id": device_id, "since": since_utc, "until": until_utc or "9999-12-31 23:59:59"},
     )
+
+
+def first_reading_utc(source: str = "greenhouse", device_id: int = settings.DEVICE_ID) -> str | None:
+    """
+    When the oldest raw reading still kept was taken (the start of the date pickers).
+
+    Args:
+        source (str): ``"greenhouse"`` (this controller) or ``"weather"``.
+        device_id (int): Controller, for ``"greenhouse"``.
+
+    Returns:
+        str | None: ``YYYY-MM-DD HH:MM:SS`` UTC, or None without readings.
+    """
+    if source == "weather":
+        data = _read("SELECT min(measured_utc) AS t FROM weather_readings", none_if_empty=False)
+    else:
+        data = _read("SELECT min(reading_utc) AS t FROM sensor_readings WHERE device_id = :d",
+                     {"d": device_id}, none_if_empty=False)
+    if data is None or data["t"].isna().all():
+        return None
+    return str(data["t"].iloc[0])
+
+
+WEATHER_HISTORY_COLUMNS = ("temperature_c", "apparent_temperature_c", "relative_humidity_pct",
+                           "wind_speed_kmh", "precipitation_mm")
+
+
+def weather_history(since_utc: str, until_utc: str, hourly: bool = False,
+                    place: dict | None = None) -> DataFrame | None:
+    """
+    Outdoor weather in a period, oldest first.
+
+    Args:
+        since_utc (str): Start, inclusive.
+        until_utc (str): End, exclusive.
+        hourly (bool): One row per hour: averages, except rain, which is the
+            hour's total (each reading holds the preceding 15 minutes).
+        place (dict | None): Only readings for this location (``core.places.current()``).
+
+    Returns:
+        DataFrame | None: ``measured_utc`` and ``WEATHER_HISTORY_COLUMNS``;
+        None on error or without readings.
+    """
+    from core.places import SAME_PLACE_DEGREES
+
+    period = {"since": since_utc, "until": until_utc}
+    where = "WHERE measured_utc >= :since AND measured_utc < :until "
+    if place is not None:
+        where += "AND abs(latitude - :lat) <= :d AND abs(longitude - :lon) <= :d "
+        period.update(lat=place["latitude"], lon=place["longitude"], d=SAME_PLACE_DEGREES)
+    if not hourly:
+        return _read("SELECT measured_utc, " + ", ".join(WEATHER_HISTORY_COLUMNS) + " FROM weather_readings "
+                     + where + "ORDER BY measured_utc", period)
+    averages = ", ".join(f"round(avg({c}), 2) AS {c}" for c in WEATHER_HISTORY_COLUMNS if c != "precipitation_mm")
+    return _read(
+        "SELECT substr(measured_utc, 1, 13) || ':00:00' AS measured_utc, " + averages +
+        ", round(sum(precipitation_mm), 2) AS precipitation_mm FROM weather_readings " + where +
+        "GROUP BY 1 ORDER BY 1", period)
 
 
 def latest_relay_states(device_id: int = settings.DEVICE_ID) -> DataFrame | None:

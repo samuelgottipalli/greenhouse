@@ -134,7 +134,8 @@ been removed. It is still in the git history.
 | Page | What you can do |
 |---|---|
 | **Home** | Health at a glance: controller online/offline with uptime, Wi-Fi signal and memory; how fresh the readings are; each relay's state; the background services; active alerts. |
-| **Reports** | Tabs: **Greenhouse** (gauges, charts and a table of the readings inside) and **Outdoor weather** (today's weather with gauges and charts). |
+| **Reports** | Tabs: **Greenhouse** (gauges, charts and a table of the readings inside) and **Outdoor weather** (today's weather with gauges, plus its history). Charts cover 24 hours, 7 days, 30 days or any date range in the last 6 months. |
+| **Analysis** | Month-by-month box plots for the last year (middle 95 %, middle half, median, average), with this month so far next to the same month last year. |
 | **Remote Control** | Switch the fan, heater, light and water on or off. |
 | **Settings** | Tabs: **Display** (units, formats, time zone, colour scheme, page width, auto-refresh), **Location** (the town the weather and sunrise/sunset are for; changes apply at once), **Greenhouse rules** (fan, heater, grow light and watering) and **Controllers** (Wi-Fi setup code and QR code, software updates). |
 | **Help** | Tabs: **How to use it** and **About**. |
@@ -201,8 +202,9 @@ On the always-on server (Linux), install them all as services that start at boot
 after a crash: `sudo venv/bin/python deploy/install_services.py --user <you> --enable`. Logs:
 `journalctl -u greenhouse-ingest -f`. Step-by-step setup is in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
-`python -m scripts.retention --measure` shows how much the database grows per year with the
-nightly retention job (about 2.6 MB per device).
+`python -m scripts.retention` is the monthly job: it summarises finished months for the Analysis
+page, then deletes readings older than 6 months (after backing up the database to
+`server/data/backups/`). It only does what is missing, so running it by hand is safe.
 
 `python -m scripts.bench` times the dashboard's queries on a year of synthetic data (the real
 database is not touched).
