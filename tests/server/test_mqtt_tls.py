@@ -179,3 +179,12 @@ def test_certificates_travel_with_updates():
     assert "certs/isrg_root_x1.py" in paths
     assert len(paths) <= 64  # ota.MAX_FILES
 
+
+
+def test_controller_restart_uses_the_shared_settings(monkeypatch):
+    monkeypatch.setattr(settings, "MQTT_TLS", True)
+    monkeypatch.setattr(settings, "MQTT_CA_FILE", None)
+    sent = []
+    monkeypatch.setattr(mqtt, "single", lambda **kw: sent.append(kw))
+    assert mqtt.publish_controller_restart(1)
+    assert sent[0]["tls"] == {"ca_certs": None}

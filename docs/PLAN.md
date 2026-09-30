@@ -227,6 +227,7 @@ old months instead of keeping every reading.
 | 11.2 ✅ | **Monthly summaries** (schema v8, `monthly_stats`): per controller and measure (temperature, humidity, light in lux) and for the weather (temperature, humidity, wind, rain as daily totals): samples, mean, median, 25th/75th and 2.5th/97.5th percentiles, min, max, and rain's monthly total. | Tests for the statistics, local month boundaries (daylight saving), lux and daily rain. | 0.5 d |
 | 11.3 ✅ | **The monthly job** (`scripts.retention`, replacing the nightly hourly roll-up): summarise every finished month not yet summarised, back up the database, then delete readings older than 6 whole months, only once their months are summarised. It only does what is missing. Runs on the 1st at 03:30, at the next start if that was missed (`Persistent=true`), and 10 minutes after every start (`OnBootSec`); `run_all.py` runs it at start-up and daily. | Tests: summarise-then-trim, a second run does nothing, a missed 1st caught up, nothing deleted if a summary fails, backups rotate. On a year of synthetic data: 2.6 s, database 21 MB → 9.6 MB. | 1 d |
 | 11.4 ✅ | **Analysis page**: Greenhouse and Outdoor weather tabs, a box plot per measure for the last 12 months plus this month so far (live), this month highlighted against the same month last year with a comparison sentence and the numbers underneath. | Page and chart tests; checked in Chrome on a year of synthetic data. | 1 d |
+| 11.5 ✅ | **Restart buttons** (Settings › System): restart the controller (an `{"action": "restart"}` command on its existing command topic; controllers from 1.3.0), the dashboard and background services (`systemctl restart --no-block`, or a request file for `run_all.py`), and the server computer. Each asks first. `install_services.py --enable` writes a sudo rule allowing exactly those two commands, checked with `visudo`. | Tests for each platform's commands, missing permission, the rule text matching the command, `run_all` restarting all but the broker, the controller restart, and the tab's confirm/cancel flow. | 1 d |
 
 ---
 
@@ -247,6 +248,6 @@ old months instead of keeping every reading.
 | 8 | Planned | Cloud VM deployment, reachable from the internet |
 | 9 | Planned | Hosted service for many greenhouses |
 | 10 | Planned | Free and premium plans |
-| 11 | 11.1–11.4 ✅ | Released as **1.2.0** (server only). Reports periods and date ranges, monthly summaries and clean-up, Analysis page (schema v8) |
+| 11 | 11.1–11.5 ✅ | 11.1–11.4 released as **1.2.0** (server only). Reports periods and date ranges, monthly summaries and clean-up, Analysis page (schema v8); 11.5 restart buttons |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

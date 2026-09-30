@@ -133,3 +133,30 @@ def publish_relay_command(
         log.error("Could not publish relay command: %s", err)
         return False
     return True
+
+
+def publish_controller_restart(device_id: int = settings.DEVICE_ID) -> bool:
+    """
+    Ask a controller to restart (Settings › System). Controllers from 1.3.0
+    understand it; older ones ignore it.
+
+    Sent on the controller's command topic (``relay/set``), which its broker
+    login may already read, as ``{"action": "restart"}``.
+
+    Args:
+        device_id (int): Target device.
+
+    Returns:
+        bool: True if the broker accepted the message.
+    """
+    try:
+        single(
+            topic=device_topic(device_id, "relay/set"),
+            payload=json.dumps({"action": "restart", "source": "web"}),
+            qos=1,
+            **connection(),
+        )
+    except (OSError, ValueError) as err:
+        log.error("Could not send the restart: %s", err)
+        return False
+    return True

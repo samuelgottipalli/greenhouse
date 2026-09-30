@@ -109,7 +109,11 @@ server$ systemctl status 'greenhouse-*'
 ```
 
 This installs and starts `greenhouse-ingest`, `greenhouse-automation`, `greenhouse-weather`,
-`greenhouse-firmware` (controller updates, port 8081) and `greenhouse-web`. Each restarts 5 s after a crash and starts at boot. It also enables two timers:
+`greenhouse-firmware` (controller updates, port 8081) and `greenhouse-web`. Each restarts 5 s after a crash and starts at boot.
+With `--enable` it also writes `/etc/sudoers.d/greenhouse-dashboard` (checked with `visudo` first), which
+lets the services' account run exactly two commands as administrator without a password: restarting the
+greenhouse services, and rebooting (the buttons on Settings › System). Delete that file to turn the
+buttons off. It also enables two timers:
 `greenhouse-alerts.timer` (alert check every 2 minutes, see [Alerts](#alerts)) and
 `greenhouse-retention.timer`, the monthly job: on the 1st at 03:30 (or at the next start if the
 server was off then, and again 10 minutes after every start) it summarises each finished month for

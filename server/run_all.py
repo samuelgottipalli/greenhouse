@@ -19,7 +19,9 @@ or let the installer start it when you log in. It starts and watches:
   it finds nothing to do.
 
 Each program's output goes to ``data/logs/<name>.log``. Ctrl+C (or logging
-out) stops everything.
+out) stops everything. The dashboard's Settings › System can ask for every
+program except the broker to be restarted: it writes ``RESTART_REQUEST``
+(see ``core/system.py``), which the supervisor picks up within a second.
 """
 import logging
 import os
@@ -100,6 +102,10 @@ def programs(broker_config: Path = BROKER_CONFIG) -> dict[str, list[str]]:
     return commands
 
 
+# Written by the dashboard (core/system.py) to ask for a restart of every program but the broker.
+RESTART_REQUEST = SERVER_DIR / "data" / "restart-request"
+
+
 class Child:
     """
     One long-running program, restarted with backoff when it stops.
@@ -119,6 +125,25 @@ class Child:
         self.started_at = None
         self.next_start = 0.0
         self.backoff = RESTART_MIN_S
+
+    def restart(self, now: float, wait_s: float = 5.0) -> None:
+        """
+        Stop the program (politely, then forcefully) so it starts again at once.
+
+        Args:
+            now (float): Monotonic seconds.
+            wait_s (float): How long to wait for it to stop.
+        """
+        if self.process is not None and self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=wait_s)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+        self.process = None
+        self.next_start = now
+        self.backoff = RESTART_MIN_S
+        self.restarts += 1
 
     def check(self, now: float, launch) -> None:
         """
@@ -198,7 +223,9 @@ class Supervisor:
     """Keeps the programs running and the jobs on schedule."""
 
     def __init__(self, children: list[Child], jobs: list[Job], popen=subprocess.Popen,
-                 clock=time.monotonic, local_now=datetime.now, log_dir: Path = LOG_DIR):
+                 clock=time.monotonic, local_now=datetime.now, log_dir: Path = LOG_DIR,
+                 restart_request: Path = RESTART_REQUEST):
+        self.restart_request = restart_request
         self.children = children
         self.jobs = jobs
         self.popen = popen
@@ -224,13 +251,27 @@ class Supervisor:
         log.info("starting %s", name)
         try:
             return self.popen(command, cwd=SERVER_DIR, stdout=output, stderr=subprocess.STDOUT,
-                              env=dict(os.environ, PYTHONUNBUFFERED="1"), creationflags=flags)
+                              env=dict(os.environ, PYTHONUNBUFFERED="1", GREENHOUSE_SUPERVISOR="run_all"),
+                              creationflags=flags)
         finally:
             output.close()  # the child keeps its own copy
 
+    def restart_requested(self) -> bool:
+        """Was a restart asked for from the dashboard? (Removes the request.)"""
+        try:
+            self.restart_request.unlink()
+        except OSError:  # no request (or it can't be removed: then it isn't acted on either)
+            return False
+        return True
+
     def step(self) -> None:
-        """One pass: restart stopped programs and start due jobs."""
+        """One pass: act on a restart request, restart stopped programs and start due jobs."""
         now, today = self.clock(), self.local_now()
+        if self.restart_requested():
+            log.info("restart requested from the dashboard")
+            for child in self.children:
+                if child.name != "broker":
+                    child.restart(now)
         for child in self.children:
             child.check(now, self.launch)
         for job in self.jobs:
