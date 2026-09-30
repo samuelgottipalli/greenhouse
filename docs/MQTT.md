@@ -90,6 +90,18 @@ The device ignores invalid commands. It confirms a valid command by
 publishing the relay's state message, so the server should treat that state
 message, not its own command, as the confirmation.
 
+The same topic carries one other command, from the dashboard's Settings › System
+(`core.mqtt.publish_controller_restart`):
+
+```json
+{"action": "restart", "source": "web"}
+```
+
+The controller (1.3.0 and later) shows "Restarting…", sends anything queued and
+restarts; its status goes `offline` (last will) and back to `online`. Older
+controllers ignore it. It uses this topic so the controller's existing broker
+login and topic rules need no change.
+
 ## Settings and local mode
 
 The automation service publishes the current thresholds and watering schedule, retained, whenever

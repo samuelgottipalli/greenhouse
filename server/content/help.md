@@ -10,7 +10,7 @@ The menu on the left has five pages. The bigger ones are split into tabs along t
 | **Reports** | **Greenhouse**: what it's like inside now and over time. **Outdoor weather**: the weather outside, today and over time. |
 | **Analysis** | Each month of the last year side by side, and how this month compares with the same month last year. |
 | **Remote Control** | Switch the fan, heater, grow light and watering on or off yourself. |
-| **Settings** | **Display**: how things look. **Location**: where the greenhouse is, for the weather. **Greenhouse rules**: when the equipment runs. **Controllers**: connect a controller to Wi-Fi and update it. |
+| **Settings** | **Display**: how things look. **Location**: where the greenhouse is, for the weather. **Greenhouse rules**: when the equipment runs. **Controllers**: connect a controller to Wi-Fi and update it. **System**: restart things. |
 | **Help** | This guide, and **About** the system. |
 
 Pages update by themselves when new readings arrive (you can turn this off in Settings › Display).
@@ -116,6 +116,19 @@ These choices apply to everyone who uses the dashboard.
     turns that time off.
 *   **Save** keeps your changes, **Revert** undoes unsaved changes, **Restore Defaults** goes back
     to the factory rules.
+
+## Settings › System
+
+Three buttons for when something seems stuck. Each asks "are you sure?" first.
+
+*   **Restart the controller**: it restarts in about half a minute. Its switches turn off
+    meanwhile and the rules switch them back as needed. It must be online and on version 1.3.0 or
+    later (update it on Settings › Controllers first if not).
+*   **Restart the dashboard and background services**: this page disappears for about 15
+    seconds and reconnects by itself.
+*   **Restart the server computer**: the dashboard is back in a minute or two.
+
+The controller keeps running your rules while the server restarts.
 
 ## Settings › Controllers
 

@@ -13,9 +13,17 @@ given user, writes them to ``/etc/systemd/system`` (or ``--dest``), and with
 monthly job (summaries, then clean-up) on the 1st and after every start. Logs go to the journal::
 
     journalctl -u greenhouse-ingest -f
+
+It also writes ``/etc/sudoers.d/greenhouse-dashboard`` (``--sudoers-dir``),
+which lets the services' account run exactly two commands as administrator
+without a password: restarting the greenhouse services, and restarting the
+computer (the dashboard's Settings › System buttons; ``server/core/system.py``).
+The file is checked with ``visudo`` before it is put in place.
 """
 import argparse
 import getpass
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -71,6 +79,35 @@ def install(dest: Path, user: str, python: str, server_dir: Path = REPO_DIR / "s
     return written
 
 
+def install_sudoers(folder: Path, user: str, check=subprocess.run) -> Path | None:
+    """
+    Write the sudo rule for the dashboard's restart buttons, if ``visudo`` accepts it.
+
+    Args:
+        folder (Path): Normally ``/etc/sudoers.d``.
+        user (str): The services' account.
+        check (callable): Runs ``visudo -cf`` (injected in tests).
+
+    Returns:
+        Path | None: The file written, or None if it was rejected (nothing changed).
+    """
+    sys.path.insert(0, str(REPO_DIR / "server"))
+    from core import system
+
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / Path(system.SUDOERS_FILE).name
+    staged = folder / (target.name + ".new")  # sudo ignores names containing a dot
+    staged.write_text(system.sudoers_rule(user), encoding="utf-8", newline="\n")
+    os.chmod(staged, 0o440)
+    visudo = shutil.which("visudo")
+    if visudo and check([visudo, "-cf", str(staged)], capture_output=True).returncode != 0:
+        os.chmod(staged, 0o600)  # read-only files can't be removed on Windows (tests)
+        staged.unlink()
+        return None
+    os.replace(staged, target)
+    return target
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     Command-line entry point.
@@ -83,10 +120,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--python", default=sys.executable, help="interpreter (default: this one)")
     parser.add_argument("--dest", type=Path, default=Path("/etc/systemd/system"))
     parser.add_argument("--enable", action="store_true", help="reload systemd and start the services")
+    parser.add_argument("--sudoers-dir", type=Path, default=None,
+                        help="where the rule for the dashboard's restart buttons goes "
+                             "(default with --enable: /etc/sudoers.d)")
     args = parser.parse_args(argv)
 
     for path in install(args.dest, args.user, args.python):
         print(f"wrote {path}")
+    sudoers_dir = args.sudoers_dir or (Path("/etc/sudoers.d") if args.enable else None)
+    if sudoers_dir is not None:
+        try:
+            rule = install_sudoers(sudoers_dir, args.user)
+        except OSError as err:  # not run as root: the restart buttons will say what to do
+            print(f"Skipped the restart-button permission ({err})")
+        else:
+            print(f"wrote {rule}" if rule else "The restart-button permission was rejected by visudo; skipped")
     if args.enable:
         subprocess.run(["systemctl", "daemon-reload"], check=True)
         subprocess.run(["systemctl", "enable", "--now", *UNITS, *(f"{t}.timer" for t in TIMERS)], check=True)

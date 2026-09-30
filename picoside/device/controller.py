@@ -105,6 +105,7 @@ class Controller:
             self.settings = local_rules.default_settings()
         self._reset = reset
         self.firmware_request = None
+        self.restart_requested = False
         self.update_on_trial = ota.is_pending()
 
         self.screen = SCREEN_MAIN
@@ -173,6 +174,10 @@ class Controller:
         if self.firmware_request is not None:
             request, self.firmware_request = self.firmware_request, None
             self.apply_update(request)
+        if self.restart_requested:
+            self.restart_requested = False
+            self.restart("Restarting (asked from the dashboard)...")
+            return  # the board resets; nothing else this pass (tests' fake reset returns)
         if self.update_on_trial and self.uptime_ms > ota.CONFIRM_WITHIN_MS:
             print("Update not confirmed in time: restarting")
             self.reset()
@@ -337,6 +342,23 @@ class Controller:
             self._reset = machine.reset
         self._reset()
 
+    def restart(self, message):
+        """
+        Restart the board: show why, send what's queued, then reset.
+
+        Relays switch off during the restart; the server's automation (or
+        local mode) switches them back as needed.
+
+        Args:
+            message (str): For the screen.
+        """
+        print(message)
+        self.display.set_backlight(True)
+        self.display.show_message(message)
+        self.net.flush()
+        time.sleep_ms(1000)
+        self.reset()
+
     def publish_firmware(self, state, detail=""):
         """
         Publish (or queue) the installed version and update progress, retained.
@@ -470,15 +492,19 @@ class Controller:
 
     def handle_command(self, command):
         """
-        Apply a relay command received over MQTT.
+        Apply a command received over MQTT: a relay switch, or a restart.
 
         Args:
-            command (dict): ``{"relay": 1-8, "state": 0|1, "source": "web"|"auto"}``;
-                ``source`` is optional. Invalid commands are ignored.
+            command (dict): ``{"relay": 1-8, "state": 0|1, "source": "web"|"auto"}``
+                (``source`` is optional), or ``{"action": "restart"}`` from the
+                dashboard's Settings › System. Invalid commands are ignored.
 
         Returns:
-            bool: True if the command was applied.
+            bool: True if the command was accepted.
         """
+        if command.get("action") == "restart":
+            self.restart_requested = True  # done on the next tick, outside the MQTT callback
+            return True
         number = command.get("relay")
         state = command.get("state")
         if not self.relays.valid(number) or state not in (0, 1) or isinstance(state, bool):

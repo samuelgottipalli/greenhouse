@@ -49,7 +49,7 @@ def test_about_gives_credit():
 
 @pytest.mark.parametrize("page, labels", [
     ("views/reports.py", ["Greenhouse", "Outdoor weather"]),
-    ("views/settings.py", ["Display", "Location", "Greenhouse rules", "Controllers"]),
+    ("views/settings.py", ["Display", "Location", "Greenhouse rules", "Controllers", "System"]),
 ])
 def test_tabbed_pages(seeded_db, page, labels):
     at = run_page(page)
@@ -98,7 +98,9 @@ def test_weather_page_shows_latest_reading(seeded_db):
     values = [m.value for m in at.metric]
     assert values[0] == "Overcast" and values[3] == "12 h 00 min"  # fixture sun: 06:00-18:00 UTC
     assert set(gauges(at)) == {"Temperature", "Humidity", "Precipitation", "Wind speed"}
-    assert len(at.get("arrow_vega_lite_chart")) == 4  # a chart of the day under each gauge
+    # A chart of the day under each gauge; History adds 4 more when the fixture's noon readings
+    # fall in the last 24 hours, which depends on the time of day the tests run.
+    assert len(at.get("arrow_vega_lite_chart")) in (4, 8)
     captions = [c.value for c in at.caption]
     assert captions[0] == ":material/update: Data last updated at **12:00 PM** · 39.5349, -119.7527 · from Open-Meteo"
     assert "Today's total 0.03 in" in captions  # 4 x 0.2 mm, fixture units are US

@@ -54,6 +54,10 @@ class FakeNet:
     def publish(self, suffix, payload, retain=False):
         self.published.append((suffix, payload, retain))
 
+    def flush(self):
+        self.flushed = getattr(self, "flushed", 0) + 1
+        return 0
+
     def ip_address(self):
         return "192.168.1.50" if self.wifi_ok else None
 
@@ -410,3 +414,26 @@ def test_remote_command_does_not_wake_the_backlight(ctl, ticks):
     ctl.tick()
     assert not ctl.display.backlight
     assert ctl.display.lcd.screen[0].startswith("Relay 2: fan")  # text still updates
+
+
+# --- restart from the dashboard (Settings › System) ------------------------------------
+
+
+def test_restart_command_restarts_on_the_next_tick(pico, config, ticks):
+    resets = []
+    lcd = FakeLcd()
+    display = pico.display.Display(config, lcd=lcd)
+    net = FakeNet()
+    controller = pico.controller.Controller(config, display, FakeSensors(), pico.relays.Relays(config),
+                                            FakeButtons(), net, FakeClock(), reset=lambda: resets.append(True))
+    controller.start()
+    assert controller.handle_command({"action": "restart", "source": "web"}) is True
+    assert resets == []  # not inside the MQTT callback
+    controller.tick()
+    assert resets == [True] and net.flushed == 1  # queued messages went out first
+    assert "Restarting" in "".join(lcd.screen)
+
+
+def test_unknown_action_is_ignored(ctl):
+    assert ctl.handle_command({"action": "format-the-disk"}) is False
+    assert ctl.restart_requested is False
