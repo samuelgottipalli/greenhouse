@@ -244,10 +244,10 @@ old months instead of keeping every reading.
 | 4 | 4.1–4.8 ✅ | 4.8 evaluated and not needed at this scale (see the step); on-hardware checks for 4.6/4.7 are in the RUNBOOK sign-off |
 | 5 | 5.1–5.6 ✅ | Installer (`setup.bat`/`setup.sh`), setup hotspot, setup codes, updates over Wi-Fi, `run_all.py`. On-hardware checks are in the RUNBOOK sign-off |
 | 6 | 6.1–6.4 ✅ | Released as **1.1.0** (tag `v1.1.0`), with the location setting (Settings › Location); schema v7 stores the controller's version name |
-| 7 | 7.1–7.5 ✅ | On `develop` as 1.3.0-dev (not deployed yet). Checked on the real Pico W against Let's Encrypt and DigiCert brokers (roots found by trying, a wrong root refused, ~30 KB RAM); found and fixed umqtt's timeouts on TLS sockets |
+| 7 | 7.1–7.5 ✅ | On `develop` as 1.4.0-dev (not deployed yet). Checked on the real Pico W against Let's Encrypt and DigiCert brokers (roots found by trying, a wrong root refused, ~30 KB RAM); found and fixed umqtt's timeouts on TLS sockets |
 | 8 | Planned | Cloud VM deployment, reachable from the internet |
 | 9 | Planned | Hosted service for many greenhouses |
 | 10 | Planned | Free and premium plans |
-| 11 | 11.1–11.5 ✅ | 11.1–11.4 released as **1.2.0** (server only). Reports periods and date ranges, monthly summaries and clean-up, Analysis page (schema v8); 11.5 restart buttons |
+| 11 | 11.1–11.5 ✅ | 11.1–11.4 released as **1.2.0** (server only), 11.5 as **1.3.0**. Reports periods and date ranges, monthly summaries and clean-up, Analysis page (schema v8); 11.5 restart buttons |
 
 Bring-up on real hardware follows [RUNBOOK.md](RUNBOOK.md).

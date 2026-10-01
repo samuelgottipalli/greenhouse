@@ -5,7 +5,7 @@ controller (the Pico W). Versions read *major.minor.patch*: *major* goes up for 
 need care when upgrading, *minor* for new features and *patch* for fixes only. A version ending in
 `-dev` is still being built.
 
-## Server 1.3.0-dev · Controller 1.3.0-dev (in progress)
+## Server 1.4.0-dev · Controller 1.4.0-dev (in progress)
 
 Being built on the `develop` branch.
 
@@ -13,6 +13,14 @@ Being built on the `develop` branch.
   instead of running Mosquitto yourself: a new choice in the installer, encrypted connections
   (TLS) from the server and the controllers, and the controller checks the service's certificate.
   The setup code and the controller's setup page know about encrypted services.
+
+## Server 1.3.0 · Controller 1.3.0 (2026-09-30)
+
+- **Restart buttons** on the new Settings › System tab: restart the controller, the dashboard and
+  background services, or the server computer. Each asks first.
+- The controller understands the restart command (update it to 1.3.0 for its button to work).
+- The service installer adds a permission that lets the dashboard run exactly those two restart
+  commands on the server, and nothing else.
 
 ## Server 1.2.0 · Controller 1.1.1 (2026-09-29)
 
