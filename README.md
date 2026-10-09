@@ -131,7 +131,7 @@ been removed. It is still in the git history.
 |---|---|
 | **Home** | Health at a glance: controller online/offline with uptime, Wi-Fi signal and memory; how fresh the readings are; each relay's state; the background services; active alerts. |
 | **Reports** | Tabs: **Greenhouse** (gauges, charts and a table of the readings inside) and **Outdoor weather** (today's weather with gauges, plus its history). Charts cover 24 hours, 7 days, 30 days or any date range in the last 6 months. |
-| **Analysis** | Month-by-month box plots for the last year (middle 95 %, middle half, median, average), with this month so far next to the same month last year. |
+| **Analysis** | **Compare**: today vs yesterday, this week vs last week, this month vs last month (both periods on one chart, with a like-for-like sentence), or the last 12 months as box plots (middle 95 %, middle half, median, average), with this month so far next to the same month last year. |
 | **Remote Control** | Switch the fan, heater, light and water on or off. |
 | **Settings** | Tabs: **Display** (units, formats, time zone, colour scheme, page width, auto-refresh), **Location** (the town the weather and sunrise/sunset are for; changes apply at once), **Greenhouse rules** (fan, heater, grow light and watering), **Controllers** (Wi-Fi setup code and QR code, software updates) and **System** (restart the controller, the services or the server computer). |
 | **Help** | Tabs: **How to use it** and **About**. |

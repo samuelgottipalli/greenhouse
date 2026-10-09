@@ -8,7 +8,7 @@ The menu on the left has five pages. The bigger ones are split into tabs along t
 |---|---|
 | **Home** | Everything at a glance: is the controller online, are the readings fresh, what's switched on, any problems. |
 | **Reports** | **Greenhouse**: what it's like inside now and over time. **Outdoor weather**: the weather outside, today and over time. |
-| **Analysis** | Each month of the last year side by side, and how this month compares with the same month last year. |
+| **Analysis** | Today against yesterday, this week against last week, this month against last month, and each month of the last year side by side. |
 | **Remote Control** | Switch the fan, heater, grow light and watering on or off yourself. |
 | **Settings** | **Display**: how things look. **Location**: where the greenhouse is, for the weather. **Greenhouse rules**: when the equipment runs. **Controllers**: connect a controller to Wi-Fi and update it. **System**: restart things. |
 | **Help** | This guide, and **About** the system. |
@@ -64,7 +64,18 @@ range, for temperature, humidity, rain (totals per hour, or per day for longer p
 
 ## Analysis
 
-One chart per measure, with a box for each month of the last year:
+**Compare** at the top picks what to look at:
+
+*   **Today vs yesterday**: hourly averages, today so far (orange) over all of yesterday (blue).
+*   **This week vs last week**: hourly averages from Monday, this week so far over all of last week.
+*   **This month vs last month**: daily averages by date, this month's complete days over all of
+    last month.
+
+Under each chart a sentence compares like with like: today so far against yesterday up to the same
+time, this week against last week up to the same point, this month against last month up to the
+same date (for example "Today so far: average 69.5 °F: 0.2 °F cooler than yesterday by this time").
+
+**Last 12 months** shows one chart per measure, with a box for each month of the last year:
 
 *   The **whiskers** span the middle 95 % of the readings, so a few odd readings don't stretch them.
 *   The **box** holds the middle half, the **line** across it is the median (the middle reading)

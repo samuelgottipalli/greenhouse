@@ -156,3 +156,126 @@ def render(source: str, device_id: int) -> None:
             shown += 1
     if not shown:
         st.info("No readings yet. Months appear here as readings build up.")
+
+
+# --- period comparisons (today / this week / this month against the one before) ---------------
+
+COMPARISONS = {
+    # kind: (current label, previous label, "so far" phrase, "by then" phrase)
+    "day": ("Today", "Yesterday", "Today so far", "yesterday by this time"),
+    "week": ("This week", "Last week", "This week so far", "last week by this point"),
+    "month": ("This month", "Last month", "This month so far", "last month by this date"),
+}
+WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def comparison_data(source: str, device_id: int, measure: str, kind: str, zone: str, minute: str,
+                    place: tuple | None):
+    """Both curves and the like-for-like figures, cached for 5 minutes (``minute`` keys the cache)."""
+    from core import comparisons
+
+    now = datetime.now(timezone.utc)
+    where = {"latitude": place[0], "longitude": place[1]} if place else None
+    frame, windows = comparisons.curves(source, device_id, measure, now, zone, kind, where)
+    return frame, windows, comparisons.compare(source, device_id, measure, now, zone, kind, where)
+
+
+def x_axis(kind: str, time_format: str) -> alt.Axis:
+    """The shared axis: hours of the day, weekdays, or days of the month."""
+    if kind == "day":
+        hours = "datum.value % 12 == 0 ? 12 : datum.value % 12"
+        label = (f"({hours}) + (datum.value < 12 ? ' AM' : ' PM')" if time_format != "24-hour"
+                 else "datum.value + ':00'")
+        return alt.Axis(values=list(range(0, 24, 3)), labelExpr=label, title=None, grid=False)
+    if kind == "week":
+        names = "[" + ", ".join(f"'{d}'" for d in WEEKDAYS) + "]"
+        return alt.Axis(values=list(range(0, 168, 24)), labelExpr=f"{names}[floor(datum.value / 24)]",
+                        title=None, grid=False)
+    return alt.Axis(values=[1, 5, 10, 15, 20, 25, 30], title="Day of the month", grid=False)
+
+
+def comparison_chart(frame: DataFrame, kind: str, unit: str, time_format: str, log: bool = False,
+                     rain: bool = False) -> alt.Chart:
+    """The current period so far (orange) over the whole previous one (blue)."""
+    now_label, before_label = COMPARISONS[kind][:2]
+    data = frame.assign(series=frame["period"].map({"current": now_label, "previous": before_label}))
+    domain = [now_label, before_label]
+    color = alt.Color("series:N", scale=alt.Scale(domain=domain, range=[COLORS[THIS_MONTH], COLORS[LAST_YEAR]]),
+                      legend=alt.Legend(title=None, orient="bottom"))
+    upper = 23 if kind == "day" else 167 if kind == "week" else 31
+    x = alt.X("x:Q", scale=alt.Scale(domain=[0 if kind != "month" else 1, upper]), axis=x_axis(kind, time_format))
+    y_title = f"{unit} per {'hour' if kind != 'month' else 'day'}" if rain else unit
+    y = alt.Y("value:Q", title=y_title, scale=alt.Scale(type="symlog") if log else alt.Scale(zero=False))
+    tooltip = [alt.Tooltip("series:N", title=""), alt.Tooltip("value:Q", title=unit, format=",.2f")]
+    lines = alt.Chart(data).mark_line(strokeWidth=2, interpolate="monotone").encode(x=x, y=y, color=color,
+                                                                                  tooltip=tooltip)
+    # Dots for this period, so even its first hour or day shows (and stays on top of the previous one).
+    dots = alt.Chart(data[data["period"] == "current"]).mark_point(filled=True, size=40).encode(
+        x=x, y=y, color=color, tooltip=tooltip)
+    return (lines + dots).properties(height=240, width="container")
+
+
+def comparison_sentence(kind: str, figures: dict, unit: str, convert, places: int, measure: str) -> str | None:
+    """Like-for-like: the current period so far against the previous one up to the same point."""
+    _now, _before, so_far, by_then = COMPARISONS[kind]
+    current, previous = figures["current"], figures["previous"]
+    if current is None:
+        return None
+
+    def show(value):
+        return f"{round(float(convert(value)), places):g}"
+
+    if measure == "rain":
+        text = f"{so_far}: {show(current['total'])} {unit} of rain"
+        return text + (f" ({by_then}: {show(previous['total'])} {unit})." if previous else ".")
+    text = f"{so_far}: average {show(current['mean'])} {unit} (low {show(current['minimum'])}, " \
+           f"high {show(current['maximum'])})"
+    if previous is None:
+        return text + f"; no readings from {by_then.split(' by ')[0]} to compare with."
+    change = round(float(convert(current["mean"])) - float(convert(previous["mean"])), places)
+    if measure == "temperature":
+        words = ("warmer", "cooler")
+    else:
+        words = ("higher", "lower")
+    trend = "about the same as" if abs(change) < 10 ** -places else \
+        f"{abs(change):g} {unit} {words[0] if change > 0 else words[1]} than"
+    return f"{text}: {trend} {by_then} (average {show(previous['mean'])} {unit})."
+
+
+def render_comparison(kind: str, source: str, device_id: int, place: dict | None = None) -> None:
+    """
+    One tab of a period comparison: a chart per measure with a like-for-like sentence.
+
+    Args:
+        kind (str): ``"day"``, ``"week"`` or ``"month"``.
+        source (str): ``"greenhouse"`` or ``"weather"``.
+        device_id (int): The controller, for ``"greenhouse"``.
+        place (dict | None): For weather, the chosen location.
+    """
+    from ui import display_zone
+
+    units = st.session_state["units"]
+    time_format = st.session_state["time_format"]
+    zone = display_zone()
+    minute = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")[:-1]  # changes every 10 minutes
+    where = (place["latitude"], place["longitude"]) if place else None
+    shown = 0
+    for column, (measure, (label, _stored)) in zip(st.columns(2) * 2, history.MEASURES[source].items()):
+        frame, _windows, figures = comparison_data(source, device_id, measure, kind, zone, minute, where)
+        with column.container(border=True):
+            st.markdown(f"**{label.replace(' per day', '')}**" + (" (estimated)" if measure == "light" else ""))
+            if frame.empty:
+                st.caption("No readings in these periods.")
+                continue
+            unit, convert = display_units(measure, units)
+            places = decimals_for(measure, units)
+            shown_frame = frame.assign(value=[round(float(convert(v)), places) for v in frame["value"]])
+            st.altair_chart(comparison_chart(shown_frame, kind, unit, time_format, log=measure == "light",
+                                             rain=measure == "rain"), use_container_width=True)
+            sentence = comparison_sentence(kind, figures, unit, convert, places, measure)
+            if sentence:
+                st.caption(sentence)
+            shown += 1
+    if not shown:
+        st.info("No readings yet for these periods.")
