@@ -5,6 +5,15 @@ controller (the Pico W). Versions read *major.minor.patch*: *major* goes up for 
 need care when upgrading, *minor* for new features and *patch* for fixes only. A version ending in
 `-dev` is still being built.
 
+## Server 1.4.0 · Controller 1.3.0 (2026-10-09)
+
+The controller is unchanged; only the server is updated.
+
+- **Compare periods on the Analysis page**: today against yesterday, this week against last week,
+  and this month against last month, each on one chart (the current period in orange over the
+  previous one in blue) with a sentence comparing like with like, such as "0.2 °F cooler than
+  yesterday by this time".
+
 ## Server 1.3.0 · Controller 1.3.0 (2026-09-30)
 
 - **Restart buttons** on the new Settings › System tab: restart the controller, the dashboard and
